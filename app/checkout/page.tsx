@@ -137,6 +137,8 @@ export default function CheckoutPage() {
     deliveryDate: string | null
     scheduleId: string | null
     message: string
+    pickupStartTime?: string | null
+    pickupEndTime?: string | null
   } | null>(null)
   const [isLoadingDeliveryDate, setIsLoadingDeliveryDate] = useState(false)
 
@@ -832,6 +834,14 @@ export default function CheckoutPage() {
                       Ihre Bestellung enthält frische Südfrüchte und wird zum nächsten verfügbaren Termin geliefert.
                     </p>
                   )}
+                  {deliveryDateInfo.pickupStartTime && deliveryDateInfo.pickupEndTime && (
+                    <div className="mt-2 pt-2 border-t border-yellow-300">
+                      <p className="text-sm font-medium text-yellow-900">
+                        Abholzeit: {deliveryDateInfo.pickupStartTime} - {deliveryDateInfo.pickupEndTime} Uhr
+                      </p>
+                      <p className="text-xs text-yellow-700 italic">oder nach Terminvereinbarung</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -1357,6 +1367,13 @@ export default function CheckoutPage() {
                             year: "numeric",
                           })}
                         </p>
+                        {deliveryDateInfo.pickupStartTime && deliveryDateInfo.pickupEndTime && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Abholung: {deliveryDateInfo.pickupStartTime} - {deliveryDateInfo.pickupEndTime} Uhr
+                            <br />
+                            <span className="italic">oder nach Terminvereinbarung</span>
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

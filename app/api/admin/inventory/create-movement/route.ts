@@ -1,20 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createManualMovement } from "@/lib/inventory/movement-service"
-import { createClient } from "@/lib/supabase/server"
+import { requireAdmin } from "@/lib/auth/api-auth"
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireAdmin(request)
+  if (authResult instanceof NextResponse) {
+    return authResult
+  }
+
   try {
-    const supabase = await createClient()
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const { productId, qty, reason, referenceId, occurredAt } = await request.json()
 
     if (!productId || !qty || !reason) {
@@ -28,7 +22,7 @@ export async function POST(request: NextRequest) {
       Number.parseInt(qty), // Already signed (positive or negative)
       reason,
       referenceId || `MANUAL-${Date.now()}`,
-      user.id, // UUID from auth
+      authResult.user.id, // UUID from auth
       occurredAt,
     )
 

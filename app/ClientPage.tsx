@@ -63,7 +63,7 @@ export default function ClientPage() {
             </div>
             <div className="relative order-first lg:order-last">
               <Image
-                src="/fresh-sicilian-oranges-and-lemons-in-wooden-crates.png"
+                src="/images/design-mode/Orangenplantage_fertig.jpg"
                 alt="Frische sizilianische Orangen und Zitronen in rustikalen Holzkisten - Hohenloher Gold Südfrüchte"
                 width={600}
                 height={400}
@@ -130,7 +130,7 @@ export default function ClientPage() {
           <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
             <div className="order-last lg:order-first">
               <Image
-                src="/sicilian-citrus-fruits-oranges-lemons-in-rustic-wo.png"
+                src="/images/design-mode/Zitronensonne.jpg"
                 alt="Sizilianische Zitrusfrüchte - Orangen und Zitronen in rustikaler Holzschale, unbehandelt und bio"
                 width={600}
                 height={400}

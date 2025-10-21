@@ -1,7 +1,13 @@
 import { createAdminClient } from "@/lib/supabase/admin"
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { requireAdmin } from "@/lib/auth/api-auth"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authResult = await requireAdmin(request)
+  if (authResult instanceof NextResponse) {
+    return authResult
+  }
+
   try {
     console.log("[v0] Server: Starting supplier demand analysis")
 

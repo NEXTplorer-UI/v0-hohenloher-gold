@@ -1,7 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { requireAdmin } from "@/lib/auth/api-auth"
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireAdmin(request)
+  if (authResult instanceof NextResponse) {
+    return authResult
+  }
+
   try {
     const { customers } = await request.json()
 

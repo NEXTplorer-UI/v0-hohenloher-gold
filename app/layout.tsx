@@ -14,6 +14,8 @@ import { ScrollToTop } from "@/components/scroll-to-top"
 import { Header } from "@/components/header"
 import { ErrorBoundary } from "@/components/error-boundary"
 import Script from "next/script"
+import { SWRConfig } from "swr"
+import { swrConfig } from "@/lib/api/swr-config"
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -134,22 +136,24 @@ export default function RootLayout({
             }),
           }}
         />
-        <CartProvider>
-          <PricingProvider>
-            <AdminProvider>
-              <InventoryProvider>
-                <ProductsProvider>
-                  <ScrollToTop />
-                  <Header />
-                  <ErrorBoundary>{children}</ErrorBoundary>
-                  <Footer />
-                  <CookieConsent />
-                  <Toaster />
-                </ProductsProvider>
-              </InventoryProvider>
-            </AdminProvider>
-          </PricingProvider>
-        </CartProvider>
+        <SWRConfig value={swrConfig}>
+          <CartProvider>
+            <PricingProvider>
+              <AdminProvider>
+                <InventoryProvider>
+                  <ProductsProvider>
+                    <ScrollToTop />
+                    <Header />
+                    <ErrorBoundary>{children}</ErrorBoundary>
+                    <Footer />
+                    <CookieConsent />
+                    <Toaster />
+                  </ProductsProvider>
+                </InventoryProvider>
+              </AdminProvider>
+            </PricingProvider>
+          </CartProvider>
+        </SWRConfig>
       </body>
     </html>
   )

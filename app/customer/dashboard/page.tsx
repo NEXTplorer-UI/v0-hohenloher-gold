@@ -7,7 +7,19 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarInitials } from "@/components/ui/avatar"
 import { useRouter } from "next/navigation"
-import { User, ShoppingBag, CreditCard, Settings, LogOut, Package, Calendar, Euro } from "lucide-react"
+import {
+  User,
+  ShoppingBag,
+  CreditCard,
+  Settings,
+  LogOut,
+  Package,
+  Calendar,
+  Euro,
+  Download,
+  Trash2,
+  Shield,
+} from "lucide-react"
 import { LoadingSpinner } from "@/components/loading-spinner"
 
 interface CustomerProfile {
@@ -38,6 +50,8 @@ interface OrderItem {
 function DashboardContent({ user }: { user: any }) {
   const [profile, setProfile] = useState<CustomerProfile | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -107,6 +121,57 @@ function DashboardContent({ user }: { user: any }) {
     }
   }
 
+  const handleExportData = async () => {
+    try {
+      const response = await fetch("/api/customer/export-data")
+      if (!response.ok) {
+        throw new Error("Export fehlgeschlagen")
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `hohenloher-gold-daten-${Date.now()}.json`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error("[v0] Error exporting data:", error)
+      alert("Fehler beim Exportieren der Daten")
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (
+      !confirm(
+        "Sind Sie sicher, dass Sie Ihren Account löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+      )
+    ) {
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      const response = await fetch("/api/customer/delete-account", {
+        method: "POST",
+      })
+
+      if (!response.ok) {
+        throw new Error("Löschen fehlgeschlagen")
+      }
+
+      alert("Ihr Account wurde erfolgreich gelöscht. Sie werden nun abgemeldet.")
+      router.push("/")
+    } catch (error) {
+      console.error("[v0] Error deleting account:", error)
+      alert("Fehler beim Löschen des Accounts")
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       delivered: { label: "Zugestellt", variant: "default" as const },
@@ -162,7 +227,7 @@ function DashboardContent({ user }: { user: any }) {
         </div>
 
         <Tabs defaultValue="orders" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:grid-cols-4">
             <TabsTrigger value="orders" className="flex items-center gap-2">
               <ShoppingBag className="w-4 h-4" />
               Bestellungen
@@ -174,6 +239,10 @@ function DashboardContent({ user }: { user: any }) {
             <TabsTrigger value="payments" className="flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
               Zahlungen
+            </TabsTrigger>
+            <TabsTrigger value="privacy" className="flex items-center gap-2">
+              <Shield className="w-4 h-4" />
+              Datenschutz
             </TabsTrigger>
           </TabsList>
 
@@ -302,6 +371,111 @@ function DashboardContent({ user }: { user: any }) {
                     Fügen Sie eine Zahlungsmethode hinzu, um Ihre Bestellungen zu vereinfachen
                   </p>
                   <Button className="bg-primary hover:bg-primary/90">Zahlungsmethode hinzufügen</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Privacy Tab */}
+          <TabsContent value="privacy" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="w-5 h-5" />
+                  Datenschutz & DSGVO
+                </CardTitle>
+                <CardDescription>
+                  Verwalten Sie Ihre persönlichen Daten gemäß der Datenschutz-Grundverordnung (DSGVO)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Data Export Section */}
+                <div className="border rounded-lg p-6 space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-primary/10 rounded-lg">
+                      <Download className="w-6 h-6 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg mb-2">Daten exportieren</h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Laden Sie eine Kopie all Ihrer persönlichen Daten herunter, die wir über Sie gespeichert haben.
+                        Dies umfasst Ihr Profil, Bestellhistorie und alle anderen Informationen.
+                      </p>
+                      <p className="text-xs text-muted-foreground mb-4">
+                        <strong>DSGVO Artikel 20:</strong> Recht auf Datenübertragbarkeit
+                      </p>
+                      <Button onClick={handleExportData} variant="outline" className="gap-2 bg-transparent">
+                        <Download className="w-4 h-4" />
+                        Daten als JSON exportieren
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Data Retention Policy */}
+                <div className="border rounded-lg p-6 space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-blue-100 rounded-lg">
+                      <Calendar className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg mb-2">Datenaufbewahrung</h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Wir speichern Ihre Daten gemäß den gesetzlichen Aufbewahrungsfristen:
+                      </p>
+                      <ul className="text-sm text-muted-foreground space-y-2 list-disc list-inside">
+                        <li>Bestelldaten: 10 Jahre (steuerrechtliche Aufbewahrungspflicht)</li>
+                        <li>Rechnungen: 10 Jahre (HGB §257)</li>
+                        <li>Kundendaten: Bis zur Löschung des Accounts oder 3 Jahre nach letzter Aktivität</li>
+                        <li>Newsletter-Daten: Bis zum Widerruf der Einwilligung</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Account Deletion Section */}
+                <div className="border border-destructive/50 rounded-lg p-6 space-y-4 bg-destructive/5">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-destructive/10 rounded-lg">
+                      <Trash2 className="w-6 h-6 text-destructive" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg mb-2 text-destructive">Account löschen</h3>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Wenn Sie Ihren Account löschen, werden Ihre persönlichen Daten anonymisiert. Bestelldaten werden
+                        aus rechtlichen Gründen (Buchhaltung, Steuern) für 10 Jahre aufbewahrt, aber ohne Bezug zu Ihrer
+                        Person.
+                      </p>
+                      <p className="text-xs text-muted-foreground mb-4">
+                        <strong>DSGVO Artikel 17:</strong> Recht auf Löschung ("Recht auf Vergessenwerden")
+                      </p>
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                        <p className="text-sm text-amber-800">
+                          <strong>Wichtig:</strong> Diese Aktion kann nicht rückgängig gemacht werden. Nach der Löschung
+                          können Sie sich nicht mehr einloggen und haben keinen Zugriff mehr auf Ihre Bestellhistorie.
+                        </p>
+                      </div>
+                      <Button
+                        onClick={handleDeleteAccount}
+                        disabled={isDeleting}
+                        variant="destructive"
+                        className="gap-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        {isDeleting ? "Wird gelöscht..." : "Account unwiderruflich löschen"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Privacy Policy Link */}
+                <div className="text-center pt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Weitere Informationen finden Sie in unserer{" "}
+                    <a href="/privacy" className="text-primary hover:underline">
+                      Datenschutzerklärung
+                    </a>
+                  </p>
                 </div>
               </CardContent>
             </Card>

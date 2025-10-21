@@ -1,8 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createMovementsFromOrder } from "@/lib/inventory/movement-service"
+import { requireAdmin } from "@/lib/auth/api-auth"
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireAdmin(request)
+  if (authResult instanceof NextResponse) {
+    return authResult
+  }
+
   try {
     console.log("[v0] Server: Updating order status")
 

@@ -5,10 +5,13 @@
 export interface DeliverySchedule {
   id: string
   delivery_date: string
-  fruit_types: string[]
   status: string
   order_deadline: string
   notes?: string
+  pickup_start_time?: string
+  pickup_end_time?: string
+  formattedDeliveryDate?: string
+  formattedOrderDeadline?: string
 }
 
 /**

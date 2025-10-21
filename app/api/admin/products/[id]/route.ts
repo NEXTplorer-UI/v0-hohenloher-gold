@@ -1,24 +1,11 @@
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
 import { type NextRequest, NextResponse } from "next/server"
+import { requireAdmin, createAdminClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-          } catch {
-            // The `setAll` method was called from a Server Component.
-          }
-        },
-      },
-    })
+    await requireAdmin()
+
+    const supabase = createAdminClient()
 
     const { data: product, error } = await supabase.from("products").select("*").eq("id", params.id).single()
 
@@ -29,6 +16,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     return NextResponse.json(product)
   } catch (error) {
+    if (error instanceof Error && (error.message.includes("Unauthorized") || error.message.includes("Forbidden"))) {
+      return NextResponse.json({ error: error.message }, { status: error.message.includes("Forbidden") ? 403 : 401 })
+    }
     console.error("Error fetching product:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
@@ -36,21 +26,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-          } catch {
-            // The `setAll` method was called from a Server Component.
-          }
-        },
-      },
-    })
+    await requireAdmin()
+
+    const supabase = createAdminClient()
 
     const body = await request.json()
     const { name, category_id, price, description, image_url, weight_kg, origin, unit, min_stock, is_active } = body
@@ -86,6 +64,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     return NextResponse.json(product)
   } catch (error) {
+    if (error instanceof Error && (error.message.includes("Unauthorized") || error.message.includes("Forbidden"))) {
+      return NextResponse.json({ error: error.message }, { status: error.message.includes("Forbidden") ? 403 : 401 })
+    }
     console.error("Error updating product:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
@@ -93,21 +74,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-          } catch {
-            // The `setAll` method was called from a Server Component.
-          }
-        },
-      },
-    })
+    await requireAdmin()
+
+    const supabase = createAdminClient()
 
     const { error } = await supabase.from("products").delete().eq("id", params.id)
 
@@ -118,6 +87,9 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     return NextResponse.json({ message: "Product deleted successfully" })
   } catch (error) {
+    if (error instanceof Error && (error.message.includes("Unauthorized") || error.message.includes("Forbidden"))) {
+      return NextResponse.json({ error: error.message }, { status: error.message.includes("Forbidden") ? 403 : 401 })
+    }
     console.error("Error deleting product:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

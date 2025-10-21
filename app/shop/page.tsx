@@ -13,6 +13,7 @@ import useSWR from "swr"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input" // Import Input component
+import { formatTime } from "@/lib/format-time"
 
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center p-8">
@@ -404,6 +405,14 @@ export default function ShopPage() {
                               <div className="text-xs text-muted-foreground">
                                 <span className="font-medium">Bestellschluss:</span> {delivery.orderDeadline}
                               </div>
+                              {delivery.pickupStartTime && delivery.pickupEndTime && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  <span className="font-medium">Abholung:</span> {formatTime(delivery.pickupStartTime)}{" "}
+                                  - {formatTime(delivery.pickupEndTime)} Uhr
+                                  <br />
+                                  <span className="text-xs italic">oder nach Terminvereinbarung</span>
+                                </div>
+                              )}
                             </div>
                           ))}
                       </div>
@@ -426,6 +435,14 @@ export default function ShopPage() {
                               <div className="text-xs text-muted-foreground">
                                 <span className="font-medium">Bestellschluss:</span> {delivery.orderDeadline}
                               </div>
+                              {delivery.pickupStartTime && delivery.pickupEndTime && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  <span className="font-medium">Abholung:</span> {delivery.pickupStartTime} -{" "}
+                                  {delivery.pickupEndTime} Uhr
+                                  <br />
+                                  <span className="text-xs italic">oder nach Terminvereinbarung</span>
+                                </div>
+                              )}
                             </div>
                           ))}
                       </div>
@@ -799,8 +816,4 @@ function ProductCard({
       </CardFooter>
     </Card>
   )
-}
-
-const CartSidebar = () => {
-  return null
 }

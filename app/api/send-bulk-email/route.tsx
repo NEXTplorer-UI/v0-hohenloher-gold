@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { EmailService } from "@/lib/email/email-service"
 import { EmailTemplates } from "@/lib/email/email-templates"
+import { requireAdmin } from "@/lib/auth/api-auth"
 
 interface BulkEmailRequest {
   subject: string
@@ -10,6 +11,11 @@ interface BulkEmailRequest {
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireAdmin(request)
+  if (authResult instanceof NextResponse) {
+    return authResult
+  }
+
   try {
     const body: BulkEmailRequest = await request.json()
     const { subject, content, recipients, type } = body

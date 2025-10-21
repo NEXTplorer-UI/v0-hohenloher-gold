@@ -20,7 +20,7 @@ export default function AboutPage() {
               Unsere Geschichte
             </Badge>
             <h1 className="font-serif font-bold text-4xl lg:text-6xl text-foreground leading-tight">
-              Über <span className="text-primary">Hohenloher Gold</span>
+              Über <span className="text-primary">Südfrüchte Hohenlohe</span>
             </h1>
             <p className="text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
               Wir verbinden die Tradition der Region Hohenlohe mit der Leidenschaft sizilianischer Bauern. Unser Ziel:
@@ -47,7 +47,7 @@ export default function AboutPage() {
             </div>
             <div className="relative">
               <img
-                src="/sicilian-farmer-harvesting-oranges-traditional-methods.png"
+                src="/images/design-mode/%C3%9Cberr%20uns.jpg"
                 alt="Sizilianischer Bauer bei der Ernte"
                 className="rounded-lg shadow-2xl w-full h-auto"
               />
@@ -167,7 +167,7 @@ export default function AboutPage() {
             </div>
             <div className="relative">
               <img
-                src="/sicilian-family-farm-traditional-citrus-grove.png"
+                src="/images/design-mode/PLantage.jpg"
                 alt="Sizilianische Familienfarm"
                 className="rounded-lg shadow-xl w-full h-auto"
               />

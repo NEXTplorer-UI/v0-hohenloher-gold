@@ -15,48 +15,26 @@ import { NextArrivalBanner } from "@/components/next-arrival-banner"
 const pickupLocations = [
   {
     id: 1,
-    name: "Bioladen Künzelsau",
-    address: "Hauptstraße 45, 74653 Künzelsau",
+    name: "Beispiel Abholort",
+    address: "Musterstraße 1, 74653 Künzelsau",
     plz: "74653",
-    contact: "Maria Schmidt",
-    phone: "07940 123456",
-    email: "maria@bioladen-kuenzelsau.de",
-    hours: "Mo-Fr: 8:00-18:00, Sa: 8:00-14:00",
-    distance: "0 km",
-  },
-  {
-    id: 2,
-    name: "Hofladen Müller",
-    address: "Dorfstraße 12, 74670 Forchtenberg",
-    plz: "74670",
-    contact: "Hans Müller",
-    phone: "07947 987654",
-    email: "info@hofladen-mueller.de",
-    hours: "Di, Do, Sa: 9:00-17:00",
-    distance: "8 km",
-  },
-  {
-    id: 3,
-    name: "Naturkost Öhringen",
-    address: "Marktplatz 3, 74613 Öhringen",
-    plz: "74613",
-    contact: "Anna Weber",
-    phone: "07941 555123",
-    email: "anna@naturkost-oehringen.de",
-    hours: "Mo-Sa: 7:30-19:00",
-    distance: "15 km",
+    contact: "Max Mustermann",
+    phone: "0123 456789",
+    email: "max@example.com",
+    hours: "Mo-Fr 14-18 Uhr",
+    distance: "5 km",
   },
 ]
 
 const centralWarehouse = {
   id: 999,
-  name: "Zentrallager Hohenloher Gold",
+  name: "Zentrallager Südfrüchte Hohenlohe",
   address: "Weststraße 28, 74629 Pfedelbach",
   plz: "74629",
-  contact: "Hohenloher Gold Team",
-  phone: "0157 357 038 64",
-  email: "info@hohenloher-gold.de",
-  hours: "Nach Vereinbarung",
+  contact: "Südfrüchte Hohenlohe Team",
+  phone: "+49 1573 5703864",
+  email: "kontakt@suedfruechte-hohenlohe.de",
+  hours: "Siehe Abholtermine",
   distance: "Zentrallager",
   isWarehouse: true,
 }
@@ -232,7 +210,7 @@ export default function DistributorPage() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mt-3">
                               <div className="flex items-center space-x-2">
                                 <Clock className="w-4 h-4 text-primary" />
-                                <span>Nach Vereinbarung</span>
+                                <span>Siehe Abholtermine</span>
                               </div>
                               <div className="flex items-center space-x-2">
                                 <Phone className="w-4 h-4 text-primary" />
@@ -241,7 +219,7 @@ export default function DistributorPage() {
                             </div>
                             <div className="flex items-center space-x-2 text-sm">
                               <Mail className="w-4 h-4 text-primary" />
-                              <span>info@hohenloher-gold.de</span>
+                              <span>kontakt@suedfruechte-hohenlohe.de</span>
                             </div>
                           </div>
                         </Card>
@@ -561,7 +539,7 @@ export default function DistributorPage() {
                 className="text-lg px-8 border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary bg-transparent"
               >
                 <Mail className="w-5 h-5 mr-2" />
-                verteiler@hohenloher-gold.de
+                kontakt@suedfruechte-hohenlohe.de
               </Button>
             </div>
           </div>

@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { FileText, Edit, Save, Plus, Star, Trash2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { useArticlesSWR } from "@/hooks/use-articles-swr"
 
 interface Article {
   id: number
@@ -49,8 +50,8 @@ function generateSlug(title: string): string {
 }
 
 export default function ContentManagementSystem() {
-  const [articles, setArticles] = useState<Article[]>([])
-  const [loading, setLoading] = useState(true)
+  const { articles, isLoading: loading, refresh: loadArticles } = useArticlesSWR()
+
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingArticle, setEditingArticle] = useState<Article | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -68,19 +69,6 @@ export default function ContentManagementSystem() {
   })
 
   const supabase = useMemo(() => createClient(), [])
-
-  const loadArticles = async () => {
-    try {
-      const { data, error } = await supabase.from("articles").select("*").order("created_at", { ascending: false })
-
-      if (error) throw error
-      setArticles(data || [])
-    } catch (error) {
-      console.error("Error loading articles:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const uploadImage = async (file: File): Promise<string | null> => {
     try {
@@ -178,6 +166,7 @@ export default function ContentManagementSystem() {
       const { error } = await supabase.from("articles").delete().eq("id", id)
 
       if (error) throw error
+
       await loadArticles()
     } catch (error) {
       console.error("Error deleting article:", error)
@@ -216,7 +205,7 @@ export default function ContentManagementSystem() {
   }
 
   useEffect(() => {
-    loadArticles()
+    // No need to call loadArticles here as SWR handles data fetching
   }, [])
 
   if (loading) {

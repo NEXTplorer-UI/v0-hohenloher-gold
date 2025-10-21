@@ -56,3 +56,57 @@ export function createAdminClient() {
     },
   })
 }
+
+/**
+ * Checks if the current authenticated user has admin role.
+ * Returns the user if admin, throws error if not authenticated or not admin.
+ */
+export async function requireAdmin() {
+  const supabase = await createClient()
+
+  // Check if user is authenticated
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    throw new Error("Unauthorized: Not authenticated")
+  }
+
+  // Check if user has admin role
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  if (profileError || !profile) {
+    throw new Error("Unauthorized: Profile not found")
+  }
+
+  if (profile.role !== "admin") {
+    throw new Error("Forbidden: Admin access required")
+  }
+
+  return user
+}
+
+/**
+ * Checks if the current authenticated user is authenticated.
+ * Returns the user if authenticated, throws error if not.
+ */
+export async function requireAuth() {
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+
+  if (error || !user) {
+    throw new Error("Unauthorized: Not authenticated")
+  }
+
+  return user
+}

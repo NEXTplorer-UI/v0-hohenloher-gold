@@ -270,7 +270,15 @@ export default function CustomerRegisterPage() {
 
               {success && (
                 <Alert className="border-green-200 bg-green-50">
-                  <AlertDescription className="text-green-800">{success}</AlertDescription>
+                  <AlertDescription className="text-green-800">
+                    <div className="space-y-2">
+                      <p className="font-semibold">{success}</p>
+                      <p className="text-sm">
+                        Der Bestätigungslink ist <strong>1 Stunde</strong> gültig. Bitte überprüfen Sie auch Ihren
+                        Spam-Ordner.
+                      </p>
+                    </div>
+                  </AlertDescription>
                 </Alert>
               )}
 

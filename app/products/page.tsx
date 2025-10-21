@@ -215,13 +215,13 @@ export default function ProductsPage() {
                 className="h-auto p-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
                 <Card className="w-full transition-all duration-200 hover:shadow-lg data-[state=active]:ring-2 data-[state=active]:ring-primary">
-                  <div className="relative h-32 overflow-hidden rounded-t-lg">
+                  <div className="relative h-96 overflow-hidden rounded-t-lg">
                     <img
-                      src="/sicilian-oranges-fresh-organic.png"
+                      src="/images/design-mode/S%C3%BCdfrucht.jpg"
                       alt="Frische Südfrüchte"
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-70" />
                     <div className="absolute bottom-2 left-2 text-white">
                       <Sun className="w-5 h-5" />
                     </div>
@@ -238,7 +238,7 @@ export default function ProductsPage() {
                 className="h-auto p-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
                 <Card className="w-full transition-all duration-200 hover:shadow-lg data-[state=active]:ring-2 data-[state=active]:ring-primary">
-                  <div className="relative h-32 overflow-hidden rounded-t-lg">
+                  <div className="relative h-96 overflow-hidden rounded-t-lg">
                     <img
                       src="/dried-figs-organic-natural.png"
                       alt="Trockenfrüchte"
@@ -261,13 +261,13 @@ export default function ProductsPage() {
                 className="h-auto p-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
               >
                 <Card className="w-full transition-all duration-200 hover:shadow-lg data-[state=active]:ring-2 data-[state=active]:ring-primary">
-                  <div className="relative h-32 overflow-hidden rounded-t-lg">
+                  <div className="relative h-96 overflow-hidden rounded-t-lg">
                     <img
-                      src="/olive-oil-extra-virgin-sicilian-bottle.png"
+                      src="/images/design-mode/Oliven%C3%B6l%20Glas.jpg"
                       alt="Kaltgepresste Öle"
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-70" />
                     <div className="absolute bottom-2 left-2 text-white">
                       <Award className="w-5 h-5" />
                     </div>

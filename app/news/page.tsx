@@ -1,11 +1,12 @@
 "use client"
 
+import type React from "react"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Calendar, ArrowRight, User } from "lucide-react"
-import Link from "next/link"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
 import { createClient } from "@/lib/supabase/client"
 import { useEffect, useState, Suspense } from "react"
@@ -82,6 +83,7 @@ function ArticlesList() {
                         src={
                           article.image_url ||
                           "/placeholder.svg?height=400&width=600&query=Hohenloher Gold featured article" ||
+                          "/placeholder.svg" ||
                           "/placeholder.svg"
                         }
                         alt={article.title}
@@ -141,6 +143,7 @@ function ArticlesList() {
                           src={
                             article.image_url ||
                             "/placeholder.svg?height=200&width=400&query=Hohenloher Gold news article" ||
+                            "/placeholder.svg" ||
                             "/placeholder.svg"
                           }
                           alt={article.title}
@@ -225,6 +228,38 @@ function ArticlesList() {
 }
 
 export default function NewsPage() {
+  const [email, setEmail] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+
+  const handleNewsletterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setMessage(null)
+
+    try {
+      const response = await fetch("/api/newsletter/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, source: "news_page" }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setMessage({ type: "success", text: data.message })
+        setEmail("")
+      } else {
+        setMessage({ type: "error", text: data.error || "Ein Fehler ist aufgetreten" })
+      }
+    } catch (error) {
+      console.error("Newsletter subscription error:", error)
+      setMessage({ type: "error", text: "Verbindungsfehler. Bitte versuchen Sie es später erneut." })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <NextArrivalBanner />
@@ -260,16 +295,31 @@ export default function NewsPage() {
               Abonnieren Sie unseren Newsletter und erfahren Sie als Erste von neuen Ernten, Produkten und besonderen
               Angeboten.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4 max-w-md mx-auto">
-              <input
-                type="email"
-                placeholder="Ihre E-Mail-Adresse"
-                className="flex-1 px-4 py-3 rounded-lg text-foreground bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <Button variant="secondary" size="lg" className="px-8">
-                <Link href="#newsletter-signup">Anmelden</Link>
-              </Button>
-            </div>
+            <form onSubmit={handleNewsletterSubmit} className="pt-4 max-w-md mx-auto space-y-4">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <input
+                  type="email"
+                  placeholder="Ihre E-Mail-Adresse"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                  className="flex-1 px-4 py-3 rounded-lg text-foreground bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                />
+                <Button type="submit" variant="secondary" size="lg" className="px-8" disabled={isSubmitting}>
+                  {isSubmitting ? "Wird gesendet..." : "Anmelden"}
+                </Button>
+              </div>
+              {message && (
+                <p
+                  className={`text-sm ${
+                    message.type === "success" ? "text-green-200" : "text-red-200"
+                  } bg-black/20 px-4 py-2 rounded-lg`}
+                >
+                  {message.text}
+                </p>
+              )}
+            </form>
           </div>
         </div>
       </section>

@@ -13,17 +13,14 @@ export function Header() {
     <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <Link href="/" className="flex items-center space-x-1 -ml-4">
+          <Link href="/" className="flex items-center justify-center space-x-1 -ml-16">
             <img
-              src="/hohenloher-gold-logo-new.png"
+              src="/hohenloher-gold-logo.png"
               alt="Hohenloher Gold Logo"
-              className="w-36 h-36 rounded-full -my-10 -mx-2"
+              className="w-45 h-45 rounded-full object-contain"
             />
-            <div className="font-serif font-bold text-xl text-foreground">
+            <div className="font-serif font-bold text-xl text-foreground text-center">
               <div>Südfrüchte Hohenlohe</div>
-              <div className="">
-                <span className="text-gold">{"&"}</span> Hohenloher Gold
-              </div>
             </div>
           </Link>
 

@@ -3,13 +3,17 @@ import { createAdminClient } from "@/lib/supabase/server"
 
 export async function GET() {
   try {
-    console.log("[v0] Loading delivery schedules from database...")
-
     const supabase = createAdminClient()
 
     const { data: schedules, error } = await supabase
       .from("delivery_schedules")
-      .select("*")
+      .select(`
+        *,
+        delivery_schedule_products(
+          product_id,
+          products(id, name, category_id)
+        )
+      `)
       .order("delivery_date", { ascending: true })
 
     if (error) {
@@ -17,27 +21,19 @@ export async function GET() {
       throw error
     }
 
-    console.log(`[v0] Found ${schedules?.length || 0} delivery schedules`)
-
-    const transformedSchedules = schedules?.map((schedule) => {
-      const deliveryDate = new Date(schedule.delivery_date)
-      const orderDeadline = new Date(schedule.order_deadline)
-
-      return {
-        date: deliveryDate.toLocaleDateString("de-DE", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        }),
-        type: Array.isArray(schedule.fruit_types) ? schedule.fruit_types.join(" & ") : schedule.fruit_types,
-        status: schedule.status,
-        orderDeadline: orderDeadline.toLocaleDateString("de-DE", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        }),
-      }
-    })
+    // Transform to include products array
+    const transformedSchedules = schedules?.map((schedule: any) => ({
+      id: schedule.id,
+      delivery_date: schedule.delivery_date,
+      status: schedule.status,
+      order_deadline: schedule.order_deadline,
+      notes: schedule.notes,
+      pickup_start_time: schedule.pickup_start_time,
+      pickup_end_time: schedule.pickup_end_time,
+      created_at: schedule.created_at,
+      updated_at: schedule.updated_at,
+      products: schedule.delivery_schedule_products?.map((dsp: any) => dsp.products).filter(Boolean) || [],
+    }))
 
     return NextResponse.json(transformedSchedules || [])
   } catch (error) {

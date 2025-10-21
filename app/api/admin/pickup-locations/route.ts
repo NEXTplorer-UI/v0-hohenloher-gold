@@ -1,8 +1,14 @@
 import { createClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { requireAdmin } from "@/lib/auth/api-auth"
 
 // GET - Fetch all pickup locations (admin)
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authResult = await requireAdmin(request)
+  if (authResult instanceof NextResponse) {
+    return authResult
+  }
+
   try {
     const supabase = await createClient()
 
@@ -24,7 +30,12 @@ export async function GET() {
 }
 
 // POST - Create new pickup location
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const authResult = await requireAdmin(request)
+  if (authResult instanceof NextResponse) {
+    return authResult
+  }
+
   try {
     const supabase = await createClient()
     const body = await request.json()

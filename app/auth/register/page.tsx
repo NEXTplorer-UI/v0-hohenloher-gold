@@ -181,7 +181,19 @@ export default function RegisterPage() {
 
             {message && (
               <Alert variant={message.includes("erfolgreich") ? "default" : "destructive"}>
-                <AlertDescription>{message}</AlertDescription>
+                <AlertDescription>
+                  {message.includes("erfolgreich") ? (
+                    <div className="space-y-2">
+                      <p className="font-semibold">{message}</p>
+                      <p className="text-sm">
+                        Der Bestätigungslink ist <strong>1 Stunde</strong> gültig. Bitte überprüfen Sie auch Ihren
+                        Spam-Ordner.
+                      </p>
+                    </div>
+                  ) : (
+                    message
+                  )}
+                </AlertDescription>
               </Alert>
             )}
 

@@ -6,31 +6,47 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Plus, Edit, Trash2, Check, X, AlertCircle } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Calendar, Plus, Edit, Trash2, Check, X, AlertCircle, Clock } from "lucide-react"
 import { createBrowserClient } from "@supabase/ssr"
+import { useDeliverySchedulesSWR } from "@/hooks/use-delivery-schedules-swr"
 
 interface DeliverySchedule {
   id: string
   delivery_date: string
-  fruit_types: string[]
   status: "planned" | "confirmed" | "completed" | "cancelled"
   order_deadline: string
   notes: string | null
+  pickup_start_time: string | null
+  pickup_end_time: string | null
   created_at: string
   updated_at: string
+  products?: Product[]
+}
+
+interface Product {
+  id: number
+  name: string
+  category_id: number
+  categories?: { name: string }
 }
 
 export default function DeliveryScheduleManagement() {
-  const [schedules, setSchedules] = useState<DeliverySchedule[]>([])
-  const [loading, setLoading] = useState(true)
+  const { schedules, isLoading: loading, refresh: loadSchedules } = useDeliverySchedulesSWR()
+
+  const [products, setProducts] = useState<Product[]>([])
+  const [selectedCategory, setSelectedCategory] = useState<string>("all")
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
 
   const [formData, setFormData] = useState({
     delivery_date: "",
-    fruit_types: "",
+    selectedProductIds: [] as number[],
     status: "planned" as const,
     order_deadline: "",
+    pickup_start_time: "",
+    pickup_end_time: "",
     notes: "",
   })
 
@@ -39,35 +55,51 @@ export default function DeliveryScheduleManagement() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   )
 
-  const loadSchedules = async () => {
-    setLoading(true)
+  const loadCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from("delivery_schedules")
-        .select("*")
-        .order("delivery_date", { ascending: true })
+      const { data, error } = await supabase.from("categories").select("id, name").order("name")
 
       if (error) throw error
 
-      setSchedules(data || [])
+      setCategories(data || [])
     } catch (error) {
-      console.error("Error loading delivery schedules:", error)
-    } finally {
-      setLoading(false)
+      console.error("Error loading categories:", error)
+    }
+  }
+
+  const loadProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, name, category_id, categories(name)")
+        .eq("is_active", true)
+        .order("name")
+
+      if (error) throw error
+
+      setProducts(data || [])
+    } catch (error) {
+      console.error("Error loading products:", error)
     }
   }
 
   useEffect(() => {
-    loadSchedules()
+    loadCategories()
+    loadProducts()
   }, [])
+
+  const filteredProducts =
+    selectedCategory === "all" ? products : products.filter((p) => p.category_id === Number.parseInt(selectedCategory))
 
   const handleAdd = () => {
     setIsAdding(true)
     setFormData({
       delivery_date: "",
-      fruit_types: "",
+      selectedProductIds: [],
       status: "planned",
       order_deadline: "",
+      pickup_start_time: "",
+      pickup_end_time: "",
       notes: "",
     })
   }
@@ -76,9 +108,11 @@ export default function DeliveryScheduleManagement() {
     setEditingId(schedule.id)
     setFormData({
       delivery_date: schedule.delivery_date,
-      fruit_types: schedule.fruit_types.join(", "),
+      selectedProductIds: schedule.products?.map((p) => p.id) || [],
       status: schedule.status,
       order_deadline: schedule.order_deadline,
+      pickup_start_time: schedule.pickup_start_time || "",
+      pickup_end_time: schedule.pickup_end_time || "",
       notes: schedule.notes || "",
     })
   }
@@ -88,44 +122,73 @@ export default function DeliveryScheduleManagement() {
     setEditingId(null)
     setFormData({
       delivery_date: "",
-      fruit_types: "",
+      selectedProductIds: [],
       status: "planned",
       order_deadline: "",
+      pickup_start_time: "",
+      pickup_end_time: "",
       notes: "",
     })
   }
 
+  const toggleProduct = (productId: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      selectedProductIds: prev.selectedProductIds.includes(productId)
+        ? prev.selectedProductIds.filter((id) => id !== productId)
+        : [...prev.selectedProductIds, productId],
+    }))
+  }
+
   const handleSave = async () => {
     try {
-      const fruitTypesArray = formData.fruit_types
-        .split(",")
-        .map((f) => f.trim())
-        .filter((f) => f.length > 0)
+      if (formData.pickup_start_time && formData.pickup_end_time) {
+        if (formData.pickup_start_time >= formData.pickup_end_time) {
+          alert("Die Endzeit muss nach der Startzeit liegen")
+          return
+        }
+      }
 
       const scheduleData = {
         delivery_date: formData.delivery_date,
-        fruit_types: fruitTypesArray,
         status: formData.status,
         order_deadline: formData.order_deadline,
+        pickup_start_time: formData.pickup_start_time || null,
+        pickup_end_time: formData.pickup_end_time || null,
         notes: formData.notes || null,
         updated_at: new Date().toISOString(),
       }
 
-      if (isAdding) {
-        const { error } = await supabase.from("delivery_schedules").insert([scheduleData])
+      let scheduleId: string
 
+      if (isAdding) {
+        const { data, error } = await supabase.from("delivery_schedules").insert([scheduleData]).select().single()
         if (error) throw error
+        scheduleId = data.id
       } else if (editingId) {
         const { error } = await supabase.from("delivery_schedules").update(scheduleData).eq("id", editingId)
-
         if (error) throw error
+        scheduleId = editingId
+        await supabase.from("delivery_schedule_products").delete().eq("delivery_schedule_id", scheduleId)
+      } else {
+        return
+      }
+
+      if (formData.selectedProductIds.length > 0) {
+        const productAssociations = formData.selectedProductIds.map((productId) => ({
+          delivery_schedule_id: scheduleId,
+          product_id: productId,
+        }))
+
+        const { error: junctionError } = await supabase.from("delivery_schedule_products").insert(productAssociations)
+        if (junctionError) throw junctionError
       }
 
       await loadSchedules()
       handleCancel()
     } catch (error) {
       console.error("Error saving delivery schedule:", error)
-      alert("Fehler beim Speichern des Liefertermins")
+      alert("Fehler beim Speichern des Liefertermins: " + (error as Error).message)
     }
   }
 
@@ -133,8 +196,8 @@ export default function DeliveryScheduleManagement() {
     if (!confirm("Möchten Sie diesen Liefertermin wirklich löschen?")) return
 
     try {
+      await supabase.from("delivery_schedule_products").delete().eq("delivery_schedule_id", id)
       const { error } = await supabase.from("delivery_schedules").delete().eq("id", id)
-
       if (error) throw error
 
       await loadSchedules()
@@ -171,6 +234,11 @@ export default function DeliveryScheduleManagement() {
 
   const isDeadlinePassed = (deadline: string) => {
     return new Date(deadline) < new Date()
+  }
+
+  const formatTimeRange = (startTime: string | null, endTime: string | null) => {
+    if (!startTime || !endTime) return null
+    return `${startTime} - ${endTime} Uhr`
   }
 
   if (loading) {
@@ -227,14 +295,72 @@ export default function DeliveryScheduleManagement() {
                 />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="pickup_start_time" className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Abholung von
+                </Label>
+                <Input
+                  id="pickup_start_time"
+                  type="time"
+                  value={formData.pickup_start_time}
+                  onChange={(e) => setFormData({ ...formData, pickup_start_time: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="pickup_end_time">Abholung bis</Label>
+                <Input
+                  id="pickup_end_time"
+                  type="time"
+                  value={formData.pickup_end_time}
+                  onChange={(e) => setFormData({ ...formData, pickup_end_time: e.target.value })}
+                />
+              </div>
+            </div>
             <div>
-              <Label htmlFor="fruit_types">Verfügbare Früchte (kommagetrennt) *</Label>
-              <Input
-                id="fruit_types"
-                placeholder="z.B. Orangen, Zitronen, Clementinen"
-                value={formData.fruit_types}
-                onChange={(e) => setFormData({ ...formData, fruit_types: e.target.value })}
-              />
+              <Label>Verfügbare Produkte auswählen *</Label>
+              <div className="mt-2 mb-3">
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-full p-2 border rounded text-sm"
+                >
+                  <option value="all">Alle Kategorien</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id.toString()}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="mt-2 max-h-60 overflow-y-auto border rounded-lg p-3 space-y-2">
+                {filteredProducts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Keine Produkte in dieser Kategorie</p>
+                ) : (
+                  filteredProducts.map((product) => (
+                    <div key={product.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`product-${product.id}`}
+                        checked={formData.selectedProductIds.includes(product.id)}
+                        onCheckedChange={() => toggleProduct(product.id)}
+                      />
+                      <label
+                        htmlFor={`product-${product.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {product.name}
+                        {product.categories && (
+                          <span className="text-muted-foreground ml-2">({product.categories.name})</span>
+                        )}
+                      </label>
+                    </div>
+                  ))
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {formData.selectedProductIds.length} Produkt(e) ausgewählt
+              </p>
             </div>
             <div>
               <Label htmlFor="status">Status</Label>
@@ -260,7 +386,7 @@ export default function DeliveryScheduleManagement() {
               />
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSave} size="sm">
+              <Button onClick={handleSave} size="sm" disabled={formData.selectedProductIds.length === 0}>
                 <Check className="h-4 w-4 mr-2" />
                 Speichern
               </Button>
@@ -306,14 +432,72 @@ export default function DeliveryScheduleManagement() {
                       />
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor={`edit_pickup_start_time_${schedule.id}`} className="flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        Abholung von
+                      </Label>
+                      <Input
+                        id={`edit_pickup_start_time_${schedule.id}`}
+                        type="time"
+                        value={formData.pickup_start_time}
+                        onChange={(e) => setFormData({ ...formData, pickup_start_time: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor={`edit_pickup_end_time_${schedule.id}`}>Abholung bis</Label>
+                      <Input
+                        id={`edit_pickup_end_time_${schedule.id}`}
+                        type="time"
+                        value={formData.pickup_end_time}
+                        onChange={(e) => setFormData({ ...formData, pickup_end_time: e.target.value })}
+                      />
+                    </div>
+                  </div>
                   <div>
-                    <Label htmlFor={`edit_fruit_types_${schedule.id}`}>Verfügbare Früchte (kommagetrennt) *</Label>
-                    <Input
-                      id={`edit_fruit_types_${schedule.id}`}
-                      placeholder="z.B. Orangen, Zitronen, Clementinen"
-                      value={formData.fruit_types}
-                      onChange={(e) => setFormData({ ...formData, fruit_types: e.target.value })}
-                    />
+                    <Label>Verfügbare Produkte auswählen *</Label>
+                    <div className="mt-2 mb-3">
+                      <select
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        className="w-full p-2 border rounded text-sm"
+                      >
+                        <option value="all">Alle Kategorien</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id.toString()}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="mt-2 max-h-60 overflow-y-auto border rounded-lg p-3 space-y-2">
+                      {filteredProducts.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Keine Produkte in dieser Kategorie</p>
+                      ) : (
+                        filteredProducts.map((product) => (
+                          <div key={product.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`edit-product-${product.id}`}
+                              checked={formData.selectedProductIds.includes(product.id)}
+                              onCheckedChange={() => toggleProduct(product.id)}
+                            />
+                            <label
+                              htmlFor={`edit-product-${product.id}`}
+                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                            >
+                              {product.name}
+                              {product.categories && (
+                                <span className="text-muted-foreground ml-2">({product.categories.name})</span>
+                              )}
+                            </label>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formData.selectedProductIds.length} Produkt(e) ausgewählt
+                    </p>
                   </div>
                   <div>
                     <Label htmlFor={`edit_status_${schedule.id}`}>Status</Label>
@@ -339,7 +523,7 @@ export default function DeliveryScheduleManagement() {
                     />
                   </div>
                   <div className="flex gap-2">
-                    <Button onClick={handleSave} size="sm">
+                    <Button onClick={handleSave} size="sm" disabled={formData.selectedProductIds.length === 0}>
                       <Check className="h-4 w-4 mr-2" />
                       Speichern
                     </Button>
@@ -366,8 +550,18 @@ export default function DeliveryScheduleManagement() {
                       <p>
                         <strong>Bestellschluss:</strong> {formatDate(schedule.order_deadline)}
                       </p>
+                      {formatTimeRange(schedule.pickup_start_time, schedule.pickup_end_time) && (
+                        <p className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          <strong>Abholzeit:</strong>{" "}
+                          {formatTimeRange(schedule.pickup_start_time, schedule.pickup_end_time)}
+                        </p>
+                      )}
                       <p>
-                        <strong>Verfügbare Früchte:</strong> {schedule.fruit_types.join(", ")}
+                        <strong>Verfügbare Produkte:</strong>{" "}
+                        {schedule.products && schedule.products.length > 0
+                          ? schedule.products.map((p) => p.name).join(", ")
+                          : "Keine Produkte zugeordnet"}
                       </p>
                       {schedule.notes && (
                         <p>
