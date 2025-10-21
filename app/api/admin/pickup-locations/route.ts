@@ -1,0 +1,63 @@
+import { createClient } from "@/lib/supabase/server"
+import { NextResponse } from "next/server"
+
+// GET - Fetch all pickup locations (admin)
+export async function GET() {
+  try {
+    const supabase = await createClient()
+
+    const { data: locations, error } = await supabase
+      .from("pickup_locations")
+      .select("*")
+      .order("name", { ascending: true })
+
+    if (error) {
+      console.error("Database error:", error)
+      return NextResponse.json({ error: "Failed to fetch pickup locations" }, { status: 500 })
+    }
+
+    return NextResponse.json(locations)
+  } catch (error) {
+    console.error("Error fetching pickup locations:", error)
+    return NextResponse.json({ error: "Failed to fetch pickup locations" }, { status: 500 })
+  }
+}
+
+// POST - Create new pickup location
+export async function POST(request: Request) {
+  try {
+    const supabase = await createClient()
+    const body = await request.json()
+
+    const { name, address, postal_code, city, contact_person, contact_phone, is_active } = body
+
+    // Validation
+    if (!name || !address || !postal_code || !city) {
+      return NextResponse.json({ error: "Name, Adresse, PLZ und Stadt sind Pflichtfelder" }, { status: 400 })
+    }
+
+    const { data: location, error } = await supabase
+      .from("pickup_locations")
+      .insert({
+        name,
+        address,
+        postal_code,
+        city,
+        contact_person,
+        contact_phone,
+        is_active: is_active ?? true,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error("Database error:", error)
+      return NextResponse.json({ error: "Failed to create pickup location" }, { status: 500 })
+    }
+
+    return NextResponse.json(location, { status: 201 })
+  } catch (error) {
+    console.error("Error creating pickup location:", error)
+    return NextResponse.json({ error: "Failed to create pickup location" }, { status: 500 })
+  }
+}
