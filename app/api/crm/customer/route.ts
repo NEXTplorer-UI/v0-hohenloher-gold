@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       postal_code: customerData.zip,
       city: customerData.city,
       address: fullAddress,
-      tags: [customerData.category],
+      favorite_categories: customerData.category ? [customerData.category] : [],
       customer_segment: "new",
       marketing_consent: customerData.emailUpdates,
       marketing_consent_at: consentAt,

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,69 +22,65 @@ export default function CustomerInput() {
     house_number: "",
     city: "",
     postal_code: "",
-    tags: [] as string[],
-    pickupLocation: "",
-    notes: "",
+    favorite_categories: [] as string[],
+    special_requests: "",
+    customer_segment: "new" as "new" | "regular" | "premium" | "distributor",
   })
 
-  const [selectedPurchaseCategory, setSelectedPurchaseCategory] = useState("")
-  const [selectedPickupLocation, setSelectedPickupLocation] = useState("")
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; slug: string }>>([])
+  const [pickupLocations, setPickupLocations] = useState<
+    Array<{ id: string; name: string; city: string; address: string }>
+  >([])
+  const [isLoadingData, setIsLoadingData] = useState(true)
+
+  const [selectedCategory, setSelectedCategory] = useState("")
 
   const [isLoading, setIsLoading] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
 
   const [isOpen, setIsOpen] = useState(false)
 
-  const [availableTags, setAvailableTags] = useState<string[]>([
-    "Südfrüchte-Käufer",
-    "Trockenfrüchte-Käufer",
-    "Spezialitäten-Käufer",
-    "Regional-Käufer",
-    "Gemischt",
-    "Abholung-Stuttgart",
-    "Abholung-Heilbronn",
-    "Abholung-Schwäbisch Hall",
-    "Verteiler-Stuttgart",
-    "Verteiler-Heilbronn",
-    "Verteiler-Schwäbisch Hall",
-  ])
-  const [newTag, setNewTag] = useState("")
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [categoriesRes, locationsRes] = await Promise.all([
+          fetch("/api/categories"),
+          fetch("/api/pickup-locations"),
+        ])
 
-  const purchaseCategories = [
-    "Südfrüchte-Käufer",
-    "Trockenfrüchte-Käufer",
-    "Spezialitäten-Käufer",
-    "Regional-Käufer",
-    "Gemischt",
-  ]
+        if (categoriesRes.ok) {
+          const { categories: cats } = await categoriesRes.json()
+          setCategories(cats)
+        }
 
-  const pickupLocations = [
-    "Abholung-Stuttgart",
-    "Abholung-Heilbronn",
-    "Abholung-Schwäbisch Hall",
-    "Verteiler-Stuttgart",
-    "Verteiler-Heilbronn",
-    "Verteiler-Schwäbisch Hall",
-  ]
+        if (locationsRes.ok) {
+          const { pickupLocations: locs } = await locationsRes.json()
+          setPickupLocations(locs)
+        }
+      } catch (error) {
+        console.error("[v0] Error loading data:", error)
+      } finally {
+        setIsLoadingData(false)
+      }
+    }
 
-  const addTag = (tag: string) => {
-    if (tag && !customerData.tags.includes(tag)) {
-      setCustomerData({ ...customerData, tags: [...customerData.tags, tag] })
+    loadData()
+  }, [])
+
+  const addCategory = (categoryName: string) => {
+    if (categoryName && !customerData.favorite_categories.includes(categoryName)) {
+      setCustomerData({
+        ...customerData,
+        favorite_categories: [...customerData.favorite_categories, categoryName],
+      })
     }
   }
 
-  const removeTag = (tagToRemove: string) => {
+  const removeCategory = (categoryToRemove: string) => {
     setCustomerData({
       ...customerData,
-      tags: customerData.tags.filter((tag) => tag !== tagToRemove),
+      favorite_categories: customerData.favorite_categories.filter((cat) => cat !== categoryToRemove),
     })
-  }
-
-  const addCustomTag = () => {
-    if (newTag.trim() && !availableTags.includes(newTag.trim())) {
-      setAvailableTags([...availableTags, newTag.trim()])
-      setNewTag("")
-    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,12 +120,11 @@ export default function CustomerInput() {
           house_number: "",
           city: "",
           postal_code: "",
-          tags: [],
-          pickupLocation: "",
-          notes: "",
+          favorite_categories: [],
+          special_requests: "",
+          customer_segment: "new",
         })
-        setSelectedPurchaseCategory("")
-        setSelectedPickupLocation("")
+        setSelectedCategory("")
 
         setTimeout(() => setSuccessMessage(""), 3000)
       } else {
@@ -237,116 +232,66 @@ export default function CustomerInput() {
                   />
                 </div>
                 <div className="space-y-2 col-span-2">
-                  <Label>Tags verwalten</Label>
-                  <div className="space-y-2">
+                  <Label htmlFor="customer_segment">Kundensegment</Label>
+                  <Select
+                    value={customerData.customer_segment}
+                    onValueChange={(value: any) => setCustomerData({ ...customerData, customer_segment: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Segment wählen" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new">Neukunde</SelectItem>
+                      <SelectItem value="regular">Stammkunde</SelectItem>
+                      <SelectItem value="premium">Premium-Kunde</SelectItem>
+                      <SelectItem value="distributor">Verteiler</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label>Kaufkategorien (aus Datenbank)</Label>
+                  {isLoadingData ? (
+                    <p className="text-sm text-muted-foreground">Lade Kategorien...</p>
+                  ) : (
                     <Select
-                      value={selectedPurchaseCategory}
+                      value={selectedCategory}
                       onValueChange={(value) => {
-                        setSelectedPurchaseCategory(value)
-                        addTag(value)
-                        setSelectedPurchaseCategory("")
+                        setSelectedCategory(value)
+                        addCategory(value)
+                        setSelectedCategory("")
                       }}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Kaufkategorie wählen" />
+                        <SelectValue placeholder="Kategorie wählen" />
                       </SelectTrigger>
                       <SelectContent>
-                        {purchaseCategories.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
+                        {categories.map((category) => (
+                          <SelectItem key={category.id} value={category.name}>
+                            {category.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-
-                    <Select
-                      value={selectedPickupLocation}
-                      onValueChange={(value) => {
-                        setSelectedPickupLocation(value)
-                        addTag(value)
-                        setSelectedPickupLocation("")
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Abholort wählen" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {pickupLocations.map((location) => (
-                          <SelectItem key={location} value={location}>
-                            {location}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select onValueChange={addTag}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Verfügbare Tags auswählen" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableTags
-                          .filter((tag) => !customerData.tags.includes(tag))
-                          .map((tag) => (
-                            <SelectItem key={tag} value={tag}>
-                              {tag}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Neuen Tag erstellen:</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Neuen Tag eingeben..."
-                        value={newTag}
-                        onChange={(e) => setNewTag(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault()
-                            addCustomTag()
-                          }
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        onClick={addCustomTag}
-                        disabled={!newTag.trim() || availableTags.includes(newTag.trim())}
-                      >
-                        Hinzufügen
-                      </Button>
-                    </div>
-                  </div>
-
-                  {customerData.tags.length > 0 && (
+                  )}
+                  {customerData.favorite_categories.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {customerData.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary" className="flex items-center gap-1">
-                          {tag}
-                          <X className="h-3 w-3 cursor-pointer" onClick={() => removeTag(tag)} />
+                      {customerData.favorite_categories.map((cat) => (
+                        <Badge key={cat} variant="secondary" className="flex items-center gap-1">
+                          {cat}
+                          <X className="h-3 w-3 cursor-pointer" onClick={() => removeCategory(cat)} />
                         </Badge>
                       ))}
                     </div>
                   )}
-
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Alle verfügbaren Tags:</Label>
-                    <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto p-2 border rounded-md bg-gray-50">
-                      {availableTags.map((tag) => (
-                        <Badge
-                          key={tag}
-                          variant="outline"
-                          className={`text-xs cursor-pointer hover:bg-blue-100 ${
-                            customerData.tags.includes(tag) ? "bg-blue-200" : ""
-                          }`}
-                          onClick={() => addTag(tag)}
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="special_requests">Besondere Wünsche / Notizen</Label>
+                  <Input
+                    id="special_requests"
+                    value={customerData.special_requests}
+                    onChange={(e) => setCustomerData({ ...customerData, special_requests: e.target.value })}
+                    placeholder="Besondere Anforderungen oder Notizen..."
+                  />
                 </div>
               </div>
               <Button type="submit" className="w-full" disabled={isLoading}>

@@ -5,7 +5,6 @@ import "./globals.css"
 import { CartProvider } from "@/contexts/cart-context"
 import { PricingProvider } from "@/components/pricing-context"
 import { AdminProvider } from "@/contexts/admin-context"
-import { InventoryProvider } from "@/contexts/inventory-context"
 import { ProductsProvider } from "@/contexts/products-context"
 import { CookieConsent } from "@/components/cookie-consent"
 import { Toaster } from "@/components/ui/toaster"
@@ -140,16 +139,14 @@ export default function RootLayout({
           <CartProvider>
             <PricingProvider>
               <AdminProvider>
-                <InventoryProvider>
-                  <ProductsProvider>
-                    <ScrollToTop />
-                    <Header />
-                    <ErrorBoundary>{children}</ErrorBoundary>
-                    <Footer />
-                    <CookieConsent />
-                    <Toaster />
-                  </ProductsProvider>
-                </InventoryProvider>
+                <ProductsProvider>
+                  <ScrollToTop />
+                  <Header />
+                  <ErrorBoundary>{children}</ErrorBoundary>
+                  <Footer />
+                  <CookieConsent />
+                  <Toaster />
+                </ProductsProvider>
               </AdminProvider>
             </PricingProvider>
           </CartProvider>

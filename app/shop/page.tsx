@@ -400,7 +400,7 @@ export default function ShopPage() {
                             <div key={index} className="p-3 bg-primary/10 rounded border">
                               <div className="flex justify-between items-start mb-1">
                                 <span className="font-medium">{delivery.date}</span>
-                                <span className="text-primary text-sm">{delivery.type}</span>
+                                {delivery.notes && <span className="text-primary text-sm mx-60 px-0">{delivery.notes}</span>}
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 <span className="font-medium">Bestellschluss:</span> {delivery.orderDeadline}
@@ -430,15 +430,15 @@ export default function ShopPage() {
                             <div key={index} className="p-3 bg-gold/10 rounded border">
                               <div className="flex justify-between items-start mb-1">
                                 <span className="font-medium">{delivery.date}</span>
-                                <span className="text-gold text-sm">{delivery.type}</span>
+                                {delivery.notes && <span className="text-gold text-sm">{delivery.notes}</span>}
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 <span className="font-medium">Bestellschluss:</span> {delivery.orderDeadline}
                               </div>
                               {delivery.pickupStartTime && delivery.pickupEndTime && (
                                 <div className="text-xs text-muted-foreground mt-1">
-                                  <span className="font-medium">Abholung:</span> {delivery.pickupStartTime} -{" "}
-                                  {delivery.pickupEndTime} Uhr
+                                  <span className="font-medium">Abholung:</span> {formatTime(delivery.pickupStartTime)}{" "}
+                                  - {formatTime(delivery.pickupEndTime)} Uhr
                                   <br />
                                   <span className="text-xs italic">oder nach Terminvereinbarung</span>
                                 </div>

@@ -13,7 +13,7 @@ export function Footer() {
                 alt="Hohenloher Gold Logo"
                 className="w-10 h-10 rounded-full"
               />
-              <span className="font-serif font-bold text-lg text-sidebar-foreground">Hohenloher Gold</span>
+              <span className="font-serif font-bold text-lg text-sidebar-foreground">{"Hohenloher Gold"}</span>
             </div>
             <p className="text-sm text-muted-foreground">
               Natürliche Qualität aus Hohenlohe und frische Südfrüchte direkt aus Sizilien.
@@ -59,10 +59,10 @@ export function Footer() {
           <div className="space-y-4">
             <h4 className="font-semibold text-sidebar-foreground">Kontakt</h4>
             <div className="space-y-2 text-sm text-muted-foreground">
-              <p>Hohenloher Gold GmbH</p>
-              <p>Musterstraße 123</p>
-              <p>74653 Künzelsau</p>
-              <p>info@hohenloher-gold.de</p>
+              <p>Gerlinde Fink</p>
+              <p>Weststraße 28</p>
+              <p> 74629 Pfedelbach </p>
+              <p>kontakt@suedfruechte-hohenlohe.de</p>
             </div>
           </div>
         </div>
