@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server"
 import { withErrorHandling } from "@/lib/errors/error-handler"
 import { AuthenticationError, DatabaseError } from "@/lib/errors/api-errors"
 
+export const dynamic = "force-dynamic"
+
 export const POST = withErrorHandling(async () => {
   const supabase = await createClient()
 

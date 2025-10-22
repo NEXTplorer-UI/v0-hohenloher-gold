@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth/api-auth"
 
+export const dynamic = "force-dynamic"
+
 // GET - Fetch all pickup locations (admin)
 export async function GET(request: NextRequest) {
   const authResult = await requireAdmin(request)
