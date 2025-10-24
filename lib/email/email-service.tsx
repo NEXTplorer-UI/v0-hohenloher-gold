@@ -29,7 +29,7 @@ export class EmailService {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "Hohenloher Gold <kontakt@suedfruechte-hohenlohe.de>",
+          from: "Südfrüchte Hohenlohe <kontakt@suedfruechte-hohenlohe.de>",
           to: [data.to],
           subject: data.subject,
           html: data.html,
@@ -64,7 +64,7 @@ export class EmailService {
   ): Promise<boolean> {
     const emailData: EmailData = {
       to: customerEmail,
-      subject: `Rechnung für Ihre Bestellung ${orderId} - Hohenloher Gold`,
+      subject: `Rechnung für Ihre Bestellung ${orderId} - Südfrüchte Hohenlohe`,
       html: this.getInvoiceEmailTemplate(customerName, orderId),
       attachments: [
         {
@@ -89,7 +89,7 @@ export class EmailService {
   ): Promise<boolean> {
     const emailData: EmailData = {
       to: customerEmail,
-      subject: `Bestellbestätigung ${orderId} - Hohenloher Gold`,
+      subject: `Bestellbestätigung ${orderId} - Südfrüchte Hohenlohe`,
       html: this.getOrderConfirmationTemplate(
         customerName,
         orderId,
@@ -112,7 +112,7 @@ export class EmailService {
   ): Promise<boolean> {
     const emailData: EmailData = {
       to: customerEmail,
-      subject: `Erinnerung: Abholung Ihrer Bestellung ${orderId} - Hohenloher Gold`,
+      subject: `Erinnerung: Abholung Ihrer Bestellung ${orderId} - Südfrüchte Hohenlohe`,
       html: this.getPickupReminderTemplate(customerName, orderId, pickupDate, pickupLocation),
     }
 
@@ -123,14 +123,14 @@ export class EmailService {
     return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #a16207 0%, #d97706 100%); color: white; padding: 20px; text-align: center;">
-          <h1 style="margin: 0;">Hohenloher Gold</h1>
+          <h1 style="margin: 0;">Südfrüchte Hohenlohe</h1>
           <p style="margin: 5px 0 0 0;">Ihre Rechnung ist bereit</p>
         </div>
         
         <div style="padding: 20px; background: #f9f9f9;">
           <h2>Liebe/r ${customerName},</h2>
           
-          <p>vielen Dank für Ihre Bestellung bei Hohenloher Gold!</p>
+          <p>vielen Dank für Ihre Bestellung bei Südfrüchte Hohenlohe!</p>
           
           <p>Im Anhang finden Sie die Rechnung für Ihre Bestellung <strong>${orderId}</strong>.</p>
           
@@ -146,11 +146,11 @@ export class EmailService {
           <p>Wir freuen uns auf Ihren nächsten Besuch!</p>
           
           <p>Mit freundlichen Grüßen<br>
-          Ihr Team von Hohenloher Gold</p>
+          Ihr Team von Südfrüchte Hohenlohe</p>
         </div>
         
         <div style="background: #333; color: white; padding: 15px; text-align: center; font-size: 12px;">
-          <p>Hohenloher Gold | Weststraße 28 | 74629 Pfedelbach</p>
+          <p>Südfrüchte Hohenlohe | Weststraße 28 | 74629 Pfedelbach</p>
           <p>E-Mail: kontakt@suedfruechte-hohenlohe.de | Tel: 0157 357 038 64</p>
         </div>
       </div>
@@ -221,14 +221,14 @@ export class EmailService {
     return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #a16207 0%, #d97706 100%); color: white; padding: 20px; text-align: center;">
-          <h1 style="margin: 0;">Hohenloher Gold</h1>
+          <h1 style="margin: 0;">Südfrüchte Hohenlohe</h1>
           <p style="margin: 5px 0 0 0;">Bestellbestätigung</p>
         </div>
         
         <div style="padding: 20px; background: #f9f9f9;">
           <h2>Liebe/r ${customerName},</h2>
           
-          <p>vielen Dank für Ihre Bestellung bei Hohenloher Gold!</p>
+          <p>vielen Dank für Ihre Bestellung bei Südfrüchte Hohenlohe!</p>
           
           <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
             <h3 style="color: #a16207; margin-top: 0;">Bestelldetails:</h3>
@@ -244,11 +244,11 @@ export class EmailService {
           <p>Wir werden Ihre Bestellung sorgfältig vorbereiten und Sie informieren, sobald sie zur Abholung bereit ist.</p>
           
           <p>Mit freundlichen Grüßen<br>
-          Ihr Team von Hohenloher Gold</p>
+          Ihr Team von Südfrüchte Hohenlohe</p>
         </div>
         
         <div style="background: #333; color: white; padding: 15px; text-align: center; font-size: 12px;">
-          <p>Hohenloher Gold | Weststraße 28 | 74629 Pfedelbach</p>
+          <p>Südfrüchte Hohenlohe | Weststraße 28 | 74629 Pfedelbach</p>
           <p>E-Mail: kontakt@suedfruechte-hohenlohe.de | Tel: 0157 357 038 64</p>
         </div>
       </div>
@@ -264,7 +264,7 @@ export class EmailService {
     return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%); color: white; padding: 20px; text-align: center;">
-          <h1 style="margin: 0;">Hohenloher Gold</h1>
+          <h1 style="margin: 0;">Südfrüchte Hohenlohe</h1>
           <p style="margin: 5px 0 0 0;">Abholtermin-Erinnerung</p>
         </div>
         
@@ -285,11 +285,11 @@ export class EmailService {
           <p>Wir freuen uns auf Sie!</p>
           
           <p>Mit freundlichen Grüßen<br>
-          Ihr Team von Hohenloher Gold</p>
+          Ihr Team von Südfrüchte Hohenlohe</p>
         </div>
         
         <div style="background: #333; color: white; padding: 15px; text-align: center; font-size: 12px;">
-          <p>Hohenloher Gold | Weststraße 28 | 74629 Pfedelbach</p>
+          <p>Südfrüchte Hohenlohe | Weststraße 28 | 74629 Pfedelbach</p>
           <p>E-Mail: kontakt@suedfruechte-hohenlohe.de | Tel: 0157 357 038 64</p>
         </div>
       </div>

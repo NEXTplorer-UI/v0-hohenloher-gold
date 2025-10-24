@@ -1,15 +1,17 @@
 "use client"
 
+import { Separator } from "@/components/ui/separator"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import { Search, MapPin, Users, Clock, Phone, Mail, ArrowRight, Heart, ChevronDown } from "lucide-react"
 import { useState } from "react"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
+import { useNearbyPickups } from "@/lib/hooks/use-nearby-pickups"
 
 // Mock data for pickup locations
 const pickupLocations = [
@@ -17,48 +19,54 @@ const pickupLocations = [
     id: 1,
     name: "Beispiel Abholort",
     address: "Musterstraße 1, 74653 Künzelsau",
-    plz: "74653",
-    contact: "Max Mustermann",
-    phone: "0123 456789",
+    postal_code: "74653",
+    contact_person: "Max Mustermann",
+    contact_phone: "0123 456789",
     email: "max@example.com",
     hours: "Mo-Fr 14-18 Uhr",
-    distance: "5 km",
+    distanceKm: 5,
   },
 ]
 
 const centralWarehouse = {
-  id: 999,
+  id: "999",
   name: "Zentrallager Südfrüchte Hohenlohe",
   address: "Weststraße 28, 74629 Pfedelbach",
-  plz: "74629",
-  contact: "Südfrüchte Hohenlohe Team",
-  phone: "+49 1573 5703864",
-  email: "kontakt@suedfruechte-hohenlohe.de",
-  hours: "Siehe Abholtermine",
-  distance: "Zentrallager",
+  postal_code: "74629",
+  contact_person: "Südfrüchte Hohenlohe Team",
+  contact_phone: "+49 1573 5703864",
+  city: "Pfedelbach",
+  is_active: true,
   isWarehouse: true,
 }
 
 export default function DistributorPage() {
   const [searchPlz, setSearchPlz] = useState("")
-  const [searchResults, setSearchResults] = useState<typeof pickupLocations>([])
   const [showResults, setShowResults] = useState(false)
   const [personalMessageLength, setPersonalMessageLength] = useState(0)
   const [newsletter, setNewsletter] = useState(false)
-  const [selectedStation, setSelectedStation] = useState<(typeof pickupLocations)[0] | typeof centralWarehouse | null>(
-    null,
-  )
+  const [selectedStation, setSelectedStation] = useState<any>(null)
+
+  const {
+    locations: searchResults,
+    allLocations,
+    isLoading,
+  } = useNearbyPickups({
+    userPlz: searchPlz,
+    radiusKm: 30,
+    maxPlzDelta: 300,
+    take: 5,
+  })
 
   const handlePlzSearch = () => {
     if (searchPlz.length >= 4) {
-      // Simple mock search - in real app would use proper distance calculation
-      const results = pickupLocations.filter((location) => location.plz.startsWith(searchPlz.substring(0, 3)))
-      setSearchResults(results)
       setShowResults(true)
     }
   }
 
-  const allLocations = [...pickupLocations, centralWarehouse].sort((a, b) => a.plz.localeCompare(b.plz))
+  const allLocationsWithWarehouse = [...allLocations, centralWarehouse].sort((a, b) =>
+    a.postal_code.localeCompare(b.postal_code),
+  )
 
   const handleBecomeDistributor = async () => {
     const formData = {
@@ -145,9 +153,9 @@ export default function DistributorPage() {
                     onChange={(e) => setSearchPlz(e.target.value)}
                     maxLength={5}
                   />
-                  <Button onClick={handlePlzSearch} disabled={searchPlz.length < 4}>
+                  <Button onClick={handlePlzSearch} disabled={searchPlz.length < 4 || isLoading}>
                     <Search className="w-4 h-4 mr-2" />
-                    Suchen
+                    {isLoading ? "Suche..." : "Suchen"}
                   </Button>
                 </div>
 
@@ -161,25 +169,21 @@ export default function DistributorPage() {
                             <div className="space-y-2">
                               <div className="flex justify-between items-start">
                                 <h4 className="font-semibold">{location.name}</h4>
-                                <Badge variant="outline">{location.distance}</Badge>
+                                <Badge variant="outline">
+                                  {location.distanceKm
+                                    ? `ca. ${location.distanceKm.toFixed(1)} km`
+                                    : `PLZ ${location.postal_code}`}
+                                </Badge>
                               </div>
                               <p className="text-sm text-muted-foreground">{location.address}</p>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                                 <div className="flex items-center space-x-2">
-                                  <Clock className="w-4 h-4 text-primary" />
-                                  <span>{location.hours}</span>
-                                </div>
-                                <div className="flex items-center space-x-2">
                                   <Phone className="w-4 h-4 text-primary" />
-                                  <span>{location.phone}</span>
+                                  <span>{location.contact_phone}</span>
                                 </div>
-                              </div>
-                              <div className="flex items-center space-x-2 text-sm">
-                                <Mail className="w-4 h-4 text-primary" />
-                                <span>{location.email}</span>
                               </div>
                               <p className="text-sm">
-                                <strong>Ansprechpartner:</strong> {location.contact}
+                                <strong>Ansprechpartner:</strong> {location.contact_person}
                               </p>
                             </div>
                           </Card>
@@ -209,16 +213,16 @@ export default function DistributorPage() {
                             </p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mt-3">
                               <div className="flex items-center space-x-2">
-                                <Clock className="w-4 h-4 text-primary" />
+                                <Clock className="w-4 h-4 text-primary flex-shrink-0" />
                                 <span>Siehe Abholtermine</span>
                               </div>
                               <div className="flex items-center space-x-2">
-                                <Phone className="w-4 h-4 text-primary" />
+                                <Phone className="w-4 h-4 text-primary flex-shrink-0" />
                                 <span>07940 123456</span>
                               </div>
                             </div>
                             <div className="flex items-center space-x-2 text-sm">
-                              <Mail className="w-4 h-4 text-primary" />
+                              <Mail className="w-4 h-4 text-primary flex-shrink-0" />
                               <span>kontakt@suedfruechte-hohenlohe.de</span>
                             </div>
                           </div>
@@ -256,7 +260,7 @@ export default function DistributorPage() {
                 <div className="space-y-4">
                   {/* Compact scrollable list */}
                   <div className="border rounded-lg max-h-48 overflow-y-auto">
-                    {allLocations.map((location) => (
+                    {allLocationsWithWarehouse.map((location) => (
                       <button
                         key={location.id}
                         onClick={() => setSelectedStation(location)}
@@ -311,7 +315,7 @@ export default function DistributorPage() {
                           {"isWarehouse" in selectedStation && selectedStation.isWarehouse ? (
                             <Badge variant="secondary">Zentrallager</Badge>
                           ) : (
-                            <Badge variant="outline">{selectedStation.distance}</Badge>
+                            <Badge variant="outline">PLZ {selectedStation.postal_code}</Badge>
                           )}
                         </div>
 
@@ -325,22 +329,13 @@ export default function DistributorPage() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                           <div className="flex items-center space-x-2">
-                            <Clock className="w-4 h-4 text-primary flex-shrink-0" />
-                            <span>{selectedStation.hours}</span>
-                          </div>
-                          <div className="flex items-center space-x-2">
                             <Phone className="w-4 h-4 text-primary flex-shrink-0" />
-                            <span>{selectedStation.phone}</span>
+                            <span>{selectedStation.contact_phone}</span>
                           </div>
-                        </div>
-
-                        <div className="flex items-center space-x-2 text-sm">
-                          <Mail className="w-4 h-4 text-primary flex-shrink-0" />
-                          <span>{selectedStation.email}</span>
                         </div>
 
                         <p className="text-sm">
-                          <strong>Ansprechpartner:</strong> {selectedStation.contact}
+                          <strong>Ansprechpartner:</strong> {selectedStation.contact_person}
                         </p>
                       </div>
                     </Card>

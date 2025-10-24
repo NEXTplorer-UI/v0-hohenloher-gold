@@ -7,18 +7,13 @@ import { ShoppingCart, ArrowRight, Plus, Minus, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useCart } from "@/contexts/cart-context"
 import { usePricing } from "@/components/pricing-context"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 
 export function CartHeaderIndicator() {
   const { state, dispatch } = useCart()
   const { pricingMode, calculatePrice } = usePricing()
   const [isHovered, setIsHovered] = useState(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-  useEffect(() => {
-    console.log("[v0] CartHeaderIndicator - pricingMode changed:", pricingMode)
-    console.log("[v0] CartHeaderIndicator - items:", state.items?.length || 0)
-  }, [pricingMode, state.items])
 
   // Don't show if cart is empty
   if (!state.items || state.itemCount === 0) {
@@ -32,13 +27,6 @@ export function CartHeaderIndicator() {
 
   const shippingCost = pricingMode === "shipping" ? 4.9 : 0
   const total = subtotal + shippingCost
-
-  console.log("[v0] CartHeaderIndicator - totals:", {
-    subtotal,
-    shippingCost,
-    total,
-    pricingMode,
-  })
 
   const updateQuantity = (id: number, quantity: number) => {
     dispatch({ type: "UPDATE_QUANTITY", payload: { id, quantity } })

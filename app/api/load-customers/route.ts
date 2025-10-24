@@ -1,8 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { requireAdmin } from "@/lib/auth/api-auth"
+
+export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
 
 export async function GET(request: NextRequest) {
   try {
+    await requireAdmin(request)
+
     console.log("[v0] ===== LOAD CUSTOMERS API CALLED =====")
 
     console.log("[v0] Creating admin client...")

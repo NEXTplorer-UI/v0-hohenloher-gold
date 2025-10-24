@@ -40,7 +40,7 @@ export async function createMovementsFromOrder(
 
   const movements: InventoryMovement[] = orderItems.map((item) => ({
     product_id: item.product_id,
-    order_id: orderId,
+    order_id: null,
     order_item_id: item.id || null,
     qty: -Math.abs(item.quantity), // Negative for outgoing
     reason,

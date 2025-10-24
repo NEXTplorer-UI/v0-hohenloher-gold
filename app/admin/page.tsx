@@ -23,6 +23,7 @@ const NewsletterSystem = lazy(() => import("@/components/admin/newsletter-system
 const ContentManagementSystem = lazy(() => import("@/components/admin/content-management"))
 const ProductManagement = lazy(() => import("@/components/admin/product-management"))
 const DeliveryScheduleManagement = lazy(() => import("@/components/admin/delivery-schedule-management"))
+const EmailPreviewSystem = lazy(() => import("@/app/admin/emails/page"))
 
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center p-8">
@@ -263,7 +264,8 @@ function AdminDashboardContent() {
       document.removeEventListener("keydown", handleActivity)
       document.removeEventListener("scroll", handleActivity)
     }
-  }, [router, supabase, dispatch, updateActivity])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, supabase])
 
   useEffect(() => {
     if (!state.autoLogoutEnabled || !state.user) return
@@ -281,7 +283,8 @@ function AdminDashboardContent() {
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [state.autoLogoutEnabled, state.logoutTimer, state.lastActivity, state.user, handleLogout, dispatch])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.autoLogoutEnabled, state.logoutTimer, state.user])
 
   const MobileTabNavigation = () => (
     <Sheet open={state.mobileSheetOpen} onOpenChange={(open) => dispatch({ type: "SET_MOBILE_SHEET", payload: open })}>
@@ -354,7 +357,7 @@ function AdminDashboardContent() {
             className="justify-start"
             onClick={() => dispatch({ type: "SET_MOBILE_SHEET", payload: false })}
           >
-            Newsletter
+            E-Mails
           </Button>
           <Button
             variant="ghost"
@@ -427,7 +430,7 @@ function AdminDashboardContent() {
             <TabsTrigger value="pickup">Abholorte</TabsTrigger>
             <TabsTrigger value="delivery">Liefertermine</TabsTrigger>
             <TabsTrigger value="supplier">Großhändler</TabsTrigger>
-            <TabsTrigger value="newsletter">Newsletter</TabsTrigger>
+            <TabsTrigger value="emails">E-Mails</TabsTrigger>
             <TabsTrigger value="content">Content</TabsTrigger>
             <TabsTrigger value="settings">Einstellungen</TabsTrigger>
           </TabsList>
@@ -481,10 +484,33 @@ function AdminDashboardContent() {
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="newsletter" className="space-y-4 md:space-y-6">
-          <Suspense fallback={<LoadingSpinner />}>
-            <NewsletterSystem />
-          </Suspense>
+        <TabsContent value="emails" className="space-y-4 md:space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>E-Mail Verwaltung</CardTitle>
+              <CardDescription>Newsletter versenden und Email-Templates verwalten</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="newsletter" className="space-y-4">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="newsletter">Newsletter versenden</TabsTrigger>
+                  <TabsTrigger value="preview">Email-Vorschau</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="newsletter" className="space-y-4">
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <NewsletterSystem />
+                  </Suspense>
+                </TabsContent>
+
+                <TabsContent value="preview" className="space-y-4">
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <EmailPreviewSystem />
+                  </Suspense>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="content" className="space-y-4 md:space-y-6">

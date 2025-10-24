@@ -84,6 +84,7 @@ function ArticlesList() {
                           article.image_url ||
                           "/placeholder.svg?height=400&width=600&query=Hohenloher Gold featured article" ||
                           "/placeholder.svg" ||
+                          "/placeholder.svg" ||
                           "/placeholder.svg"
                         }
                         alt={article.title}
@@ -143,6 +144,7 @@ function ArticlesList() {
                           src={
                             article.image_url ||
                             "/placeholder.svg?height=200&width=400&query=Hohenloher Gold news article" ||
+                            "/placeholder.svg" ||
                             "/placeholder.svg" ||
                             "/placeholder.svg"
                           }
@@ -229,11 +231,24 @@ function ArticlesList() {
 
 export default function NewsPage() {
   const [email, setEmail] = useState("")
+  const [consent, setConsent] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
   const handleNewsletterSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!consent) {
+      setMessage({ type: "error", text: "Bitte stimmen Sie der Datenschutzerklärung zu." })
+      return
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setMessage({ type: "error", text: "Bitte geben Sie eine gültige E-Mail-Adresse ein." })
+      return
+    }
+
     setIsSubmitting(true)
     setMessage(null)
 
@@ -249,6 +264,7 @@ export default function NewsPage() {
       if (response.ok) {
         setMessage({ type: "success", text: data.message })
         setEmail("")
+        setConsent(false)
       } else {
         setMessage({ type: "error", text: data.error || "Ein Fehler ist aufgetreten" })
       }
@@ -309,6 +325,24 @@ export default function NewsPage() {
                 <Button type="submit" variant="secondary" size="lg" className="px-8" disabled={isSubmitting}>
                   {isSubmitting ? "Wird gesendet..." : "Anmelden"}
                 </Button>
+              </div>
+              <div className="flex items-start gap-3 text-left">
+                <input
+                  type="checkbox"
+                  id="newsletter-consent"
+                  checked={consent}
+                  onChange={(e) => setConsent(e.target.checked)}
+                  disabled={isSubmitting}
+                  className="mt-1 w-4 h-4 rounded border-primary-foreground/30 bg-primary-foreground/10 text-secondary focus:ring-2 focus:ring-secondary disabled:opacity-50"
+                  required
+                />
+                <label htmlFor="newsletter-consent" className="text-sm opacity-90 cursor-pointer">
+                  Ich willige in den Erhalt des Newsletters ein und akzeptiere die{" "}
+                  <a href="/privacy" className="underline hover:opacity-80" target="_blank" rel="noopener noreferrer">
+                    Datenschutzerklärung
+                  </a>
+                  . Die Einwilligung kann jederzeit widerrufen werden.
+                </label>
               </div>
               {message && (
                 <p

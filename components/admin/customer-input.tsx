@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { UserPlus, X, ChevronDown, ChevronUp } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { safeJson } from "@/lib/utils/safe-json"
 
 export default function CustomerInput() {
   const [customerData, setCustomerData] = useState({
@@ -54,7 +55,7 @@ export default function CustomerInput() {
         }
 
         if (locationsRes.ok) {
-          const { pickupLocations: locs } = await locationsRes.json()
+          const locs = await locationsRes.json()
           setPickupLocations(locs)
         }
       } catch (error) {
@@ -105,7 +106,7 @@ export default function CustomerInput() {
         body: JSON.stringify(submitData),
       })
 
-      const result = await response.json()
+      const result = await safeJson(response)
 
       if (response.ok) {
         console.log("[v0] Customer added successfully:", result)
@@ -129,11 +130,13 @@ export default function CustomerInput() {
         setTimeout(() => setSuccessMessage(""), 3000)
       } else {
         console.error("[v0] Error adding customer:", result)
-        alert(`Fehler beim Hinzufügen des Kunden: ${result.error}`)
+        const errorMsg = result.error || result.message || "Unbekannter Fehler"
+        alert(`Fehler beim Hinzufügen des Kunden: ${errorMsg}`)
       }
     } catch (error) {
       console.error("[v0] Network error:", error)
-      alert("Netzwerkfehler beim Hinzufügen des Kunden")
+      const errorMsg = error instanceof Error ? error.message : "Netzwerkfehler"
+      alert(`Fehler beim Hinzufügen des Kunden: ${errorMsg}`)
     } finally {
       setIsLoading(false)
     }

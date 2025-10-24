@@ -2,13 +2,13 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireAdmin } from "@/lib/auth/api-auth"
 
-export async function GET(request: NextRequest) {
-  const authResult = await requireAdmin(request)
-  if (authResult instanceof NextResponse) {
-    return authResult
-  }
+export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
 
+export async function GET(request: NextRequest) {
   try {
+    await requireAdmin(request)
+
     console.log("[v0] Dashboard stats: Starting data fetch")
     const supabase = createAdminClient()
 

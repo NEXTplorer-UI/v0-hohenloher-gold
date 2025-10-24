@@ -1,35 +1,53 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createClient } from "@supabase/supabase-js"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+function getServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!url || !serviceKey) {
+    throw new Error("Missing Supabase environment variables")
+  }
+
+  return createClient(url, serviceKey, {
+    auth: { persistSession: false },
+  })
+}
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("[v0] API: customer route called")
-
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error("[v0] API: Missing Supabase environment variables")
+    const bodyText = await request.text()
+    let customerData: any
+    try {
+      customerData = JSON.parse(bodyText || "{}")
+    } catch {
+      console.error("[/api/crm/customer] Invalid JSON body")
       return NextResponse.json(
-        {
-          success: false,
-          error: "Server configuration error: Missing Supabase credentials",
-        },
-        { status: 500 },
+        { error: "Invalid JSON body" },
+        { status: 400, headers: { "content-type": "application/json" } },
       )
     }
 
-    const customerData = await request.json()
+    const missing: string[] = []
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) missing.push("NEXT_PUBLIC_SUPABASE_URL")
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY")
+    if (missing.length) {
+      console.error("[/api/crm/customer] Missing env:", missing)
+      return NextResponse.json(
+        { error: `Missing env: ${missing.join(", ")}` },
+        { status: 500, headers: { "content-type": "application/json" } },
+      )
+    }
 
-    console.log("[v0] API: Saving customer to CRM:", customerData)
+    console.log("[/api/crm/customer] Saving customer to CRM:", customerData.email)
 
-    const supabase = createAdminClient()
-    console.log("[v0] API: Supabase admin client created successfully")
+    const supabase = getServiceClient()
 
-    // Create full address string
     const fullAddress = `${customerData.street} ${customerData.houseNumber}, ${customerData.zip} ${customerData.city}`
-
-    // Determine account status based on createAccount flag
     const accountStatus = customerData.createAccount ? "has_account" : "no_account"
-
-    // Map reminder settings
     const reminderNotifications = customerData.emailReminder || false
 
     const now = new Date().toISOString()
@@ -39,7 +57,6 @@ export async function POST(request: NextRequest) {
       : null
     const consentUa = customerData.emailUpdates ? request.headers.get("user-agent") : null
 
-    // Prepare customer data for Supabase
     const customerRecord = {
       first_name: customerData.firstName,
       last_name: customerData.lastName,
@@ -61,28 +78,24 @@ export async function POST(request: NextRequest) {
       created_at: new Date().toISOString(),
     }
 
-    console.log("[v0] API: Customer record with status fields:", {
-      account_status: accountStatus,
-      reminder_notifications: reminderNotifications,
-      email: customerData.email,
-    })
-
     const { data: existingCustomers, error: checkError } = await supabase
       .from("customers")
       .select("id, user_id")
       .eq("email_normalized", customerData.email.toLowerCase().trim())
 
     if (checkError) {
-      console.error("[v0] API: Error checking existing customer:", checkError)
-      return NextResponse.json({ success: false, error: checkError.message }, { status: 500 })
+      console.error("[/api/crm/customer] Error checking existing customer:", checkError)
+      return NextResponse.json(
+        { success: false, error: checkError.message },
+        { status: 500, headers: { "content-type": "application/json" } },
+      )
     }
 
     let result
     if (existingCustomers && existingCustomers.length > 0) {
       const existingCustomer = existingCustomers[0]
-      console.log("[v0] API: Updating existing customer:", existingCustomer.id)
+      console.log("[/api/crm/customer] Updating existing customer:", existingCustomer.id)
 
-      // Don't update created_at for existing customers
       const updateRecord = { ...customerRecord }
       delete updateRecord.created_at
 
@@ -92,30 +105,28 @@ export async function POST(request: NextRequest) {
         .eq("email_normalized", customerData.email.toLowerCase().trim())
         .select()
     } else {
-      console.log("[v0] API: Creating new customer for email:", customerData.email)
+      console.log("[/api/crm/customer] Creating new customer for email:", customerData.email)
       result = await supabase.from("customers").insert(customerRecord).select()
     }
 
     const { data, error } = result
 
     if (error) {
-      console.error("[v0] API: Error saving customer to CRM:", error)
-      return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+      console.error("[/api/crm/customer] Error saving customer to CRM:", error)
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500, headers: { "content-type": "application/json" } },
+      )
     }
 
-    console.log("[v0] API: Customer saved to CRM successfully:", data)
-    return NextResponse.json({ success: true, data })
-  } catch (error) {
-    console.error("[v0] API: CRM save error:", error)
-    const errorMessage = error instanceof Error ? error.message : "Internal server error"
-    console.error("[v0] API: Error stack:", error instanceof Error ? error.stack : "No stack trace")
+    console.log("[/api/crm/customer] Customer saved to CRM successfully")
+    return NextResponse.json({ success: true, data }, { status: 200, headers: { "content-type": "application/json" } })
+  } catch (err: any) {
+    console.error("[/api/crm/customer] Uncaught ERROR:", err?.stack || err?.message || err)
+
     return NextResponse.json(
-      {
-        success: false,
-        error: errorMessage,
-        details: error instanceof Error ? error.stack : undefined,
-      },
-      { status: 500 },
+      { error: err?.message ?? "Unbekannter Serverfehler" },
+      { status: 500, headers: { "content-type": "application/json" } },
     )
   }
 }

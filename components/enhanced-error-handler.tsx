@@ -69,7 +69,7 @@ export function EnhancedErrorHandler({ error, onRetry, onDismiss, className = ""
           <p className="text-sm text-gray-600 mb-2">Benötigen Sie Hilfe? Kontaktieren Sie uns:</p>
           <div className="flex gap-4 text-sm">
             <a
-              href="mailto:info@hohenloher-gold.de"
+              href="mailto:kontakt@suedfruechte-hohenlohe.de"
               className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
             >
               <Mail className="h-3 w-3" />

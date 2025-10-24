@@ -51,7 +51,7 @@ function ConfirmContent() {
       <Card className="max-w-md w-full">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Newsletter-Bestätigung</CardTitle>
-          <CardDescription>Hohenloher Gold</CardDescription>
+          <CardDescription>Südfrüchte Hohenlohe</CardDescription>
         </CardHeader>
         <CardContent className="text-center space-y-4">
           {status === "loading" && (

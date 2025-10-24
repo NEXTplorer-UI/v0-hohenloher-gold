@@ -38,7 +38,7 @@ export class EmailTemplates {
           
           <div style="background: #333; color: white; padding: 15px; text-align: center; font-size: 12px;">
             <p>Hohenloher Gold | Weststraße 28 | 74629 Pfedelbach</p>
-            <p>E-Mail: suedfruechte-hohenlohe@outlook.de | Tel: 0157 357 038 64</p>
+            <p>E-Mail: kontakt@suedfruechte-hohenlohe.de | Tel: 0157 357 038 64</p>
           </div>
         </div>
       `,
@@ -139,7 +139,7 @@ export class EmailTemplates {
           
           <div style="background: #333; color: white; padding: 15px; text-align: center; font-size: 12px;">
             <p>Hohenloher Gold | Weststraße 28 | 74629 Pfedelbach</p>
-            <p>E-Mail: suedfruechte-hohenlohe@outlook.de | Tel: 0157 357 038 64</p>
+            <p>E-Mail: kontakt@suedfruechte-hohenlohe.de | Tel: 0157 357 038 64</p>
           </div>
         </div>
       `,
@@ -183,7 +183,7 @@ export class EmailTemplates {
           
           <div style="background: #333; color: white; padding: 15px; text-align: center; font-size: 12px;">
             <p>Hohenloher Gold | Weststraße 28 | 74629 Pfedelbach</p>
-            <p>E-Mail: suedfruechte-hohenlohe@outlook.de | Tel: 0157 357 038 64</p>
+            <p>E-Mail: kontakt@suedfruechte-hohenlohe.de | Tel: 0157 357 038 64</p>
           </div>
         </div>
       `,
@@ -206,7 +206,7 @@ export class EmailTemplates {
           
           <div style="background: #333; color: white; padding: 15px; text-align: center; font-size: 12px;">
             <p>Hohenloher Gold | Weststraße 28 | 74629 Pfedelbach</p>
-            <p>E-Mail: suedfruechte-hohenlohe@outlook.de | Tel: 0157 357 038 64</p>
+            <p>E-Mail: kontakt@suedfruechte-hohenlohe.de | Tel: 0157 357 038 64</p>
             <p><a href="#" style="color: #d97706;">Newsletter abbestellen</a></p>
           </div>
         </div>

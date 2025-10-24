@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
 
@@ -8,34 +8,59 @@ export async function POST(request: NextRequest) {
     const { token } = await request.json()
 
     if (!token) {
-      return NextResponse.json({ error: "Token is required" }, { status: 400 })
+      return NextResponse.json({ error: "Token fehlt" }, { status: 400 })
     }
 
-    const supabase = createClient()
+    const supabase = createAdminClient()
 
-    // Call RPC function to confirm subscription
-    const { data, error } = await supabase.rpc("confirm_subscription", { token })
+    const { data: customer, error: findError } = await supabase
+      .from("customers")
+      .select("id, email, newsletter_confirmed")
+      .eq("newsletter_confirm_token", token)
+      .maybeSingle()
 
-    if (error) {
-      console.error("[v0] Error confirming subscription:", error)
-      return NextResponse.json({ error: "Failed to confirm subscription" }, { status: 500 })
+    if (findError) {
+      console.error("Error finding customer:", findError)
+      return NextResponse.json({ error: "Datenbankfehler" }, { status: 500 })
     }
 
-    const result = data as { success: boolean; email?: string; error?: string }
-
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 })
+    if (!customer) {
+      return NextResponse.json({ error: "Ungültiger oder abgelaufener Bestätigungslink" }, { status: 400 })
     }
 
-    console.log("[v0] Newsletter subscription confirmed for:", result.email)
+    if (customer.newsletter_confirmed) {
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Ihre Newsletter-Anmeldung wurde bereits bestätigt!",
+          email: customer.email,
+        },
+        { status: 200 },
+      )
+    }
+
+    const { error: updateError } = await supabase
+      .from("customers")
+      .update({
+        newsletter_confirmed: true,
+        newsletter_confirm_token: null, // Clear token after use
+      })
+      .eq("id", customer.id)
+
+    if (updateError) {
+      console.error("Error confirming subscription:", updateError)
+      return NextResponse.json({ error: "Fehler beim Bestätigen der Anmeldung" }, { status: 500 })
+    }
+
+    console.log("[v0] Newsletter subscription confirmed for:", customer.email)
 
     return NextResponse.json({
       success: true,
       message: "Ihre Newsletter-Anmeldung wurde erfolgreich bestätigt!",
-      email: result.email,
+      email: customer.email,
     })
   } catch (error) {
-    console.error("[v0] Newsletter confirm API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Newsletter confirm API error:", error)
+    return NextResponse.json({ error: "Ein unerwarteter Fehler ist aufgetreten" }, { status: 500 })
   }
 }

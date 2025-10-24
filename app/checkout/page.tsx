@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useMemo } from "react"
 import { useCart } from "@/contexts/cart-context"
 import { usePricing } from "@/components/pricing-context"
 import { Button } from "@/components/ui/button"
@@ -27,18 +27,20 @@ import {
   Package,
   Calendar,
   AlertCircle,
+  LogOut,
 } from "lucide-react"
 import { saveCustomerToCRM, createUserAccount, sendOrderConfirmationEmail } from "@/lib/crm-utils"
-import { loadStripe } from "@stripe/stripe-js"
-import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js"
+import { PaymentSumUp } from "@/components/payment-sumup"
 import { createBrowserClient } from "@supabase/ssr"
 import Link from "next/link"
 import { EnhancedErrorHandler, classifyError, type ErrorInfo } from "@/components/enhanced-error-handler"
 import { useRetryLogic } from "@/hooks/use-retry-logic"
 import { determineOrderDeliveryDate } from "@/lib/delivery-schedule-utils"
+import { safeJson } from "@/lib/utils/safe-json"
+import { useStripe, useElements, PaymentElement } from "@stripe/react-stripe-js" // Import Stripe components
+import { useNearbyPickups } from "@/lib/hooks/use-nearby-pickups"
 
-const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null
+const NEXT_PICKUP_DATE = "15. Dezember 2024"
 
 function StripePaymentForm({
   orderData,
@@ -119,11 +121,11 @@ function StripePaymentForm({
   )
 }
 
-const NEXT_PICKUP_DATE = "15. Dezember 2024"
-
 export default function CheckoutPage() {
   const { state, dispatch } = useCart()
   const { pricingMode, calculatePrice, setPricingMode } = usePricing()
+
+  const [authSession, setAuthSession] = useState<any>(null)
 
   const [deliveryMethod, setDeliveryMethod] = useState("pickup")
   const [pickupLocation, setPickupLocation] = useState("station")
@@ -161,16 +163,63 @@ export default function CheckoutPage() {
   const [city, setCity] = useState("")
 
   const [searchPlz, setSearchPlz] = useState("")
-  const [nearestLocations, setNearestLocations] = useState<any[]>([])
   const [selectedLocation, setSelectedLocation] = useState<any>(null)
   const [pickupLocations, setPickupLocations] = useState<any[]>([])
   const [isLoadingLocations, setIsLoadingLocations] = useState(false)
   const [orderMessage, setOrderMessage] = useState("")
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
+  const {
+    locations: nearestLocations,
+    allLocations: allPickupLocations, // Renamed from 'locations' to 'allLocations' to avoid conflict with nearestLocations
+    isLoading: isLoadingNearbyPickups, // Renamed from 'isLoadingLocations' to avoid conflict
+  } = useNearbyPickups({
+    userPlz: searchPlz,
+    radiusKm: 30,
+    maxPlpZDelta: 300,
+    take: 5,
+  })
+
+  useEffect(() => {
+    if (nearestLocations.length === 1 && !selectedLocation) {
+      setSelectedLocation(nearestLocations[0])
+    }
+  }, [nearestLocations, selectedLocation])
+
+  const supabase = useMemo(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !anon) {
+      console.error("[v0] [Supabase] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY")
+    }
+    return createBrowserClient(url!, anon!)
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    // Load initial session
+    supabase.auth.getSession().then(({ data }) => {
+      if (!isMounted) return
+      setAuthSession(data.session ?? null)
+    })
+
+    // Subscribe to auth state changes
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return
+      setAuthSession(session ?? null)
+      if (session) {
+        // User logged in - clear login mode and errors
+        setIsLoginMode(false)
+        setCreateAccount(false)
+        setEmailError("")
+      }
+    })
+
+    return () => {
+      isMounted = false
+      subscription?.subscription?.unsubscribe()
+    }
+  }, [supabase])
 
   const hasFreshFruits = state.items.some(
     (item) => item.category === "Frische Südfrüchte" || item.category === "Südfrüchte",
@@ -179,12 +228,13 @@ export default function CheckoutPage() {
 
   const hasOnlyDeliverableItems = true // All products can be shipped if under weight limit
 
-  const [showStripePayment, setShowStripePayment] = useState(false)
-  const [clientSecret, setClientSecret] = useState("")
-  const [stripeOrderData, setStripeOrderData] = useState<any>(null)
+  const [showSumUpPayment, setShowSumUpPayment] = useState(false)
+  const [sumupCheckoutId, setSumupCheckoutId] = useState("")
+  const [sumupOrderData, setSumupOrderData] = useState<any>(null)
 
   const [orderError, setOrderError] = useState<ErrorInfo | null>(null)
-  const { executeWithRetry } = useRetryLogic({
+  const { executeWithRetry: executeOrderRetry } = useRetryLogic({
+    // Renamed to avoid conflict
     maxAttempts: 2,
     baseDelay: 1000,
   })
@@ -221,16 +271,41 @@ export default function CheckoutPage() {
         return
       }
 
-      if (data.user?.user_metadata) {
-        const metadata = data.user.user_metadata
-        setFirstName(metadata.firstName || "")
-        setLastName(metadata.lastName || "")
-        setEmail(data.user.email || "")
-        setPhone(metadata.phone || "")
-        setStreet(metadata.street || "")
-        setHouseNumber(metadata.houseNumber || "")
-        setZip(metadata.zip || "")
-        setCity(metadata.city || "")
+      const { data: sessionData } = await supabase.auth.getSession()
+      setAuthSession(sessionData.session ?? null)
+
+      const token = sessionData.session?.access_token
+      if (!token) {
+        console.error("No session token available")
+        alert("Anmeldung fehlgeschlagen: Keine Sitzung gefunden")
+        return
+      }
+
+      const res = await fetch("/api/crm/get-customer", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!res.ok) {
+        console.error("Failed to fetch customer data:", res.status)
+        // Continue anyway - user can fill out form manually
+      } else {
+        const { customer } = await res.json()
+
+        if (customer) {
+          console.log("[v0] Loaded customer data from CRM:", customer)
+          setFirstName(customer.first_name ?? "")
+          setLastName(customer.last_name ?? "")
+          setEmail(customer.email ?? data.user?.email ?? "")
+          setPhone(customer.phone ?? "")
+          setStreet(customer.street ?? "")
+          setHouseNumber(customer.house_number ?? "")
+          setZip(customer.postal_code ?? "")
+          setCity(customer.city ?? "")
+        } else {
+          // No CRM record found - user can fill out form manually
+          console.log("[v0] No customer profile found in CRM - form remains empty")
+          setEmail(data.user?.email ?? "")
+        }
       }
 
       setIsLoginMode(false)
@@ -239,6 +314,19 @@ export default function CheckoutPage() {
       console.error("Login error:", error)
       alert("Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.")
     }
+  }
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    setAuthSession(null)
+    setEmail("")
+    setFirstName("")
+    setLastName("")
+    setPhone("")
+    setStreet("")
+    setHouseNumber("")
+    setZip("")
+    setCity("")
   }
 
   useEffect(() => {
@@ -273,28 +361,33 @@ export default function CheckoutPage() {
       return pickupLocations.slice(0, 1) // Return first location as default
     }
 
-    const cleanPlz = plz.trim()
-    const userPlz = Number.parseInt(cleanPlz)
-
-    if (isNaN(userPlz)) {
+    const userPlz = Number.parseInt(plz.trim(), 10)
+    if (!Number.isFinite(userPlz)) {
       return pickupLocations.slice(0, 1)
     }
 
     // Calculate PLZ-based distances for all stations
-    const stationsWithDistance = pickupLocations.map((station) => ({
-      ...station,
-      plzDistance: Math.abs(userPlz - Number.parseInt(station.postal_code)),
-    }))
+    const stationsWithDistance = pickupLocations
+      .map((station) => {
+        const pc = Number.parseInt(String(station.postal_code ?? "").trim(), 10)
+        if (!Number.isFinite(pc)) return null
+        return { ...station, plzDistance: Math.abs(userPlz - pc) }
+      })
+      .filter(Boolean) as Array<any & { plzDistance: number }>
+
+    if (stationsWithDistance.length === 0) {
+      return pickupLocations.slice(0, 1)
+    }
 
     // Sort by PLZ distance
-    const sorted = stationsWithDistance.sort((a, b) => a.plzDistance - b.plzDistance)
-    const nearest = sorted[0]
+    stationsWithDistance.sort((a, b) => a.plzDistance - b.plzDistance)
+    const nearest = stationsWithDistance[0]
 
     // Show multiple stations if they're within similar PLZ range (threshold: 200)
     const threshold = 200
-    const similarStations = sorted.filter((station) => station.plzDistance <= nearest.plzDistance + threshold)
+    const similarStations = stationsWithDistance.filter((s) => s.plzDistance <= nearest.plzDistance + threshold)
 
-    console.log("[v0] PLZ search for", cleanPlz, "found", similarStations.length, "similar stations")
+    console.log("[v0] PLZ search for", plz, "found", similarStations.length, "similar stations")
 
     return similarStations.length > 1 ? similarStations : [nearest]
   }
@@ -303,17 +396,33 @@ export default function CheckoutPage() {
     if (!searchPlz || searchPlz.trim().length < 5) {
       return
     }
-
-    const locations = findNearestPickupLocations(searchPlz)
-    setNearestLocations(locations)
-
-    // Auto-select first location if only one, otherwise let user choose
-    if (locations.length === 1) {
-      setSelectedLocation(locations[0])
-    } else {
-      setSelectedLocation(null) // Reset selection for multiple options
-    }
+    // Search is automatic via useNearbyPickups hook
   }
+
+  const checkEmailExists = useCallback(async (email: string) => {
+    try {
+      const response = await fetch("/api/crm/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+
+      const result = await safeJson(response)
+
+      if (!response.ok) {
+        throw new Error(result.error || "Fehler bei der E-Mail-Überprüfung")
+      }
+
+      return {
+        existsInAuth: result.existsInAuth,
+        existsInCRM: result.existsInCRM,
+        error: null,
+      }
+    } catch (error) {
+      console.error("[v0] Error checking email:", error)
+      return { existsInAuth: false, existsInCRM: false, error: "Fehler bei der E-Mail-Überprüfung" }
+    }
+  }, [])
 
   const handleOrderSubmission = useCallback(async () => {
     if (!firstName || !lastName || !email) {
@@ -326,7 +435,12 @@ export default function CheckoutPage() {
       return
     }
 
-    if (email && email.includes("@")) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const needsEmailCheck = !session && createAccount && !isLoginMode
+
+    if (needsEmailCheck && email && email.includes("@")) {
       console.log("[v0] Checking email before order submission:", email)
       const emailCheck = await checkEmailExists(email)
 
@@ -377,7 +491,8 @@ export default function CheckoutPage() {
     try {
       setOrderError(null)
 
-      await executeWithRetry(async () => {
+      await executeOrderRetry(async () => {
+        // Use renamed function
         await saveCustomerToCRM(customerData)
 
         if (createAccount && !isLoginMode) {
@@ -408,19 +523,17 @@ export default function CheckoutPage() {
           finalPickupLocationId = null
         } else if (deliveryMethod === "pickup") {
           if (pickupLocation === "warehouse") {
-            // User selected warehouse - use first location (should be warehouse)
-            const warehouseLocation = pickupLocations.find(
+            const warehouseLocation = allPickupLocations.find(
               (loc) => loc.name.includes("Zentrallager") || loc.name.includes("Pfedelbach"),
             )
             if (warehouseLocation) {
               finalPickupLocation = warehouseLocation.name
               finalPickupLocationId = warehouseLocation.id
-            } else if (pickupLocations[0]) {
-              finalPickupLocation = pickupLocations[0].name
-              finalPickupLocationId = pickupLocations[0].id
+            } else if (allPickupLocations[0]) {
+              finalPickupLocation = allPickupLocations[0].name
+              finalPickupLocationId = allPickupLocations[0].id
             }
           } else if (pickupLocation === "station") {
-            // User selected a station via PLZ search
             if (selectedLocation) {
               finalPickupLocation = selectedLocation.name
               finalPickupLocationId = selectedLocation.id
@@ -449,41 +562,37 @@ export default function CheckoutPage() {
           notes: orderMessage,
           emailReminder,
           emailUpdates,
-          orderTime: new Date().toISOString(), // Add order time
-          deliveryDate: deliveryDateInfo?.deliveryDate || null, // Include delivery date
-          deliveryScheduleId: deliveryDateInfo?.scheduleId || null, // Include schedule ID
+          orderTime: new Date().toISOString(),
+          deliveryDate: deliveryDateInfo?.deliveryDate || null,
+          deliveryScheduleId: deliveryDateInfo?.scheduleId || null,
         }
 
-        if (paymentMethod === "stripe") {
-          if (!stripePublishableKey) {
-            throw new Error("Stripe ist nicht konfiguriert. Bitte wählen Sie eine andere Zahlungsmethode.")
-          }
-
+        if (paymentMethod === "sumup") {
           const tempOrderNumber = `HG-TEMP-${Date.now()}`
 
-          const response = await fetch("/api/create-payment-intent", {
+          const response = await fetch("/api/payments/sumup/create-checkout", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              amount: totalAmountCents,
+              amount: totalAmount.toFixed(2),
               currency: "eur",
               orderNumber: tempOrderNumber,
               customerEmail: email,
-              customerName: `${firstName} ${lastName}`,
             }),
           })
 
+          const parsed = await safeJson(response)
+
           if (!response.ok) {
-            const errorData = await response.json()
-            throw new Error(errorData.error || "Payment intent creation failed")
+            throw new Error(parsed.error || `Request failed (${response.status})`)
           }
 
-          const { clientSecret } = await response.json()
-          setClientSecret(clientSecret)
-          setStripeOrderData({ ...orderData, orderNumber: tempOrderNumber })
-          setShowStripePayment(true)
+          const { checkoutId } = parsed
+          setSumupCheckoutId(checkoutId)
+          setSumupOrderData({ ...orderData, orderNumber: tempOrderNumber })
+          setShowSumUpPayment(true)
           return
         }
 
@@ -496,18 +605,26 @@ export default function CheckoutPage() {
           body: JSON.stringify(orderData),
         })
 
+        console.log(
+          "[v0] [/api/orders] status",
+          orderResponse.status,
+          "content-type",
+          orderResponse.headers.get("content-type"),
+        )
+
+        const orderParsed = await safeJson(orderResponse)
+        console.log("[v0] [/api/orders] parsed response:", orderParsed)
+
         if (!orderResponse.ok) {
-          const errorData = await orderResponse.json()
-          throw new Error(errorData.error || "Failed to save order")
+          throw new Error(orderParsed.error || `Failed to save order (${orderResponse.status})`)
         }
 
-        const orderResult = await orderResponse.json()
-        console.log("[v0] Order saved successfully:", orderResult)
+        console.log("[v0] Order saved successfully:", orderParsed)
 
         const finalOrderData = {
           ...orderData,
-          orderNumber: orderResult.data.order.order_number,
-          orderTime: orderResult.data.order.order_time,
+          orderNumber: orderParsed.data.order.order_number,
+          orderTime: orderParsed.data.order.order_time,
         }
 
         const emailResult = await sendOrderConfirmationEmail(finalOrderData)
@@ -517,7 +634,7 @@ export default function CheckoutPage() {
 
         dispatch({ type: "CLEAR_CART" })
         const params = new URLSearchParams({
-          orderNumber: orderResult.data.order.order_number, // Use backend-generated number
+          orderNumber: orderParsed.data.order.order_number,
           deliveryMethod,
           paymentMethod,
           total: totalAmount.toString(),
@@ -548,67 +665,75 @@ export default function CheckoutPage() {
     city,
     orderMessage,
     dispatch,
-    executeWithRetry,
-    stripePublishableKey,
+    executeOrderRetry, // Use renamed function
     nearestLocations,
     selectedLocation,
-    pickupLocations,
+    allPickupLocations, // Changed from pickupLocations
     pickupLocation, // Added pickupLocation to dependencies
     safeCalculatePrice,
     deliveryDateInfo, // Include deliveryDateInfo in dependencies
+    supabase,
+    password,
+    confirmPassword,
+    passwordError,
+    isLoginMode,
+    loginEmail,
+    checkEmailExists, // Added checkEmailExists to dependencies - this is the fix
+    setLoginEmail, // Added setLoginEmail to dependencies
+    setIsLoginMode, // Added setIsLoginMode to dependencies
   ])
 
-  const handleStripeSuccess = async () => {
-    if (stripeOrderData) {
-      console.log("[v0] Saving Stripe order to database:", stripeOrderData)
+  const handleSumUpSuccess = async () => {
+    if (sumupOrderData) {
+      console.log("[v0] Saving SumUp order to database:", sumupOrderData)
       const orderResponse = await fetch("/api/orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(stripeOrderData),
+        body: JSON.stringify(sumupOrderData),
       })
 
-      if (orderResponse.ok) {
-        const orderResult = await orderResponse.json()
-        console.log("[v0] Stripe order saved successfully:", orderResult)
+      const orderParsed = await safeJson(orderResponse)
 
-        const updatedStripeOrderData = {
-          ...stripeOrderData,
-          orderNumber: orderResult.data.order.order_number,
-          orderTime: orderResult.data.order.order_time,
+      if (orderResponse.ok) {
+        console.log("[v0] SumUp order saved successfully:", orderParsed)
+
+        const updatedSumUpOrderData = {
+          ...sumupOrderData,
+          orderNumber: orderParsed.data.order.order_number,
+          orderTime: orderParsed.data.order.order_time,
         }
 
-        const emailResult = await sendOrderConfirmationEmail(updatedStripeOrderData)
+        const emailResult = await sendOrderConfirmationEmail(updatedSumUpOrderData)
         if (emailResult.success) {
           console.log("Order confirmation email sent successfully")
         }
 
         dispatch({ type: "CLEAR_CART" })
         const params = new URLSearchParams({
-          orderNumber: orderResult.data.order.order_number,
-          deliveryMethod: updatedStripeOrderData.deliveryMethod,
-          paymentMethod: "stripe",
-          total: updatedStripeOrderData.total,
-          customerName: updatedStripeOrderData.customerName,
+          orderNumber: orderParsed.data.order.order_number,
+          deliveryMethod: updatedSumUpOrderData.deliveryMethod,
+          paymentMethod: "sumup",
+          total: updatedSumUpOrderData.total,
+          customerName: updatedSumUpOrderData.customerName,
         })
 
         window.location.href = `/order-confirmation?${params.toString()}`
       } else {
-        console.error("[v0] Failed to save Stripe order to database")
-        // Fallback to original order number if database save fails
-        const emailResult = await sendOrderConfirmationEmail(stripeOrderData)
+        console.error("[v0] Failed to save SumUp order to database:", orderParsed.error)
+        const emailResult = await sendOrderConfirmationEmail(sumupOrderData)
         if (emailResult.success) {
           console.log("Order confirmation email sent successfully")
         }
 
         dispatch({ type: "CLEAR_CART" })
         const params = new URLSearchParams({
-          orderNumber: stripeOrderData.orderNumber,
-          deliveryMethod: stripeOrderData.deliveryMethod,
-          paymentMethod: "stripe",
-          total: stripeOrderData.total,
-          customerName: stripeOrderData.customerName,
+          orderNumber: sumupOrderData.orderNumber,
+          deliveryMethod: sumupOrderData.deliveryMethod,
+          paymentMethod: "sumup",
+          total: sumupOrderData.total,
+          customerName: sumupOrderData.customerName,
         })
 
         window.location.href = `/order-confirmation?${params.toString()}`
@@ -616,8 +741,8 @@ export default function CheckoutPage() {
     }
   }
 
-  const handleStripeError = (errorMessage: string) => {
-    console.error("Stripe payment error:", errorMessage)
+  const handleSumUpError = (errorMessage: string) => {
+    console.error("SumUp payment error:", errorMessage)
     const classifiedError = classifyError(new Error(errorMessage))
     setOrderError(classifiedError)
   }
@@ -692,34 +817,15 @@ export default function CheckoutPage() {
     loadDeliveryDate()
   }, [state.items])
 
-  const checkEmailExists = async (email: string) => {
-    try {
-      const response = await fetch("/api/crm/check-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Fehler bei der E-Mail-Überprüfung")
-      }
-
-      const result = await response.json()
-      return {
-        existsInAuth: result.existsInAuth,
-        existsInCRM: result.existsInCRM,
-        error: null,
-      }
-    } catch (error) {
-      console.error("[v0] Error checking email:", error)
-      return { existsInAuth: false, existsInCRM: false, error: "Fehler bei der E-Mail-Überprüfung" }
-    }
-  }
-
   const [emailError, setEmailError] = useState("")
   const [isCheckingEmail, setIsCheckingEmail] = useState(false)
 
   const handleEmailBlur = async () => {
+    if (authSession) {
+      setEmailError("")
+      return
+    }
+
     if (!email || !email.includes("@")) return
 
     setIsCheckingEmail(true)
@@ -743,7 +849,7 @@ export default function CheckoutPage() {
     setIsCheckingEmail(false)
   }
 
-  if (showStripePayment && clientSecret && stripePromise) {
+  if (showSumUpPayment && sumupCheckoutId) {
     return (
       <div className="min-h-screen bg-background py-8">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -752,19 +858,13 @@ export default function CheckoutPage() {
               <CardHeader>
                 <CardTitle className="text-center">Zahlung abschließen</CardTitle>
                 <p className="text-center text-muted-foreground">
-                  Bestellung {stripeOrderData.orderNumber} - €{stripeOrderData.total}
+                  Bestellung {sumupOrderData.orderNumber} - €{sumupOrderData.total}
                 </p>
               </CardHeader>
               <CardContent>
-                <Elements stripe={stripePromise} options={{ clientSecret }}>
-                  <StripePaymentForm
-                    orderData={stripeOrderData}
-                    onSuccess={handleStripeSuccess}
-                    onError={handleStripeError}
-                  />
-                </Elements>
+                <PaymentSumUp checkoutId={sumupCheckoutId} onSuccess={handleSumUpSuccess} onError={handleSumUpError} />
                 <div className="mt-4 text-center">
-                  <Button variant="outline" onClick={() => setShowStripePayment(false)}>
+                  <Button variant="outline" onClick={() => setShowSumUpPayment(false)}>
                     Zurück zur Bestellung
                   </Button>
                 </div>
@@ -776,14 +876,15 @@ export default function CheckoutPage() {
     )
   }
 
-  if (showStripePayment) {
+  // Replace Stripe payment error UI with SumUp
+  if (showSumUpPayment) {
     return (
       <Card className="mb-6">
         <CardContent className="p-6">
           <div className="text-center text-red-600">
-            <p>Stripe-Zahlung ist derzeit nicht verfügbar.</p>
+            <p>SumUp-Zahlung ist derzeit nicht verfügbar.</p>
             <p>Bitte wählen Sie eine andere Zahlungsmethode.</p>
-            <Button onClick={() => setShowStripePayment(false)} className="mt-4">
+            <Button onClick={() => setShowSumUpPayment(false)} className="mt-4">
               Zurück zur Zahlungsauswahl
             </Button>
           </div>
@@ -820,6 +921,33 @@ export default function CheckoutPage() {
           onDismiss={() => setOrderError(null)}
           className="mb-6"
         />
+
+        {authSession && (
+          <Card className="mb-6 border-green-200 bg-green-50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-2 h-2 bg-green-600 rounded-full" />
+                  <div>
+                    <p className="text-sm font-medium text-green-900">
+                      Angemeldet als <strong>{authSession.user.email}</strong>
+                    </p>
+                    <p className="text-xs text-green-700">Ihre Kundendaten wurden automatisch geladen</p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLogout}
+                  className="gap-2 border-green-300 hover:bg-green-100 bg-transparent"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Abmelden
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {hasFreshFruits && deliveryDateInfo && (
           <Card className="mb-6 border-yellow-200 bg-yellow-50">
@@ -1066,7 +1194,6 @@ export default function CheckoutPage() {
                 <CardTitle>Lieferung</CardTitle>
               </CardHeader>
               <CardContent>
-                {/* Added AlertCircle icon and updated message for Olive Oil */}
                 {hasOliveOil && (
                   <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                     <div className="flex items-center">
@@ -1201,7 +1328,7 @@ export default function CheckoutPage() {
                     {pickupLocation === "station" && (
                       <div className="space-y-2">
                         <Label htmlFor="plz">PLZ für Abholort</Label>
-                        {isLoadingLocations && (
+                        {isLoadingNearbyPickups && ( // Use renamed state
                           <p className="text-sm text-muted-foreground">Abholorte werden geladen...</p>
                         )}
                         <div className="flex space-x-2">
@@ -1210,13 +1337,15 @@ export default function CheckoutPage() {
                             placeholder="74653"
                             value={searchPlz}
                             onChange={(e) => setSearchPlz(e.target.value)}
-                            disabled={isLoadingLocations}
+                            disabled={isLoadingNearbyPickups} // Use renamed state
                           />
                           <Button
                             variant="outline"
                             onClick={handlePickupLocationSearch}
-                            disabled={searchPlz.length < 5 || isLoadingLocations}
+                            disabled={searchPlz.length < 5 || isLoadingNearbyPickups}
                           >
+                            {" "}
+                            {/* Use renamed state */}
                             Suchen
                           </Button>
                         </div>
@@ -1236,7 +1365,11 @@ export default function CheckoutPage() {
                                   <br />
                                   {nearestLocations[0].address}
                                   <br />
-                                  <span className="text-muted-foreground">PLZ: {nearestLocations[0].postal_code}</span>
+                                  <span className="text-muted-foreground">
+                                    {nearestLocations[0].distanceKm
+                                      ? `ca. ${nearestLocations[0].distanceKm.toFixed(1)} km entfernt`
+                                      : `PLZ: ${nearestLocations[0].postal_code}`}
+                                  </span>
                                   <br />
                                   <span className="text-muted-foreground">
                                     Kontakt: {nearestLocations[0].contact_phone}
@@ -1260,7 +1393,10 @@ export default function CheckoutPage() {
                                         <p className="font-medium text-sm">{location.name}</p>
                                         <p className="text-xs text-muted-foreground">{location.address}</p>
                                         <p className="text-xs text-muted-foreground">
-                                          PLZ: {location.postal_code} • Kontakt: {location.contact_phone}
+                                          {location.distanceKm
+                                            ? `ca. ${location.distanceKm.toFixed(1)} km entfernt`
+                                            : `PLZ: ${location.postal_code}`}{" "}
+                                          • Kontakt: {location.contact_phone}
                                         </p>
                                       </div>
                                       <div
@@ -1284,25 +1420,25 @@ export default function CheckoutPage() {
                           </div>
                         )}
 
-                        {nearestLocations.length === 0 && !isLoadingLocations && (
-                          <p className="text-sm text-muted-foreground">
-                            Geben Sie Ihre PLZ ein, um den nächstgelegenen Abholort zu finden.
-                          </p>
-                        )}
+                        {nearestLocations.length === 0 &&
+                          !isLoadingNearbyPickups &&
+                          searchPlz.length >= 5 && ( // Use renamed state
+                            <p className="text-sm text-muted-foreground">Keine Abholorte in Ihrer Nähe gefunden.</p>
+                          )}
                       </div>
                     )}
 
                     {pickupLocation === "warehouse" && (
                       <div className="p-3 bg-card border rounded-lg">
-                        {pickupLocations.length > 0 && pickupLocations[0] ? (
+                        {allPickupLocations.length > 0 && allPickupLocations[0] ? ( // Use renamed state
                           <p className="text-sm text-muted-foreground">
-                            <strong>Adresse:</strong> {pickupLocations[0].address}
+                            <strong>Adresse:</strong> {allPickupLocations[0].address} {/* Use renamed state */}
                             <br />
-                            <strong>Kontakt:</strong> {pickupLocations[0].contact_phone}
+                            <strong>Kontakt:</strong> {allPickupLocations[0].contact_phone}
                           </p>
                         ) : (
                           <p className="text-sm text-muted-foreground">
-                            <strong>Adresse:</strong> Weststraße 28, 74629 Pfedelbach
+                            <strong>Adresse:</strong> Weststraße 28, 74653 Pfedelbach
                             <br />
                             <strong>Kontakt:</strong> 0157 357 038 64
                           </p>
@@ -1503,27 +1639,24 @@ export default function CheckoutPage() {
                         </div>
                       </Label>
                     </div>
+                    {/* Replace Stripe payment option with SumUp */}
                     {hasOnlyDeliverableItems && (
-                      <>
-                        <div className="flex items-center space-x-2 p-3 border rounded-lg">
-                          <RadioGroupItem
-                            value="stripe"
-                            id="stripe"
-                            className="w-4 h-4 rounded-full border-2 border-primary bg-transparent data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
-                          />
-                          <Label htmlFor="stripe" className="flex-1 cursor-pointer">
-                            <div className="flex items-center space-x-3">
-                              <CreditCard className="w-4 h-4 text-primary" />
-                              <div>
-                                <div className="font-medium text-sm">Online bezahlen</div>
-                                <div className="text-xs text-muted-foreground">
-                                  Kreditkarte, PayPal, SEPA-Lastschrift
-                                </div>
-                              </div>
+                      <div className="flex items-center space-x-2 p-3 border rounded-lg">
+                        <RadioGroupItem
+                          value="sumup"
+                          id="sumup"
+                          className="w-4 h-4 rounded-full border-2 border-primary bg-transparent data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                        />
+                        <Label htmlFor="sumup" className="flex-1 cursor-pointer">
+                          <div className="flex items-center space-x-3">
+                            <CreditCard className="w-4 h-4 text-primary" />
+                            <div>
+                              <div className="font-medium text-sm">Online bezahlen</div>
+                              <div className="text-xs text-muted-foreground">Kreditkarte, Debitkarte</div>
                             </div>
-                          </Label>
-                        </div>
-                      </>
+                          </div>
+                        </Label>
+                      </div>
                     )}
                   </RadioGroup>
                 </div>

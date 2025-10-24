@@ -1,71 +1,74 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 
-export async function POST(request: NextRequest) {
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+type CheckEmailResponse = {
+  existsInAuth: boolean
+  existsInCRM: boolean
+  userId?: string | null
+  customerId?: string | null
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase()
+}
+
+export async function POST(req: Request) {
   try {
-    console.log("[v0] API: check-email route called")
+    const { email } = await req.json()
+    if (!email || typeof email !== "string") {
+      return NextResponse.json({ error: "Missing email" }, { status: 400 })
+    }
+    const emailNorm = normalizeEmail(email)
 
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error("[v0] API: Missing Supabase environment variables")
-      return NextResponse.json(
-        {
-          error: "Server configuration error: Missing Supabase credentials",
-        },
-        { status: 500 },
-      )
+    const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+    // Admin-Client mit Service-Role (Server ONLY!)
+    const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+
+    // AUTH: via RPC prüfen (keine PostgREST-Schema-Probleme mehr)
+    const { data: authExists, error: authErr } = await supabaseAdmin.rpc("auth_email_exists", { p_email: emailNorm })
+
+    if (authErr) {
+      console.error("[check-email] RPC error:", authErr)
+      // Wir brechen nicht ab – melden nur "unknown" statt 500
     }
 
-    const { email } = await request.json()
-
-    if (!email) {
-      return NextResponse.json({ error: "Email is required" }, { status: 400 })
-    }
-
-    console.log("[v0] API: Checking email existence:", email)
-
-    const supabase = createAdminClient()
-    console.log("[v0] API: Supabase admin client created successfully")
-
-    const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers()
-
-    let existsInAuth = false
-    if (authError) {
-      console.error("[v0] API: Error checking auth users:", authError)
-    } else {
-      existsInAuth = authUsers.users.some((user) => user.email?.toLowerCase() === email.toLowerCase())
-    }
-
-    // Check if email exists in customers table
-    const { data: existingCustomer, error: customerError } = await supabase
+    // CRM/Customers: in public.customers prüfen
+    // versuche zuerst email_normalized, fallback auf email
+    const { data: crmHit1, error: crmErr1 } = await supabaseAdmin
       .from("customers")
-      .select("id, email")
-      .eq("email", email.toLowerCase())
+      .select("id")
+      .eq("email_normalized", emailNorm)
       .maybeSingle()
 
-    if (customerError) {
-      console.error("[v0] API: Error checking customer email:", customerError)
-      return NextResponse.json({ error: "Database error" }, { status: 500 })
+    let existsInCRM = !!crmHit1?.id
+
+    if (!existsInCRM) {
+      const { data: crmHit2, error: crmErr2 } = await supabaseAdmin
+        .from("customers")
+        .select("id")
+        .eq("email", email) // unsauberer Fallback, falls email_normalized leer ist
+        .maybeSingle()
+
+      if (crmErr2) {
+        console.warn("[check-email] customers fallback error:", crmErr2)
+      }
+      existsInCRM = !!crmHit2?.id
     }
 
-    const existsInCRM = !!existingCustomer
-
-    console.log("[v0] API: Email check result:", { email, existsInAuth, existsInCRM })
     return NextResponse.json({
-      existsInAuth,
+      existsInAuth: Boolean(authExists),
       existsInCRM,
-      exists: existsInAuth || existsInCRM,
-      customer: existingCustomer,
+      error: null,
     })
-  } catch (error) {
-    console.error("[v0] API: Email check error:", error)
-    const errorMessage = error instanceof Error ? error.message : "Unknown error"
-    console.error("[v0] API: Error stack:", error instanceof Error ? error.stack : "No stack trace")
-    return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: errorMessage,
-      },
-      { status: 500 },
-    )
+  } catch (e: any) {
+    console.error("[check-email] Unexpected error:", e?.message || e)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

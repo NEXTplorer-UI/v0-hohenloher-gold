@@ -1,41 +1,69 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
 
 export async function POST(request: NextRequest) {
   try {
-    const { token } = await request.json()
+    const { email } = await request.json()
 
-    if (!token) {
-      return NextResponse.json({ error: "Token is required" }, { status: 400 })
+    if (!email) {
+      return NextResponse.json({ error: "E-Mail-Adresse fehlt" }, { status: 400 })
     }
 
-    const supabase = createClient()
+    const supabase = createAdminClient()
 
-    // Call RPC function to unsubscribe
-    const { data, error } = await supabase.rpc("unsubscribe_with_token", { token })
+    const emailNormalized = email.toLowerCase().trim()
 
-    if (error) {
-      console.error("[v0] Error unsubscribing:", error)
-      return NextResponse.json({ error: "Failed to unsubscribe" }, { status: 500 })
+    const { data: customer, error: findError } = await supabase
+      .from("customers")
+      .select("id, email, newsletter_subscribed")
+      .eq("email_normalized", emailNormalized)
+      .maybeSingle()
+
+    if (findError) {
+      console.error("Error finding customer:", findError)
+      return NextResponse.json({ error: "Datenbankfehler" }, { status: 500 })
     }
 
-    const result = data as { success: boolean; email?: string; error?: string }
-
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 })
+    if (!customer) {
+      return NextResponse.json({ error: "E-Mail-Adresse nicht gefunden" }, { status: 404 })
     }
 
-    console.log("[v0] Newsletter unsubscribed:", result.email)
+    if (!customer.newsletter_subscribed) {
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Sie sind bereits vom Newsletter abgemeldet.",
+          email: customer.email,
+        },
+        { status: 200 },
+      )
+    }
+
+    const { error: updateError } = await supabase
+      .from("customers")
+      .update({
+        newsletter_subscribed: false,
+        newsletter_unsubscribed_at: new Date().toISOString(),
+        newsletter_confirmed: false,
+      })
+      .eq("id", customer.id)
+
+    if (updateError) {
+      console.error("Error unsubscribing customer:", updateError)
+      return NextResponse.json({ error: "Fehler beim Abmelden" }, { status: 500 })
+    }
+
+    console.log("[v0] Newsletter unsubscribed:", customer.email)
 
     return NextResponse.json({
       success: true,
       message: "Sie wurden erfolgreich vom Newsletter abgemeldet.",
-      email: result.email,
+      email: customer.email,
     })
   } catch (error) {
-    console.error("[v0] Newsletter unsubscribe API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Newsletter unsubscribe API error:", error)
+    return NextResponse.json({ error: "Ein unerwarteter Fehler ist aufgetreten" }, { status: 500 })
   }
 }

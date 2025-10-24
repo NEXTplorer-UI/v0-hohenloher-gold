@@ -65,9 +65,20 @@ export async function isAdmin(request: NextRequest): Promise<boolean> {
     },
   )
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
+  const { data: profile, error } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()
 
-  return profile?.role === "admin"
+  // If there's an error or no profile, user is not admin
+  if (error) {
+    console.error("[v0] Error fetching profile:", error)
+    return false
+  }
+
+  if (!profile) {
+    console.warn("[v0] No profile found for user:", user.id)
+    return false
+  }
+
+  return profile.role === "admin"
 }
 
 /**

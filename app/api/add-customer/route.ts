@@ -2,6 +2,9 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 
+export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
+
 export async function POST(request: NextRequest) {
   console.log("[v0] ===== ADD CUSTOMER API CALLED =====")
 
