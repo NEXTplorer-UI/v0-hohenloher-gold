@@ -1,68 +1,32 @@
 "use client"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  User,
-  Mail,
-  Phone,
-  MapPin,
-  Calendar,
-  Activity,
-  Bell,
-  Users,
-  ShoppingCart,
-  Euro,
-  Heart,
-  Edit,
-  Send,
-  Loader2,
-} from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Edit } from "lucide-react"
 import { useState } from "react"
+import type { ExtendedCustomer } from "@/types/customer"
 
-interface ExtendedCustomer {
-  id: string
-  first_name: string
-  last_name: string
-  email: string
-  street?: string
-  house_number?: string
-  postal_code?: string
-  city?: string
-  phone?: string
-  tags: string[]
-  account_status?: "has_account" | "no_account"
-  customer_status?: "active" | "inactive" | "blocked"
-  registration_date?: string
-  last_activity?: string
-  newsletter_subscription?: boolean
-  reminder_notifications?: boolean
-  special_requests?: string
-  referral_source?: string
-  distribution_system_benefits?: {
-    participated: boolean
-    total_benefits: number
-    last_benefit_date?: string
-  }
-  order_count?: number
-  average_order_value?: number
-  favorite_categories?: string[]
-  total_orders?: number
-  total_spent?: number
-  last_order_date?: string
+function formatCurrency(amount?: number) {
+  return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(amount ?? 0)
 }
 
-interface CustomerDetailModalProps {
+function formatDate(dateString?: string | null) {
+  if (!dateString) return "-"
+  const d = new Date(dateString)
+  return isNaN(d.getTime()) ? "-" : d.toLocaleDateString("de-DE", { year: "numeric", month: "long", day: "numeric" })
+}
+
+export default function CustomerDetailModal({
+  customer,
+  isOpen,
+  onClose,
+  onEdit,
+}: {
   customer: ExtendedCustomer | null
   isOpen: boolean
   onClose: () => void
-  onEdit: (customer: ExtendedCustomer) => void
-}
-
-export default function CustomerDetailModal({ customer, isOpen, onClose, onEdit }: CustomerDetailModalProps) {
+  onEdit?: (c: ExtendedCustomer) => void
+}) {
   const [notificationLoading, setNotificationLoading] = useState(false)
   const [notificationSuccess, setNotificationSuccess] = useState<string | null>(null)
   const [notificationError, setNotificationError] = useState<string | null>(null)
@@ -72,49 +36,7 @@ export default function CustomerDetailModal({ customer, isOpen, onClose, onEdit 
 
   if (!customer) return null
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return "Nicht verfügbar"
-    return new Date(dateString).toLocaleDateString("de-DE", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })
-  }
-
-  const formatCurrency = (amount?: number) => {
-    if (!amount) return "0,00 €"
-    return new Intl.NumberFormat("de-DE", {
-      style: "currency",
-      currency: "EUR",
-    }).format(amount)
-  }
-
-  const getStatusBadge = (status?: string, type: "account" | "customer" = "customer") => {
-    if (type === "account") {
-      return status === "has_account" ? (
-        <Badge variant="default" className="bg-green-100 text-green-800">
-          Hat Konto
-        </Badge>
-      ) : (
-        <Badge variant="secondary">Kein Konto</Badge>
-      )
-    }
-
-    switch (status) {
-      case "active":
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800">
-            Aktiv
-          </Badge>
-        )
-      case "inactive":
-        return <Badge variant="secondary">Inaktiv</Badge>
-      case "blocked":
-        return <Badge variant="destructive">Gesperrt</Badge>
-      default:
-        return <Badge variant="secondary">Unbekannt</Badge>
-    }
-  }
+  const fullName = [customer.first_name, customer.last_name].filter(Boolean).join(" ")
 
   const sendNotification = async (type: string, subject?: string, content?: string) => {
     if (!customer.email) {
@@ -205,348 +127,160 @@ export default function CustomerDetailModal({ customer, isOpen, onClose, onEdit 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent
-        className="w-[95vw] h-[95vh] max-w-none max-h-none overflow-y-auto p-6"
-        style={{
-          width: "95vw",
-          height: "95vh",
-          maxWidth: "none",
-          maxHeight: "none",
-        }}
-      >
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-2 text-2xl font-bold">
-              <User className="w-7 h-7" />
-              {customer.first_name} {customer.last_name}
-            </DialogTitle>
-            <Button onClick={() => onEdit(customer)} size="sm" className="text-base px-4 py-2">
-              <Edit className="w-5 h-5 mr-2" />
-              Bearbeiten
-            </Button>
+            <DialogTitle className="text-2xl">Kundendetails</DialogTitle>
+            {onEdit && (
+              <Button onClick={() => onEdit(customer)} size="sm">
+                <Edit className="w-4 h-4 mr-2" />
+                Bearbeiten
+              </Button>
+            )}
           </div>
-          <DialogDescription className="text-base mt-2">
-            Detaillierte Kundeninformationen für {customer.first_name} {customer.last_name}
-          </DialogDescription>
+          <DialogDescription>Alle verfügbaren Informationen zu {fullName || customer.email}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8 mt-8">
-          {/* Grundinformationen */}
-          <Card className="h-fit">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl flex items-center gap-3">
-                <User className="w-6 h-6" />
-                Grundinformationen
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="flex items-center gap-4">
-                <Mail className="w-6 h-6 text-gray-500 flex-shrink-0" />
-                <span className="break-all text-base">{customer.email || "Nicht angegeben"}</span>
-              </div>
-              <div className="flex items-center gap-4">
-                <Phone className="w-6 h-6 text-gray-500 flex-shrink-0" />
-                <span className="text-base">{customer.phone || "Nicht angegeben"}</span>
-              </div>
-              <div className="flex items-start gap-4">
-                <MapPin className="w-6 h-6 text-gray-500 flex-shrink-0 mt-0.5" />
-                <span className="leading-relaxed text-base">
-                  {customer.street && customer.house_number
-                    ? `${customer.street} ${customer.house_number}, ${customer.postal_code} ${customer.city}`
-                    : "Adresse nicht vollständig"}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Status & Aktivität */}
-          <Card className="h-fit">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl flex items-center gap-3">
-                <Activity className="w-6 h-6" />
-                Status & Aktivität
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-base">Kontostatus:</span>
-                {getStatusBadge(customer.account_status, "account")}
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-base">Kundenstatus:</span>
-                {getStatusBadge(customer.customer_status)}
-              </div>
-              <div className="flex items-center gap-4">
-                <Calendar className="w-6 h-6 text-gray-500 flex-shrink-0" />
-                <div>
-                  <div className="font-medium text-base">Registriert:</div>
-                  <div className="text-base text-gray-600">{formatDate(customer.registration_date)}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <Activity className="w-6 h-6 text-gray-500 flex-shrink-0" />
-                <div>
-                  <div className="font-medium text-base">Letzte Aktivität:</div>
-                  <div className="text-base text-gray-600">{formatDate(customer.last_activity)}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Kommunikationspräferenzen */}
-          <Card className="h-fit">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl flex items-center gap-3">
-                <Bell className="w-6 h-6" />
-                Kommunikation
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-base">Newsletter:</span>
-                <Badge
-                  variant={customer.newsletter_subscription ? "default" : "secondary"}
-                  className="ml-2 text-sm px-3 py-1"
-                >
-                  {customer.newsletter_subscription ? "Abonniert" : "Nicht abonniert"}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-base">Erinnerungen:</span>
-                <Badge
-                  variant={customer.reminder_notifications ? "default" : "secondary"}
-                  className="ml-2 text-sm px-3 py-1"
-                >
-                  {customer.reminder_notifications ? "Aktiviert" : "Deaktiviert"}
-                </Badge>
-              </div>
-              {customer.referral_source && (
-                <div className="flex items-center gap-4">
-                  <Users className="w-6 h-6 text-gray-500 flex-shrink-0" />
-                  <div>
-                    <div className="font-medium text-base">Empfehlung:</div>
-                    <div className="text-base text-gray-600">{customer.referral_source}</div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Bestellhistorie */}
-          <Card className="h-fit">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl flex items-center gap-3">
-                <ShoppingCart className="w-6 h-6" />
-                Bestellhistorie
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-base">Anzahl Bestellungen:</span>
-                <Badge variant="outline" className="text-lg px-4 py-2 font-semibold">
-                  {customer.total_orders || 0}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-4">
-                <Euro className="w-6 h-6 text-gray-500 flex-shrink-0" />
-                <div>
-                  <div className="font-medium text-base">Gesamtumsatz:</div>
-                  <div className="text-xl font-bold text-green-600">{formatCurrency(customer.total_spent)}</div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <Euro className="w-6 h-6 text-gray-500 flex-shrink-0" />
-                <div>
-                  <div className="font-medium text-base">Ø Bestellwert:</div>
-                  <div className="text-xl font-bold">{formatCurrency(customer.average_order_value)}</div>
-                </div>
-              </div>
-              {customer.last_order_date && (
-                <div className="flex items-center gap-4">
-                  <Calendar className="w-6 h-6 text-gray-500 flex-shrink-0" />
-                  <div>
-                    <div className="font-medium text-base">Letzte Bestellung:</div>
-                    <div className="text-base text-gray-600">{formatDate(customer.last_order_date)}</div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Verteilersystem */}
-          <Card className="h-fit">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl flex items-center gap-3">
-                <Users className="w-6 h-6" />
-                Verteilersystem
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-base">Teilnahme:</span>
-                <Badge
-                  variant={customer.distribution_system_benefits?.participated ? "default" : "secondary"}
-                  className="ml-2 text-sm px-3 py-1"
-                >
-                  {customer.distribution_system_benefits?.participated ? "Ja" : "Nein"}
-                </Badge>
-              </div>
-              {customer.distribution_system_benefits?.participated && (
-                <>
-                  <div className="flex items-center gap-4">
-                    <Euro className="w-6 h-6 text-gray-500 flex-shrink-0" />
-                    <div>
-                      <div className="font-medium text-base">Gesamtvorteile:</div>
-                      <div className="text-xl font-bold text-blue-600">
-                        {formatCurrency(customer.distribution_system_benefits.total_benefits)}
-                      </div>
-                    </div>
-                  </div>
-                  {customer.distribution_system_benefits.last_benefit_date && (
-                    <div className="flex items-center gap-4">
-                      <Calendar className="w-6 h-6 text-gray-500 flex-shrink-0" />
-                      <div>
-                        <div className="font-medium text-base">Letzter Vorteil:</div>
-                        <div className="text-base text-gray-600">
-                          {formatDate(customer.distribution_system_benefits.last_benefit_date)}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Lieblingskategorien */}
-          {customer.favorite_categories && customer.favorite_categories.length > 0 && (
-            <Card className="h-fit">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-xl flex items-center gap-3">
-                  <Heart className="w-6 h-6" />
-                  Lieblingskategorien
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-3">
-                  {customer.favorite_categories.map((category, index) => (
-                    <Badge key={index} variant="outline" className="text-base px-3 py-1">
-                      {category}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Benachrichtigungen senden */}
-          <Card className="lg:col-span-2 xl:col-span-3">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-xl flex items-center gap-3">
-                <Mail className="w-6 h-6" />
-                Benachrichtigungen senden
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Schnellbenachrichtigungen */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+          {/* Grunddaten */}
+          <section className="space-y-3 p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-semibold text-lg border-b pb-2">Grundinformationen</h3>
+            <div className="text-sm space-y-2">
               <div>
-                <h4 className="font-medium text-base mb-3">Schnellbenachrichtigungen:</h4>
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    onClick={() => sendNotification("newsletter")}
-                    disabled={notificationLoading || !customer.email}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <Mail className="w-4 h-4 mr-2" />
-                    Newsletter
-                  </Button>
-                  <Button
-                    onClick={() => sendNotification("reminder")}
-                    disabled={notificationLoading || !customer.email}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <Bell className="w-4 h-4 mr-2" />
-                    Erinnerung
-                  </Button>
-                  <Button
-                    onClick={() => sendNotification("welcome")}
-                    disabled={notificationLoading || !customer.email}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <Users className="w-4 h-4 mr-2" />
-                    Willkommen
-                  </Button>
-                  <Button
-                    onClick={() => sendNotification("birthday")}
-                    disabled={notificationLoading || !customer.email}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <Calendar className="w-4 h-4 mr-2" />
-                    Geburtstag
-                  </Button>
-                </div>
+                <span className="font-medium">Name:</span> {fullName || "-"}
               </div>
-
-              {/* Benutzerdefinierte Nachricht */}
-              <div className="border-t pt-6">
-                <h4 className="font-medium text-base mb-3">Benutzerdefinierte Nachricht:</h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium">Betreff</label>
-                    <Input
-                      value={customSubject}
-                      onChange={(e) => setCustomSubject(e.target.value)}
-                      placeholder="E-Mail Betreff eingeben..."
-                      disabled={notificationLoading}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Nachricht</label>
-                    <Textarea
-                      value={customContent}
-                      onChange={(e) => setCustomContent(e.target.value)}
-                      placeholder="Nachricht eingeben..."
-                      rows={4}
-                      disabled={notificationLoading}
-                    />
-                  </div>
-                  <Button
-                    onClick={() => sendNotification("custom")}
-                    disabled={notificationLoading || !customer.email || !customSubject || !customContent}
-                    className="w-full sm:w-auto"
-                  >
-                    {notificationLoading ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4 mr-2" />
-                    )}
-                    Nachricht senden
-                  </Button>
-                </div>
+              <div>
+                <span className="font-medium">E-Mail:</span> {customer.email}
               </div>
+              <div>
+                <span className="font-medium">Telefon:</span> {customer.phone || "-"}
+              </div>
+              <div>
+                <span className="font-medium">Adresse:</span>{" "}
+                {[
+                  customer.street && `${customer.street} ${customer.house_number ?? ""}`.trim(),
+                  customer.postal_code && `${customer.postal_code} ${customer.city ?? ""}`.trim(),
+                  customer.country,
+                ]
+                  .filter(Boolean)
+                  .join(", ") || "-"}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t">
+              {customer.customer_status && (
+                <Badge variant="secondary" className="text-xs">
+                  {customer.customer_status}
+                </Badge>
+              )}
+              {customer.account_status && (
+                <Badge variant="secondary" className="text-xs">
+                  {customer.account_status}
+                </Badge>
+              )}
+              {customer.newsletter_subscribed && <Badge className="text-xs">Newsletter</Badge>}
+            </div>
+          </section>
 
-              {/* Statusmeldungen */}
-              {notificationSuccess && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <p className="text-green-800 text-sm">{notificationSuccess}</p>
-                </div>
+          {/* Aktivität / KPIs */}
+          <section className="space-y-3 p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-semibold text-lg border-b pb-2">Aktivität & KPIs</h3>
+            <div className="text-sm space-y-2">
+              <div>
+                <span className="font-medium">Bestellungen gesamt:</span> {customer.order_count ?? 0}
+              </div>
+              <div>
+                <span className="font-medium">Gesamtumsatz:</span>{" "}
+                <span className="text-green-600 font-semibold">{formatCurrency(customer.total_spent)}</span>
+              </div>
+              <div>
+                <span className="font-medium">Ø Bestellwert:</span> {formatCurrency(customer.avg_order_value)}
+              </div>
+              <div>
+                <span className="font-medium">Letzte Bestellung:</span> {formatDate(customer.last_order_date)}
+              </div>
+              <div>
+                <span className="font-medium">Tage seit letzter Bestellung:</span>{" "}
+                {customer.days_since_last_order !== null && customer.days_since_last_order !== undefined ? (
+                  <span
+                    className={
+                      customer.days_since_last_order > 90
+                        ? "text-red-600 font-semibold"
+                        : customer.days_since_last_order > 30
+                          ? "text-orange-600"
+                          : "text-green-600"
+                    }
+                  >
+                    {customer.days_since_last_order} Tage
+                  </span>
+                ) : (
+                  "-"
+                )}
+              </div>
+              <div className="pt-2 border-t">
+                <span className="font-medium">Erstellt:</span> {formatDate(customer.created_at)}
+              </div>
+              <div>
+                <span className="font-medium">Aktualisiert:</span> {formatDate(customer.updated_at)}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <h3 className="font-semibold text-lg border-b pb-2 mb-3">Lieblingsprodukte</h3>
+          {customer.favorite_products && customer.favorite_products.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {customer.favorite_products.slice(0, 10).map((fp, idx) => (
+                <Badge key={`${fp.product_id}-${idx}`} variant="outline" className="text-xs">
+                  {fp.name || `#${fp.product_id}`} · {fp.quantity}×
+                </Badge>
+              ))}
+              {customer.favorite_products.length > 10 && (
+                <Badge variant="secondary" className="text-xs">
+                  +{customer.favorite_products.length - 10} weitere
+                </Badge>
               )}
-              {notificationError && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-red-800 text-sm">{notificationError}</p>
-                </div>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">Keine Daten vorhanden</div>
+          )}
+        </section>
+
+        <section className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <h3 className="font-semibold text-lg border-b pb-2 mb-3">Notizen</h3>
+          <div className="text-sm whitespace-pre-wrap">
+            {customer.notes?.trim() ? (
+              <p className="leading-relaxed">{customer.notes}</p>
+            ) : (
+              <span className="text-gray-500">Keine Notizen vorhanden</span>
+            )}
+          </div>
+        </section>
+
+        {/* Kategorien */}
+        {!!customer.favorite_categories?.length && (
+          <section className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-semibold text-lg border-b pb-2 mb-3">Lieblingskategorien</h3>
+            <div className="flex flex-wrap gap-2">
+              {customer.favorite_categories.slice(0, 10).map((cat, idx) => (
+                <Badge key={`${cat}-${idx}`} variant="secondary" className="text-xs">
+                  {cat}
+                </Badge>
+              ))}
+              {customer.favorite_categories.length > 10 && (
+                <Badge variant="outline" className="text-xs">
+                  +{customer.favorite_categories.length - 10} weitere
+                </Badge>
               )}
-              {!customer.email && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <p className="text-yellow-800 text-sm">Kunde hat keine E-Mail-Adresse hinterlegt</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
+        )}
+
+        {/* Footer */}
+        <div className="mt-6 flex gap-2 justify-end border-t pt-4">
+          <Button onClick={onClose} variant="outline">
+            Schließen
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

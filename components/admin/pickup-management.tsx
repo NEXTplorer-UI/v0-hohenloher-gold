@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -25,7 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { MapPin, Plus, Edit, Trash2 } from "lucide-react"
+import { MapPin, Plus, Edit, Trash2, Clock, Mail, Info } from "lucide-react"
 
 interface PickupLocation {
   id: string
@@ -35,6 +36,10 @@ interface PickupLocation {
   city: string
   contact_person: string | null
   contact_phone: string | null
+  email: string | null
+  pickup_hours_start: string | null
+  pickup_hours_end: string | null
+  notes: string | null
   is_active: boolean
   created_at: string
 }
@@ -53,6 +58,10 @@ export default function PickupLocationManagement() {
     city: "",
     contact_person: "",
     contact_phone: "",
+    email: "",
+    pickup_hours_start: "",
+    pickup_hours_end: "",
+    notes: "",
   })
   const { toast } = useToast()
 
@@ -223,6 +232,10 @@ export default function PickupLocationManagement() {
       city: location.city,
       contact_person: location.contact_person || "",
       contact_phone: location.contact_phone || "",
+      email: location.email || "",
+      pickup_hours_start: location.pickup_hours_start || "",
+      pickup_hours_end: location.pickup_hours_end || "",
+      notes: location.notes || "",
     })
     setIsEditDialogOpen(true)
   }
@@ -240,6 +253,10 @@ export default function PickupLocationManagement() {
       city: "",
       contact_person: "",
       contact_phone: "",
+      email: "",
+      pickup_hours_start: "",
+      pickup_hours_end: "",
+      notes: "",
     })
   }
 
@@ -266,7 +283,7 @@ export default function PickupLocationManagement() {
             {locations.map((location) => (
               <Card key={location.id} className="p-4">
                 <div className="flex items-center justify-between">
-                  <div className="space-y-2">
+                  <div className="space-y-2 flex-1">
                     <div className="flex items-center gap-2">
                       <MapPin className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">{location.name}</span>
@@ -281,6 +298,24 @@ export default function PickupLocationManagement() {
                       <div className="text-sm">
                         Kontakt: {location.contact_person}
                         {location.contact_phone && ` (${location.contact_phone})`}
+                      </div>
+                    )}
+                    {location.email && (
+                      <div className="text-sm flex items-center gap-1">
+                        <Mail className="h-3 w-3" />
+                        {location.email}
+                      </div>
+                    )}
+                    {(location.pickup_hours_start || location.pickup_hours_end) && (
+                      <div className="text-sm flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        Abholzeiten: {location.pickup_hours_start || "?"} - {location.pickup_hours_end || "?"} Uhr
+                      </div>
+                    )}
+                    {location.notes && (
+                      <div className="text-sm flex items-start gap-1 text-muted-foreground">
+                        <Info className="h-3 w-3 mt-0.5" />
+                        <span>{location.notes}</span>
                       </div>
                     )}
                   </div>
@@ -307,7 +342,7 @@ export default function PickupLocationManagement() {
       </Card>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Neuer Abholort</DialogTitle>
             <DialogDescription>Erstellen Sie einen neuen Abholstandort für Kunden</DialogDescription>
@@ -369,6 +404,46 @@ export default function PickupLocationManagement() {
                 placeholder="Optional"
               />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="email">E-Mail</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="Optional"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="pickup_hours_start">Abholzeit von</Label>
+                <Input
+                  id="pickup_hours_start"
+                  value={formData.pickup_hours_start}
+                  onChange={(e) => setFormData({ ...formData, pickup_hours_start: e.target.value })}
+                  placeholder="z.B. 09:00"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pickup_hours_end">Abholzeit bis</Label>
+                <Input
+                  id="pickup_hours_end"
+                  value={formData.pickup_hours_end}
+                  onChange={(e) => setFormData({ ...formData, pickup_hours_end: e.target.value })}
+                  placeholder="z.B. 18:00"
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="notes">Hinweise</Label>
+              <Textarea
+                id="notes"
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="z.B. Eingang auf der Rückseite"
+                rows={3}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
@@ -380,7 +455,7 @@ export default function PickupLocationManagement() {
       </Dialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Abholort bearbeiten</DialogTitle>
             <DialogDescription>Bearbeiten Sie die Details des Abholstandorts</DialogDescription>
@@ -434,6 +509,45 @@ export default function PickupLocationManagement() {
                 id="edit-contact_phone"
                 value={formData.contact_phone}
                 onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-email">E-Mail</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-pickup_hours_start">Abholzeit von</Label>
+                <Input
+                  id="edit-pickup_hours_start"
+                  value={formData.pickup_hours_start}
+                  onChange={(e) => setFormData({ ...formData, pickup_hours_start: e.target.value })}
+                  placeholder="z.B. 09:00"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-pickup_hours_end">Abholzeit bis</Label>
+                <Input
+                  id="edit-pickup_hours_end"
+                  value={formData.pickup_hours_end}
+                  onChange={(e) => setFormData({ ...formData, pickup_hours_end: e.target.value })}
+                  placeholder="z.B. 18:00"
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-notes">Hinweise</Label>
+              <Textarea
+                id="edit-notes"
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="z.B. Eingang auf der Rückseite"
+                rows={3}
               />
             </div>
           </div>

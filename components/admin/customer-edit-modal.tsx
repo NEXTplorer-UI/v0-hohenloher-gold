@@ -31,7 +31,7 @@ interface ExtendedCustomer {
   customer_status?: "active" | "inactive" | "blocked"
   registration_date?: string
   last_activity?: string
-  newsletter_subscription?: boolean
+  newsletter_subscribed?: boolean
   reminder_notifications?: boolean
   special_requests?: string
   referral_source?: string
@@ -324,11 +324,11 @@ export default function CustomerEditModal({
               <input
                 type="checkbox"
                 id="newsletter_subscription"
-                checked={editingCustomer?.newsletter_subscription || false}
+                checked={editingCustomer?.newsletter_subscribed || false}
                 onChange={(e) =>
                   setEditingCustomer({
                     ...editingCustomer!,
-                    newsletter_subscription: e.target.checked,
+                    newsletter_subscribed: e.target.checked,
                   })
                 }
                 className="rounded border-gray-300"

@@ -7,25 +7,66 @@ export const runtime = "nodejs"
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdmin(request)
+    console.log("[v0] [load-customers] API called")
 
-    console.log("[v0] ===== LOAD CUSTOMERS API CALLED =====")
+    console.log("[v0] [load-customers] Checking admin authentication...")
+    try {
+      await requireAdmin(request)
+      console.log("[v0] [load-customers] Admin authentication successful")
+    } catch (authError) {
+      console.error("[v0] [load-customers] Admin authentication failed:", authError)
+      return NextResponse.json(
+        { error: "Unauthorized", details: authError instanceof Error ? authError.message : "Not authorized" },
+        { status: 401 },
+      )
+    }
 
-    console.log("[v0] Creating admin client...")
+    console.log("[v0] [load-customers] Creating admin client...")
     const supabase = createAdminClient()
-    console.log("[v0] Admin client created")
+    console.log("[v0] [load-customers] Admin client created successfully")
 
-    console.log("[v0] Querying customers table...")
+    console.log("[v0] [load-customers] Querying customers table...")
     const { data, error } = await supabase
       .from("customers")
       .select(`
-        *,
-        orders:orders(count)
+        id,
+        first_name,
+        last_name,
+        email,
+        email_normalized,
+        phone,
+        street,
+        house_number,
+        postal_code,
+        city,
+        country,
+        address,
+        customer_segment,
+        account_status,
+        customer_status,
+        registration_date,
+        total_orders,
+        total_spent,
+        last_order_date,
+        preferred_products,
+        favorite_categories,
+        marketing_consent,
+        marketing_consent_at,
+        newsletter_subscribed,
+        newsletter_subscribed_at,
+        newsletter_confirmed,
+        newsletter_unsubscribed_at,
+        reminder_notifications,
+        special_requests,
+        referral_source,
+        distribution_system_benefits,
+        created_at,
+        updated_at
       `)
       .order("created_at", { ascending: false })
 
     if (error) {
-      console.error("[v0] Supabase error loading customers:", {
+      console.error("[v0] [load-customers] Supabase error:", {
         message: error.message,
         code: error.code,
         details: error.details,
@@ -41,15 +82,17 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log("[v0] Raw data received:", data?.length || 0, "customers")
+    console.log("[v0] [load-customers] Successfully fetched", data?.length || 0, "customers")
 
     const processedData =
       data?.map((customer) => ({
         ...customer,
-        order_count: customer.orders?.[0]?.count || customer.total_orders || 0,
+        tags: [],
+        order_count: customer.total_orders || 0,
+        newsletter_subscription: customer.newsletter_subscribed || false,
       })) || []
 
-    console.log("[v0] Successfully loaded and processed customers:", processedData?.length || 0)
+    console.log("[v0] [load-customers] Returning", processedData?.length || 0, "processed customers")
 
     return NextResponse.json({
       success: true,
@@ -57,8 +100,8 @@ export async function GET(request: NextRequest) {
       data: processedData,
     })
   } catch (error) {
-    console.error("[v0] Unexpected error in load-customers API:", error)
-    console.error("[v0] Error stack:", error instanceof Error ? error.stack : "No stack")
+    console.error("[v0] [load-customers] Unexpected error:", error)
+    console.error("[v0] [load-customers] Error stack:", error instanceof Error ? error.stack : "No stack")
     return NextResponse.json(
       {
         error: "Internal server error",

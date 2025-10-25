@@ -100,17 +100,25 @@ export async function requireAuth(request: NextRequest) {
  * Throws AuthenticationError if not authenticated, AuthorizationError if not admin
  */
 export async function requireAdmin(request: NextRequest) {
+  console.log("[v0] [requireAdmin] Checking authentication...")
+
   const user = await getAuthenticatedUser(request)
 
   if (!user) {
+    console.log("[v0] [requireAdmin] No authenticated user found")
     throw new AuthenticationError()
   }
+
+  console.log("[v0] [requireAdmin] User authenticated:", user.id)
+  console.log("[v0] [requireAdmin] Checking admin role...")
 
   const isAdminUser = await isAdmin(request)
 
   if (!isAdminUser) {
+    console.log("[v0] [requireAdmin] User is not admin")
     throw new AuthorizationError()
   }
 
+  console.log("[v0] [requireAdmin] User is admin")
   return { user }
 }

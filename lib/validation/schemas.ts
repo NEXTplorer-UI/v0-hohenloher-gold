@@ -96,7 +96,7 @@ export const complaintSchema = z.object({
   orderNumber: z
     .string()
     .min(1, "Bestellnummer ist erforderlich")
-    .regex(/^HG-\d{4}-\d{6}$/, "Ungültige Bestellnummer (Format: HG-YYYY-XXXXXX)"),
+    .max(50, "Bestellnummer darf maximal 50 Zeichen lang sein"),
   description: z
     .string()
     .min(10, "Beschreibung muss mindestens 10 Zeichen lang sein")

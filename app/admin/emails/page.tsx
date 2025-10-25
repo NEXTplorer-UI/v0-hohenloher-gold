@@ -137,6 +137,13 @@ export default function EmailPreviewPage() {
       pickupReminder: "pickupReminder",
       distributorApplication: "distributorApplication",
       newsletter: "newsletter",
+      newsletterConfirmation: "newsletterConfirmation",
+      paymentReceipt: "paymentReceipt",
+      readyForPickup: "readyForPickup",
+      orderConfirmed: "orderConfirmed",
+      orderPickedUp: "orderPickedUp",
+      orderCancelled: "orderCancelled",
+      shippingNotification: "shippingNotification",
     }
 
     const section = sectionMap[templateId]
@@ -209,6 +216,13 @@ export default function EmailPreviewPage() {
                             pickupReminder: "pickupReminder",
                             distributorApplication: "distributorApplication",
                             newsletter: "newsletter",
+                            newsletterConfirmation: "newsletterConfirmation",
+                            paymentReceipt: "paymentReceipt",
+                            readyForPickup: "readyForPickup",
+                            orderConfirmed: "orderConfirmed",
+                            orderPickedUp: "orderPickedUp",
+                            orderCancelled: "orderCancelled",
+                            shippingNotification: "shippingNotification",
                           }[templateId] as keyof EmailCopyType
                           handleTextChange(section, key, e.target.value)
                         }}
@@ -226,6 +240,13 @@ export default function EmailPreviewPage() {
                             pickupReminder: "pickupReminder",
                             distributorApplication: "distributorApplication",
                             newsletter: "newsletter",
+                            newsletterConfirmation: "newsletterConfirmation",
+                            paymentReceipt: "paymentReceipt",
+                            readyForPickup: "readyForPickup",
+                            orderConfirmed: "orderConfirmed",
+                            orderPickedUp: "orderPickedUp",
+                            orderCancelled: "orderCancelled",
+                            shippingNotification: "shippingNotification",
                           }[templateId] as keyof EmailCopyType
                           handleTextChange(section, key, e.target.value)
                         }}

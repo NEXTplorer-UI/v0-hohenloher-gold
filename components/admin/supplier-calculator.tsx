@@ -50,7 +50,14 @@ export default function SupplierOrderCalculator() {
       setLoading(true)
       console.log("[v0] Loading supplier demand analysis...")
 
-      const response = await fetch("/api/admin/supplier-demand-analysis")
+      const response = await fetch("/api/admin/supplier-demand-analysis", { cache: "no-store" })
+
+      if (!response.ok) {
+        const text = await response.text()
+        console.error("[v0] API returned error:", response.status, text.slice(0, 200))
+        throw new Error(`HTTP ${response.status}`)
+      }
+
       const data = await response.json()
 
       if (data.success) {

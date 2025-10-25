@@ -8,37 +8,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Search, MapPin, Users, Clock, Phone, Mail, ArrowRight, Heart, ChevronDown } from "lucide-react"
+import { Search, MapPin, Users, Phone, Mail, ArrowRight, Heart, ChevronDown, Clock } from "lucide-react"
 import { useState } from "react"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
 import { useNearbyPickups } from "@/lib/hooks/use-nearby-pickups"
-
-// Mock data for pickup locations
-const pickupLocations = [
-  {
-    id: 1,
-    name: "Beispiel Abholort",
-    address: "Musterstraße 1, 74653 Künzelsau",
-    postal_code: "74653",
-    contact_person: "Max Mustermann",
-    contact_phone: "0123 456789",
-    email: "max@example.com",
-    hours: "Mo-Fr 14-18 Uhr",
-    distanceKm: 5,
-  },
-]
-
-const centralWarehouse = {
-  id: "999",
-  name: "Zentrallager Südfrüchte Hohenlohe",
-  address: "Weststraße 28, 74629 Pfedelbach",
-  postal_code: "74629",
-  contact_person: "Südfrüchte Hohenlohe Team",
-  contact_phone: "+49 1573 5703864",
-  city: "Pfedelbach",
-  is_active: true,
-  isWarehouse: true,
-}
 
 export default function DistributorPage() {
   const [searchPlz, setSearchPlz] = useState("")
@@ -64,9 +37,7 @@ export default function DistributorPage() {
     }
   }
 
-  const allLocationsWithWarehouse = [...allLocations, centralWarehouse].sort((a, b) =>
-    a.postal_code.localeCompare(b.postal_code),
-  )
+  const sortedLocations = [...allLocations].sort((a, b) => a.postal_code.localeCompare(b.postal_code))
 
   const handleBecomeDistributor = async () => {
     const formData = {
@@ -176,12 +147,35 @@ export default function DistributorPage() {
                                 </Badge>
                               </div>
                               <p className="text-sm text-muted-foreground">{location.address}</p>
+
+                              {location.notes && (
+                                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                                  <strong>Hinweis:</strong> {location.notes}
+                                </p>
+                              )}
+
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                                 <div className="flex items-center space-x-2">
                                   <Phone className="w-4 h-4 text-primary" />
                                   <span>{location.contact_phone}</span>
                                 </div>
+                                {location.email && (
+                                  <div className="flex items-center space-x-2">
+                                    <Mail className="w-4 h-4 text-primary" />
+                                    <span className="truncate">{location.email}</span>
+                                  </div>
+                                )}
                               </div>
+
+                              {location.pickup_hours_start && location.pickup_hours_end && (
+                                <div className="flex items-center space-x-2 text-sm">
+                                  <Clock className="w-4 h-4 text-primary" />
+                                  <span>
+                                    Abholzeiten: {location.pickup_hours_start} - {location.pickup_hours_end} Uhr
+                                  </span>
+                                </div>
+                              )}
+
                               <p className="text-sm">
                                 <strong>Ansprechpartner:</strong> {location.contact_person}
                               </p>
@@ -196,37 +190,7 @@ export default function DistributorPage() {
                           <p className="text-muted-foreground mb-4">
                             Leider haben wir noch keinen Abholort in Ihrer Nähe.
                           </p>
-                          <p className="text-sm text-muted-foreground mb-6">
-                            Sie können Ihre Bestellung aber gerne direkt in unserem Zentrallager abholen:
-                          </p>
                         </div>
-
-                        <Card className="p-4 border-primary/20">
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-start">
-                              <h4 className="font-semibold text-primary">Zentrallager Hohenloher Gold</h4>
-                              <Badge variant="secondary">Zentrallager</Badge>
-                            </div>
-                            <p className="text-sm text-muted-foreground">Gartenbühlstraße 33 / Setze, 74613 Öhringen</p>
-                            <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
-                              <strong>Hinweis:</strong> Das Lager befindet sich auf der Rückseite des Gebäudes
-                            </p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mt-3">
-                              <div className="flex items-center space-x-2">
-                                <Clock className="w-4 h-4 text-primary flex-shrink-0" />
-                                <span>Siehe Abholtermine</span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <Phone className="w-4 h-4 text-primary flex-shrink-0" />
-                                <span>07940 123456</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-2 text-sm">
-                              <Mail className="w-4 h-4 text-primary flex-shrink-0" />
-                              <span>kontakt@suedfruechte-hohenlohe.de</span>
-                            </div>
-                          </div>
-                        </Card>
 
                         <div className="text-center pt-4">
                           <p className="text-sm text-muted-foreground mb-4">
@@ -257,97 +221,120 @@ export default function DistributorPage() {
                 <p className="text-sm text-muted-foreground">Wählen Sie einen Standort für Details</p>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {/* Compact scrollable list */}
-                  <div className="border rounded-lg max-h-48 overflow-y-auto">
-                    {allLocationsWithWarehouse.map((location) => (
-                      <button
-                        key={location.id}
-                        onClick={() => setSelectedStation(location)}
-                        className={`w-full text-left p-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors ${
-                          selectedStation?.id === location.id ? "bg-primary/5 border-primary/20" : ""
+                {sortedLocations.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Noch keine Abholorte verfügbar</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="border rounded-lg max-h-48 overflow-y-auto">
+                      {sortedLocations.map((location) => (
+                        <button
+                          key={location.id}
+                          onClick={() => setSelectedStation(location)}
+                          className={`w-full text-left p-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors ${
+                            selectedStation?.id === location.id ? "bg-primary/5 border-primary/20" : ""
+                          }`}
+                        >
+                          <div className="flex justify-between items-center">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2">
+                                <h4 className="font-medium text-sm">{location.name}</h4>
+                                {location.name.toLowerCase().includes("zentrallager") && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    Zentrallager
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {location.city ||
+                                  location.address.split(",")[1]?.trim() ||
+                                  location.address.split(",")[0]}
+                              </p>
+                            </div>
+                            <ChevronDown
+                              className={`w-4 h-4 text-muted-foreground transition-transform ${
+                                selectedStation?.id === location.id ? "rotate-180" : ""
+                              }`}
+                            />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    {selectedStation && (
+                      <Card
+                        className={`p-4 ${
+                          selectedStation.name.toLowerCase().includes("zentrallager")
+                            ? "border-primary/20 bg-primary/5"
+                            : "border-border"
                         }`}
                       >
-                        <div className="flex justify-between items-center">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2">
-                              <h4 className="font-medium text-sm">{location.name}</h4>
-                              {"isWarehouse" in location && location.isWarehouse && (
-                                <Badge variant="secondary" className="text-xs">
-                                  Zentrallager
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {location.address.split(",")[1]?.trim() || location.address.split(",")[0]}
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-start">
+                            <h4
+                              className={`font-semibold ${
+                                selectedStation.name.toLowerCase().includes("zentrallager")
+                                  ? "text-primary"
+                                  : "text-foreground"
+                              }`}
+                            >
+                              {selectedStation.name}
+                            </h4>
+                            {selectedStation.name.toLowerCase().includes("zentrallager") ? (
+                              <Badge variant="secondary">Zentrallager</Badge>
+                            ) : (
+                              <Badge variant="outline">PLZ {selectedStation.postal_code}</Badge>
+                            )}
+                          </div>
+
+                          <p className="text-sm text-muted-foreground">{selectedStation.address}</p>
+
+                          {selectedStation.notes && (
+                            <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                              <strong>Hinweis:</strong> {selectedStation.notes}
                             </p>
-                          </div>
-                          <ChevronDown
-                            className={`w-4 h-4 text-muted-foreground transition-transform ${
-                              selectedStation?.id === location.id ? "rotate-180" : ""
-                            }`}
-                          />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Detailed information for selected station */}
-                  {selectedStation && (
-                    <Card
-                      className={`p-4 ${
-                        "isWarehouse" in selectedStation && selectedStation.isWarehouse
-                          ? "border-primary/20 bg-primary/5"
-                          : "border-border"
-                      }`}
-                    >
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-start">
-                          <h4
-                            className={`font-semibold ${
-                              "isWarehouse" in selectedStation && selectedStation.isWarehouse
-                                ? "text-primary"
-                                : "text-foreground"
-                            }`}
-                          >
-                            {selectedStation.name}
-                          </h4>
-                          {"isWarehouse" in selectedStation && selectedStation.isWarehouse ? (
-                            <Badge variant="secondary">Zentrallager</Badge>
-                          ) : (
-                            <Badge variant="outline">PLZ {selectedStation.postal_code}</Badge>
                           )}
-                        </div>
 
-                        <p className="text-sm text-muted-foreground">{selectedStation.address}</p>
-
-                        {"isWarehouse" in selectedStation && selectedStation.isWarehouse && (
-                          <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
-                            <strong>Hinweis:</strong> Abholung nach telefonischer Vereinbarung
-                          </p>
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                          <div className="flex items-center space-x-2">
-                            <Phone className="w-4 h-4 text-primary flex-shrink-0" />
-                            <span>{selectedStation.contact_phone}</span>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                            <div className="flex items-center space-x-2">
+                              <Phone className="w-4 h-4 text-primary flex-shrink-0" />
+                              <span>{selectedStation.contact_phone}</span>
+                            </div>
+                            {selectedStation.email && (
+                              <div className="flex items-center space-x-2">
+                                <Mail className="w-4 h-4 text-primary flex-shrink-0" />
+                                <span className="truncate">{selectedStation.email}</span>
+                              </div>
+                            )}
                           </div>
+
+                          {selectedStation.pickup_hours_start && selectedStation.pickup_hours_end && (
+                            <div className="flex items-center space-x-2 text-sm">
+                              <Clock className="w-4 h-4 text-primary flex-shrink-0" />
+                              <span>
+                                Abholzeiten: {selectedStation.pickup_hours_start} - {selectedStation.pickup_hours_end}{" "}
+                                Uhr
+                              </span>
+                            </div>
+                          )}
+
+                          <p className="text-sm">
+                            <strong>Ansprechpartner:</strong> {selectedStation.contact_person}
+                          </p>
                         </div>
+                      </Card>
+                    )}
 
-                        <p className="text-sm">
-                          <strong>Ansprechpartner:</strong> {selectedStation.contact_person}
-                        </p>
+                    {!selectedStation && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">Wählen Sie einen Abholort aus der Liste für Details</p>
                       </div>
-                    </Card>
-                  )}
-
-                  {!selectedStation && (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <MapPin className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">Wählen Sie einen Abholort aus der Liste für Details</p>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

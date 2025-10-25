@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createManualMovement } from "@/lib/inventory/movement-service"
 import { requireAdmin } from "@/lib/auth/api-auth"
+import { createAdminClient } from "@/lib/supabase/server"
 
 export async function POST(request: NextRequest) {
   const authResult = await requireAdmin(request)
@@ -26,9 +27,27 @@ export async function POST(request: NextRequest) {
       occurredAt,
     )
 
+    const supabase = createAdminClient()
+
+    const { data: movements, error: stockError } = await supabase
+      .from("inventory_movements")
+      .select("qty")
+      .eq("product_id", productId)
+
+    let newStock = 0
+    if (!stockError && movements) {
+      newStock = movements.reduce((sum: number, m: any) => sum + m.qty, 0)
+      console.log(`[v0] Calculated new stock for product ${productId}: ${newStock}`)
+    }
+
+    await supabase.rpc("refresh_product_availability").catch((err: any) => {
+      console.warn("[v0] Could not refresh product_availability view:", err.message)
+    })
+
     return NextResponse.json({
       success: true,
       data: movement,
+      newStock, // Return authoritative stock
     })
   } catch (error) {
     console.error("[v0] Error creating inventory movement:", error)

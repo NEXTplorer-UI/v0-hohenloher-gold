@@ -9,11 +9,20 @@ function normalizeEmail(email: string): string {
   return email.toLowerCase().trim()
 }
 
+function safeGetOriginFromRequestUrl(req: NextRequest): string | null {
+  try {
+    const u = new URL(req.url)
+    return u.origin
+  } catch {
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log("[v0] Newsletter subscribe API called")
-    const { email, source = "news_page" } = await request.json()
-    console.log("[v0] Newsletter subscription request:", { email, source })
+    const { email, source = "news_page", siteUrl: clientSiteUrl } = await request.json()
+    console.log("[v0] Newsletter subscription request:", { email, source, clientSiteUrl })
 
     // Validate email
     if (!email || !email.includes("@")) {
@@ -42,36 +51,40 @@ export async function POST(request: NextRequest) {
 
     const confirmToken = crypto.randomUUID()
 
-    // Try to get the site URL from multiple sources
-    let siteUrl: string
-    let urlSource: string
+    let siteUrl = "http://localhost:3000" // Default fallback
+    let urlSource = "localhost fallback"
 
-    // 1. Check environment variable (but validate it's a real URL)
-    const envUrl = process.env.NEXT_PUBLIC_SITE_URL
-    if (envUrl && (envUrl.startsWith("http://") || envUrl.startsWith("https://"))) {
-      siteUrl = envUrl
-      urlSource = "environment variable"
-    } else {
-      // 2. Use request headers (works in v0 preview and production)
-      const host = request.headers.get("host")
-      const protocol = request.headers.get("x-forwarded-proto") || "https"
-
-      if (host) {
-        siteUrl = `${protocol}://${host}`
-        urlSource = "request headers"
-      } else {
-        // 3. Fallback to localhost for local development
-        siteUrl = "http://localhost:3000"
-        urlSource = "localhost fallback"
+    // 1. Client-provided URL (most reliable in v0 preview)
+    if (clientSiteUrl && typeof clientSiteUrl === "string" && clientSiteUrl.startsWith("http")) {
+      siteUrl = clientSiteUrl
+      urlSource = "client-provided"
+    }
+    // 2. Extract from request.url (independent of headers)
+    else {
+      const reqOrigin = safeGetOriginFromRequestUrl(request)
+      if (reqOrigin && reqOrigin.startsWith("http")) {
+        siteUrl = reqOrigin
+        urlSource = "request.url"
+      }
+      // 3. Environment variable (if valid URL)
+      else if (process.env.NEXT_PUBLIC_SITE_URL?.startsWith("http")) {
+        siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+        urlSource = "environment variable"
+      }
+      // 4. Construct from headers (production fallback)
+      else {
+        const host = request.headers.get("x-forwarded-host") || request.headers.get("host")
+        const proto = request.headers.get("x-forwarded-proto") || "https"
+        if (host) {
+          siteUrl = `${proto}://${host}`
+          urlSource = "host headers"
+        }
       }
     }
 
     const confirmUrl = `${siteUrl}/newsletter/confirm?token=${confirmToken}`
 
-    console.log("[v0] URL source:", urlSource)
-    console.log("[v0] Site URL:", siteUrl)
-    console.log("[v0] Generated confirmation URL:", confirmUrl)
-    console.log("[v0] Confirmation token:", confirmToken)
+    console.log("[v0] URL resolution:", { urlSource, siteUrl, confirmUrl })
 
     if (existing && existing.newsletter_subscribed && existing.newsletter_confirmed) {
       console.log("[v0] Customer already subscribed and confirmed")
@@ -114,7 +127,6 @@ export async function POST(request: NextRequest) {
 
       if (insertError) {
         console.error("[v0] Error creating customer:", insertError)
-        // Check if it's a duplicate email error
         if (insertError.code === "23505") {
           return NextResponse.json({ error: "Diese E-Mail-Adresse ist bereits registriert." }, { status: 400 })
         }
@@ -142,7 +154,6 @@ export async function POST(request: NextRequest) {
       console.log("[v0] Confirmation email sent successfully")
     } catch (emailError) {
       console.error("[v0] Error sending confirmation email:", emailError)
-      // Don't fail the request if email fails, user can try again
     }
 
     console.log("[v0] Newsletter subscription completed successfully")

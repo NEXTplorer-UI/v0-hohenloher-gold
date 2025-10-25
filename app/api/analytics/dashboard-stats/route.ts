@@ -1,13 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireAdmin } from "@/lib/auth/api-auth"
+import { APIError } from "@/lib/errors/api-errors"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("[v0] Dashboard stats: Checking authentication...")
     await requireAdmin(request)
+    console.log("[v0] Dashboard stats: Authentication successful")
 
     console.log("[v0] Dashboard stats: Starting data fetch")
     const supabase = createAdminClient()
@@ -173,6 +176,16 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("[v0] Dashboard stats error:", error)
+
+    if (error instanceof APIError) {
+      console.error("[v0] Dashboard stats API error:", error.message, "Status:", error.statusCode)
+      return NextResponse.json(
+        { error: error.message, code: error.code, details: error.details },
+        { status: error.statusCode },
+      )
+    }
+
+    console.error("[v0] Dashboard stats unexpected error:", error instanceof Error ? error.message : String(error))
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

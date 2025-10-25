@@ -28,11 +28,10 @@ export default function ClientPage() {
                   Frisch aus Sizilien
                 </Badge>
                 <h1 className="font-serif font-bold text-3xl sm:text-4xl lg:text-6xl text-foreground leading-tight">
-                  Natürliche Qualität aus <span className="text-primary">Hohenlohe</span>
+                  Natürliche Qualität in <span className="text-primary">Hohenlohe</span>
                 </h1>
                 <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
-                  Entdecken Sie unbehandelte Lebensmittel und frische Südfrüchte direkt vom Erzeuger. Qualität,
-                  Nachhaltigkeit und menschliche Beziehungen stehen bei uns im Mittelpunkt.
+                  Entdecken Sie möglichst unbehandelte Lebensmittel und frische Südfrüchte direkt vom Erzeuger. Qualität, Nachhaltigkeit und menschliche Beziehungen stehen bei uns im Mittelpunkt.
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-4">
@@ -83,7 +82,7 @@ export default function ClientPage() {
           <div className="text-center space-y-4 mb-12 sm:mb-16">
             <h2 className="font-serif font-bold text-2xl sm:text-3xl lg:text-4xl text-foreground">Unsere Werte</h2>
             <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto">
-              Was uns antreibt und warum wir jeden Tag für beste Qualität arbeiten
+              Was uns antreibt und warum wir für beste Qualität arbeiten
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
@@ -92,7 +91,7 @@ export default function ClientPage() {
                 <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
                   <Heart className="w-8 h-8 text-primary" />
                 </div>
-                <h3 className="font-serif font-bold text-xl text-foreground">Menschliche Beziehungen</h3>
+                <h3 className="font-serif font-bold text-xl text-foreground"> Beziehung</h3>
                 <p className="text-muted-foreground">
                   Wir pflegen direkte, vertrauensvolle Beziehungen zu unseren Erzeugern und Kunden.
                 </p>
@@ -105,7 +104,7 @@ export default function ClientPage() {
                 </div>
                 <h3 className="font-serif font-bold text-xl text-foreground">Zukunftsbejahend</h3>
                 <p className="text-muted-foreground">
-                  Schutz der Natur und faire Bedingungen für Bauern in Sizilien stehen im Fokus.
+                  Faire Bedingungen für Bauern in Sizilien und Lebensmittel in ihrer reinsten Form zu erhalten stehen im Fokus.
                 </p>
               </CardContent>
             </Card>
@@ -116,7 +115,7 @@ export default function ClientPage() {
                 </div>
                 <h3 className="font-serif font-bold text-xl text-foreground">Qualität</h3>
                 <p className="text-muted-foreground">
-                  Unbehandelte, naturbelassene Lebensmittel in Top-Qualität ohne Zertifizierungszwang.
+                  Möglichst unbehandelte, naturbelassene Lebensmittel in Top-Qualität ohne Zertifizierungszwang.
                 </p>
               </CardContent>
             </Card>
@@ -145,7 +144,7 @@ export default function ClientPage() {
                   Südfrüchte Hohenlohe
                 </Badge>
                 <h2 className="font-serif font-bold text-2xl sm:text-3xl lg:text-4xl text-card-foreground">
-                  Frische Südfrüchte direkt aus Sizilien
+                  Frische Südfrüchte direkt aus Ribera
                 </h2>
                 <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
                   Unsere Südfrüchte kommen direkt von sizilianischen Bauern zu Ihnen. Unbehandelt und voller natürlicher
@@ -181,10 +180,9 @@ export default function ClientPage() {
       <section className="py-16 sm:py-20 bg-primary text-primary-foreground">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="max-w-3xl mx-auto space-y-6">
-            <h2 className="font-serif font-bold text-2xl sm:text-3xl lg:text-4xl">Werden Sie Teil unseres Netzwerks</h2>
+            <h2 className="font-serif font-bold text-2xl sm:text-3xl lg:text-4xl">Bringen Sie die Ribera Orangen auch in Ihre Region </h2>
             <p className="text-base sm:text-lg opacity-90">
-              Entdecken Sie unsere dezentrale Verteilung und werden Sie selbst Verteiler. Gemeinsam bringen wir beste
-              Qualität in Ihre Region.
+              Entdecken Sie unsere dezentrale Verteilung und werden Sie selbst Verteiler. Gemeinsam bringen wir die Sonne Siziliens in Ihre Region.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <Link href="/distributor#application-form">

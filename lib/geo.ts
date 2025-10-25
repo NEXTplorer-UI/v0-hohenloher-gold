@@ -10,6 +10,10 @@ export interface PickupLocation {
   postal_code: string
   latitude?: number | null
   longitude?: number | null
+  email?: string | null
+  pickup_hours_start?: string | null
+  pickup_hours_end?: string | null
+  notes?: string | null
   [key: string]: any
 }
 

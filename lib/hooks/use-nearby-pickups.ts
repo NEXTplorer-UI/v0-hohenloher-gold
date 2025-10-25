@@ -30,9 +30,17 @@ export function useNearbyPickups(options: UseNearbyPickupsOptions = {}) {
   // Rank locations based on user input
   const rankedLocations = useMemo<RankedLocation[]>(() => {
     if (!data || data.length === 0) return []
-    if (!userPlz || userPlz.trim().length < 4) return []
+    if (!userPlz || userPlz.trim().length < 4) {
+      return data
+        .map((loc) => ({
+          ...loc,
+          score: 0,
+          reason: "plz" as const,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    }
 
-    return rankLocations(data, userPlz, {
+    const ranked = rankLocations(data, userPlz, {
       userLat,
       userLon,
       radiusKm,
@@ -40,6 +48,18 @@ export function useNearbyPickups(options: UseNearbyPickupsOptions = {}) {
       take,
       useGeo,
     })
+
+    if (ranked.length === 0) {
+      return data
+        .map((loc) => ({
+          ...loc,
+          score: 999,
+          reason: "plz" as const,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    }
+
+    return ranked
   }, [data, userPlz, userLat, userLon, radiusKm, maxPlzDelta, take, useGeo])
 
   return {

@@ -1,12 +1,127 @@
+"use client"
+
+import type React from "react"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Mail, Phone, MapPin, MessageCircle, User } from "lucide-react"
+import { Mail, Phone, MapPin, MessageCircle, User, CheckCircle, AlertCircle } from "lucide-react"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
+import { useState } from "react"
 
 export default function ContactPage() {
+  const [contactForm, setContactForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    subject: "",
+    message: "",
+  })
+  const [contactLoading, setContactLoading] = useState(false)
+  const [contactSuccess, setContactSuccess] = useState(false)
+  const [contactError, setContactError] = useState("")
+
+  const [complaintForm, setComplaintForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    orderNumber: "",
+    description: "",
+    image: null as File | null,
+  })
+  const [complaintLoading, setComplaintLoading] = useState(false)
+  const [complaintSuccess, setComplaintSuccess] = useState(false)
+  const [complaintError, setComplaintError] = useState("")
+
+  const handleContactSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setContactLoading(true)
+    setContactError("")
+    setContactSuccess(false)
+
+    try {
+      console.log("[v0] Submitting contact form")
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(contactForm),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Fehler beim Senden der Nachricht")
+      }
+
+      console.log("[v0] Contact form submitted successfully")
+      setContactSuccess(true)
+      setContactForm({
+        firstName: "",
+        lastName: "",
+        email: "",
+        subject: "",
+        message: "",
+      })
+    } catch (error) {
+      console.error("[v0] Contact form error:", error)
+      setContactError(error instanceof Error ? error.message : "Ein Fehler ist aufgetreten")
+    } finally {
+      setContactLoading(false)
+    }
+  }
+
+  const handleComplaintSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setComplaintLoading(true)
+    setComplaintError("")
+    setComplaintSuccess(false)
+
+    try {
+      console.log("[v0] Submitting complaint form")
+      const formData = new FormData()
+      formData.append("firstName", complaintForm.firstName)
+      formData.append("lastName", complaintForm.lastName)
+      formData.append("email", complaintForm.email)
+      formData.append("orderNumber", complaintForm.orderNumber)
+      formData.append("description", complaintForm.description)
+      if (complaintForm.image) {
+        formData.append("image", complaintForm.image)
+      }
+
+      const response = await fetch("/api/complaint", {
+        method: "POST",
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Fehler beim Einreichen der Reklamation")
+      }
+
+      console.log("[v0] Complaint form submitted successfully")
+      setComplaintSuccess(true)
+      setComplaintForm({
+        firstName: "",
+        lastName: "",
+        email: "",
+        orderNumber: "",
+        description: "",
+        image: null,
+      })
+      // Reset file input
+      const fileInput = document.getElementById("complaintImage") as HTMLInputElement
+      if (fileInput) fileInput.value = ""
+    } catch (error) {
+      console.error("[v0] Complaint form error:", error)
+      setComplaintError(error instanceof Error ? error.message : "Ein Fehler ist aufgetreten")
+    } finally {
+      setComplaintLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
@@ -58,7 +173,7 @@ export default function ContactPage() {
                   <div>
                     <p className="font-medium">E-Mail</p>
                     <a href="mailto:suedfruechte-hohenlohe@outlook.de" className="text-gold hover:underline">
-                      suedfruechte-hohenlohe@outlook.de
+                      kontakt@suedfruechte-hohenlohe.de
                     </a>
                   </div>
                 </div>
@@ -71,19 +186,7 @@ export default function ContactPage() {
                     </a>
                   </div>
                 </div>
-                <div className="flex items-start space-x-3">
-                  <MapPin className="w-5 h-5 text-gold mt-1" />
-                  <div>
-                    <p className="font-medium">Adresse</p>
-                    <p className="text-muted-foreground">
-                      Gerlinde Fink
-                      <br />
-                      Weststraße 28
-                      <br />
-                      74629 Pfedelbach
-                    </p>
-                  </div>
-                </div>
+                
               </CardContent>
             </Card>
 
@@ -99,15 +202,7 @@ export default function ContactPage() {
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-center space-x-3">
-                  <Mail className="w-5 h-5 text-primary" />
-                  <div>
-                    <p className="font-medium">E-Mail</p>
-                    <a href="mailto:gerlinde.fink@hohenloher-gold.de" className="text-primary hover:underline">
-                      gerlinde.fink@hohenloher-gold.de
-                    </a>
-                  </div>
-                </div>
+                
                 <div className="flex items-center space-x-3">
                   <Phone className="w-5 h-5 text-primary" />
                   <div>
@@ -142,35 +237,89 @@ export default function ContactPage() {
             </div>
 
             <Card className="p-8">
-              <form className="space-y-6">
+              {contactSuccess && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-green-900">Nachricht erfolgreich gesendet!</p>
+                    <p className="text-sm text-green-700">
+                      Wir haben Ihre Nachricht erhalten und werden uns schnellstmöglich bei Ihnen melden.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {contactError && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-red-900">Fehler beim Senden</p>
+                    <p className="text-sm text-red-700">{contactError}</p>
+                  </div>
+                </div>
+              )}
+
+              <form className="space-y-6" onSubmit={handleContactSubmit}>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="firstName">Vorname</Label>
-                    <Input id="firstName" placeholder="Ihr Vorname" />
+                    <Input
+                      id="firstName"
+                      placeholder="Ihr Vorname"
+                      value={contactForm.firstName}
+                      onChange={(e) => setContactForm({ ...contactForm, firstName: e.target.value })}
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="lastName">Nachname</Label>
-                    <Input id="lastName" placeholder="Ihr Nachname" />
+                    <Input
+                      id="lastName"
+                      placeholder="Ihr Nachname"
+                      value={contactForm.lastName}
+                      onChange={(e) => setContactForm({ ...contactForm, lastName: e.target.value })}
+                      required
+                    />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="email">E-Mail-Adresse</Label>
-                  <Input id="email" type="email" placeholder="ihre.email@beispiel.de" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="ihre.email@beispiel.de"
+                    value={contactForm.email}
+                    onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                    required
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="subject">Betreff</Label>
-                  <Input id="subject" placeholder="Worum geht es?" />
+                  <Input
+                    id="subject"
+                    placeholder="Worum geht es?"
+                    value={contactForm.subject}
+                    onChange={(e) => setContactForm({ ...contactForm, subject: e.target.value })}
+                    required
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="message">Nachricht</Label>
-                  <Textarea id="message" placeholder="Ihre Nachricht an uns..." className="min-h-[120px]" />
+                  <Textarea
+                    id="message"
+                    placeholder="Ihre Nachricht an uns..."
+                    className="min-h-[120px]"
+                    value={contactForm.message}
+                    onChange={(e) => setContactForm({ ...contactForm, message: e.target.value })}
+                    required
+                  />
                 </div>
 
-                <Button type="submit" size="lg" className="w-full">
-                  Nachricht senden
+                <Button type="submit" size="lg" className="w-full" disabled={contactLoading}>
+                  {contactLoading ? "Wird gesendet..." : "Nachricht senden"}
                 </Button>
               </form>
             </Card>
@@ -191,26 +340,73 @@ export default function ContactPage() {
             </div>
 
             <Card className="p-8 border-red-200">
-              <form className="space-y-6">
+              {complaintSuccess && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-green-900">Reklamation erfolgreich eingereicht!</p>
+                    <p className="text-sm text-green-700">
+                      Wir haben Ihre Reklamation erhalten und werden uns innerhalb von 2-3 Werktagen bei Ihnen melden.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {complaintError && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-red-900">Fehler beim Einreichen</p>
+                    <p className="text-sm text-red-700">{complaintError}</p>
+                  </div>
+                </div>
+              )}
+
+              <form className="space-y-6" onSubmit={handleComplaintSubmit}>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="complaintFirstName">Vorname *</Label>
-                    <Input id="complaintFirstName" placeholder="Ihr Vorname" required />
+                    <Input
+                      id="complaintFirstName"
+                      placeholder="Ihr Vorname"
+                      value={complaintForm.firstName}
+                      onChange={(e) => setComplaintForm({ ...complaintForm, firstName: e.target.value })}
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="complaintLastName">Nachname *</Label>
-                    <Input id="complaintLastName" placeholder="Ihr Nachname" required />
+                    <Input
+                      id="complaintLastName"
+                      placeholder="Ihr Nachname"
+                      value={complaintForm.lastName}
+                      onChange={(e) => setComplaintForm({ ...complaintForm, lastName: e.target.value })}
+                      required
+                    />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="complaintEmail">E-Mail-Adresse *</Label>
-                  <Input id="complaintEmail" type="email" placeholder="ihre.email@beispiel.de" required />
+                  <Input
+                    id="complaintEmail"
+                    type="email"
+                    placeholder="ihre.email@beispiel.de"
+                    value={complaintForm.email}
+                    onChange={(e) => setComplaintForm({ ...complaintForm, email: e.target.value })}
+                    required
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="orderNumber">Bestellnummer *</Label>
-                  <Input id="orderNumber" placeholder="z.B. HG-2025-001234" required />
+                  <Input
+                    id="orderNumber"
+                    placeholder="z.B. HG-2025-001234"
+                    value={complaintForm.orderNumber}
+                    onChange={(e) => setComplaintForm({ ...complaintForm, orderNumber: e.target.value })}
+                    required
+                  />
                   <p className="text-xs text-muted-foreground">
                     Alternativ können Sie sich anmelden, um aus Ihrer Bestellhistorie zu wählen
                   </p>
@@ -222,6 +418,8 @@ export default function ContactPage() {
                     id="complaintDescription"
                     placeholder="Beschreiben Sie bitte, welche Produkte betroffen sind und in welchem Zustand sie waren..."
                     className="min-h-[100px]"
+                    value={complaintForm.description}
+                    onChange={(e) => setComplaintForm({ ...complaintForm, description: e.target.value })}
                     required
                   />
                 </div>
@@ -232,6 +430,7 @@ export default function ContactPage() {
                     id="complaintImage"
                     type="file"
                     accept="image/*"
+                    onChange={(e) => setComplaintForm({ ...complaintForm, image: e.target.files?.[0] || null })}
                     required
                     className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                   />
@@ -250,8 +449,13 @@ export default function ContactPage() {
                   </p>
                 </div>
 
-                <Button type="submit" size="lg" className="w-full bg-red-600 hover:bg-red-700">
-                  Reklamation einreichen
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full bg-red-600 hover:bg-red-700"
+                  disabled={complaintLoading}
+                >
+                  {complaintLoading ? "Wird eingereicht..." : "Reklamation einreichen"}
                 </Button>
               </form>
             </Card>
@@ -273,6 +477,7 @@ export default function ContactPage() {
                     <p>
                       <strong>Bankverbindung:</strong>
                     </p>
+                    <p>Gerlinde Fink</p>
                     <p>Sparkasse Hohenlohekreis</p>
                     <p>IBAN: DE35 6225 1550 1000 5154 15</p>
                   </div>

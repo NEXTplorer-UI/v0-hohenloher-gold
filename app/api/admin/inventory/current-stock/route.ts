@@ -34,17 +34,24 @@ export async function GET(request: NextRequest) {
 
     const currentStock = Array.from(stockMap.entries()).map(([id, stock]) => ({
       id,
-      stock: Math.max(0, stock), // Never return negative stock
+      stock, // Return actual stock including negatives
     }))
 
     console.log(`[v0] Calculated current stock for ${currentStock.length} products`)
 
-    return NextResponse.json({
-      success: true,
-      data: currentStock,
-      totalProducts: currentStock.length,
-      totalMovements: movements?.length || 0,
-    })
+    return NextResponse.json(
+      {
+        success: true,
+        data: currentStock,
+        totalProducts: currentStock.length,
+        totalMovements: movements?.length || 0,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      },
+    )
   } catch (error) {
     console.error("[v0] Error calculating current stock:", error)
     return NextResponse.json({ error: "Failed to calculate current stock" }, { status: 500 })

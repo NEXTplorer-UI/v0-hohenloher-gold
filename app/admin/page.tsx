@@ -41,13 +41,12 @@ function Analytics() {
   const fetchStats = async () => {
     setLoading(true)
     try {
-      const response = await fetch("/api/analytics/dashboard-stats")
-      if (response.ok) {
-        const data = await response.json()
-        setStats(data)
-      } else {
-        console.error("Failed to fetch stats")
+      const response = await fetch("/api/analytics/dashboard-stats", { cache: "no-store" })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
       }
+      const data = await response.json()
+      setStats(data)
     } catch (error) {
       console.error("Error fetching stats:", error)
     } finally {
@@ -139,11 +138,12 @@ function CustomerSegments() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch("/api/analytics/dashboard-stats")
-        if (response.ok) {
-          const data = await response.json()
-          setStats(data)
+        const response = await fetch("/api/analytics/dashboard-stats", { cache: "no-store" })
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
         }
+        const data = await response.json()
+        setStats(data)
       } catch (error) {
         console.error("Error fetching customer stats:", error)
       }

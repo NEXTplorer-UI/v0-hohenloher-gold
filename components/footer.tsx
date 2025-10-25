@@ -16,7 +16,7 @@ export function Footer() {
               <span className="font-serif font-bold text-lg text-sidebar-foreground">{"Hohenloher Gold"}</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Natürliche Qualität aus Hohenlohe und frische Südfrüchte direkt aus Sizilien.
+              ursprünglich, echt, gesellig      
             </p>
           </div>
           <div className="space-y-4">

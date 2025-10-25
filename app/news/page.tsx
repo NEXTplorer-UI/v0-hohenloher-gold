@@ -85,6 +85,7 @@ function ArticlesList() {
                           "/placeholder.svg?height=400&width=600&query=Hohenloher Gold featured article" ||
                           "/placeholder.svg" ||
                           "/placeholder.svg" ||
+                          "/placeholder.svg" ||
                           "/placeholder.svg"
                         }
                         alt={article.title}
@@ -144,6 +145,7 @@ function ArticlesList() {
                           src={
                             article.image_url ||
                             "/placeholder.svg?height=200&width=400&query=Hohenloher Gold news article" ||
+                            "/placeholder.svg" ||
                             "/placeholder.svg" ||
                             "/placeholder.svg" ||
                             "/placeholder.svg"
@@ -253,10 +255,12 @@ export default function NewsPage() {
     setMessage(null)
 
     try {
+      const siteUrl = typeof window !== "undefined" ? window.location.origin : undefined
+
       const response = await fetch("/api/newsletter/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, source: "news_page" }),
+        body: JSON.stringify({ email, source: "news_page", siteUrl }),
       })
 
       const data = await response.json()

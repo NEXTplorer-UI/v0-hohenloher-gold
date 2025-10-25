@@ -425,12 +425,16 @@ export default function CheckoutPage() {
   }, [])
 
   const handleOrderSubmission = useCallback(async () => {
+    console.log("[v0] [Checkout] Order submission started")
+
     if (!firstName || !lastName || !email) {
+      console.log("[v0] [Checkout] Missing required fields")
       alert("Bitte füllen Sie alle Pflichtfelder aus.")
       return
     }
 
     if (!street || !houseNumber || !zip || !city) {
+      console.log("[v0] [Checkout] Missing address fields")
       alert("Bitte geben Sie eine vollständige Rechnungsadresse an.")
       return
     }
@@ -568,8 +572,11 @@ export default function CheckoutPage() {
         }
 
         if (paymentMethod === "sumup") {
+          console.log("[v0] [Checkout] SumUp payment selected")
           const tempOrderNumber = `HG-TEMP-${Date.now()}`
+          console.log("[v0] [Checkout] Generated temp order number:", tempOrderNumber)
 
+          console.log("[v0] [Checkout] Calling SumUp create-checkout API")
           const response = await fetch("/api/payments/sumup/create-checkout", {
             method: "POST",
             headers: {
@@ -583,16 +590,22 @@ export default function CheckoutPage() {
             }),
           })
 
+          console.log("[v0] [Checkout] SumUp API response status:", response.status)
           const parsed = await safeJson(response)
+          console.log("[v0] [Checkout] SumUp API response data:", parsed)
 
           if (!response.ok) {
+            console.error("[v0] [Checkout] SumUp checkout creation failed:", parsed.error)
             throw new Error(parsed.error || `Request failed (${response.status})`)
           }
 
           const { checkoutId } = parsed
+          console.log("[v0] [Checkout] SumUp checkout created with ID:", checkoutId)
+
           setSumupCheckoutId(checkoutId)
           setSumupOrderData({ ...orderData, orderNumber: tempOrderNumber })
           setShowSumUpPayment(true)
+          console.log("[v0] [Checkout] Showing SumUp payment widget")
           return
         }
 
@@ -683,9 +696,32 @@ export default function CheckoutPage() {
     setIsLoginMode, // Added setIsLoginMode to dependencies
   ])
 
-  const handleSumUpSuccess = async () => {
+  const handleSumUpFailed = async (failureData: any) => {
+    console.log("[v0] [Checkout] SumUp payment failed:", failureData)
+
+    // Update checkout status to 'failed' in database
+    if (sumupCheckoutId) {
+      try {
+        await fetch("/api/checkout/update-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            checkoutId: sumupCheckoutId,
+            status: "failed",
+            failureReason: failureData?.message || failureData?.failure_reason || "Unknown error",
+          }),
+        })
+      } catch (error) {
+        console.error("[v0] [Checkout] Failed to update checkout status:", error)
+      }
+    }
+  }
+
+  const handleSumUpSuccess = async (transactionData: any) => {
+    console.log("[v0] [Checkout] SumUp payment successful:", transactionData)
+
     if (sumupOrderData) {
-      console.log("[v0] Saving SumUp order to database:", sumupOrderData)
+      console.log("[v0] [Checkout] Saving SumUp order to database:", sumupOrderData)
       const orderResponse = await fetch("/api/orders", {
         method: "POST",
         headers: {
@@ -697,7 +733,7 @@ export default function CheckoutPage() {
       const orderParsed = await safeJson(orderResponse)
 
       if (orderResponse.ok) {
-        console.log("[v0] SumUp order saved successfully:", orderParsed)
+        console.log("[v0] [Checkout] SumUp order saved successfully:", orderParsed)
 
         const updatedSumUpOrderData = {
           ...sumupOrderData,
@@ -721,10 +757,11 @@ export default function CheckoutPage() {
 
         window.location.href = `/order-confirmation?${params.toString()}`
       } else {
-        console.error("[v0] Failed to save SumUp order to database:", orderParsed.error)
+        console.error("[v0] [Checkout] Failed to save SumUp order to database:", orderParsed.error)
+        // Fallback to just redirecting if saving fails, but still send confirmation
         const emailResult = await sendOrderConfirmationEmail(sumupOrderData)
         if (emailResult.success) {
-          console.log("Order confirmation email sent successfully")
+          console.log("Order confirmation email sent successfully (fallback)")
         }
 
         dispatch({ type: "CLEAR_CART" })
@@ -862,7 +899,12 @@ export default function CheckoutPage() {
                 </p>
               </CardHeader>
               <CardContent>
-                <PaymentSumUp checkoutId={sumupCheckoutId} onSuccess={handleSumUpSuccess} onError={handleSumUpError} />
+                <PaymentSumUp
+                  checkoutId={sumupCheckoutId}
+                  onSuccess={handleSumUpSuccess}
+                  onError={handleSumUpError}
+                  onFailed={handleSumUpFailed}
+                />
                 <div className="mt-4 text-center">
                   <Button variant="outline" onClick={() => setShowSumUpPayment(false)}>
                     Zurück zur Bestellung

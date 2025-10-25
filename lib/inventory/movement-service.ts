@@ -57,6 +57,11 @@ export async function createMovementsFromOrder(
     }
 
     console.log(`[v0] Successfully created ${data.length} inventory movements for order ${orderNumber}`)
+
+    await supabaseAdmin.rpc("refresh_product_availability").catch((err: any) => {
+      console.warn("[v0] Could not refresh product_availability view:", err.message)
+    })
+
     return data
   } catch (error) {
     console.error(`[v0] Failed to create inventory movements:`, error)
@@ -140,7 +145,7 @@ export async function getAllCurrentStock(): Promise<Map<number, number>> {
 
     movements?.forEach((movement) => {
       const currentStock = stockMap.get(movement.product_id) || 0
-      stockMap.set(movement.product_id, Math.max(0, currentStock + movement.qty))
+      stockMap.set(movement.product_id, currentStock + movement.qty)
     })
 
     return stockMap

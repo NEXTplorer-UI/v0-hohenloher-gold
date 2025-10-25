@@ -1,14 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createAdminClient } from "@/lib/supabase/server"
+import { buildEmail } from "@/lib/email/build"
+import { emailCopy } from "@/lib/email/copy"
+import { Resend } from "resend"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    console.log("[sumup-webhook] Received webhook:", body)
+    console.log("[v0] [sumup-webhook] Received webhook:", body)
 
     // TODO: Verify webhook signature if SumUp provides one
     // const signature = request.headers.get("x-sumup-signature")
@@ -22,36 +27,56 @@ export async function POST(request: NextRequest) {
       const { checkout_reference, status, transaction_id } = payload
 
       if (status === "PAID") {
-        const supabaseUrl = process.env.SUPABASE_URL
-        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+        const supabase = createAdminClient()
 
-        if (!supabaseUrl || !supabaseServiceKey) {
-          console.error("[sumup-webhook] Supabase credentials missing")
-          return NextResponse.json({ error: "Database configuration missing" }, { status: 500 })
-        }
-
-        const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-        const { error } = await supabase
-          .from("orders")
+        const { data: checkout, error: checkoutError } = await supabase
+          .from("checkouts")
           .update({
             payment_status: "paid",
-            status: "confirmed",
+            status: "completed",
           })
-          .eq("order_number", checkout_reference)
+          .eq("sumup_checkout_id", checkout_reference)
+          .select("*")
+          .single()
 
-        if (error) {
-          console.error("[sumup-webhook] Failed to update order:", error)
-          return NextResponse.json({ error: "Failed to update order status" }, { status: 500 })
+        if (checkoutError) {
+          console.error("[v0] [sumup-webhook] Failed to update checkout:", checkoutError)
+          return NextResponse.json({ received: true, error: "Failed to update checkout" })
         }
 
-        console.log("[sumup-webhook] Order marked as paid:", checkout_reference)
+        console.log("[v0] [sumup-webhook] Checkout marked as paid:", checkout_reference)
+
+        if (checkout && checkout.customer_email) {
+          try {
+            const vars = {
+              customerName: `${checkout.customer_first_name} ${checkout.customer_last_name}`,
+              orderNumber: checkout.temp_order_number,
+              orderDate: new Date(checkout.created_at).toLocaleDateString("de-DE"),
+              paymentMethod: "card",
+              total: checkout.total_amount.toFixed(2),
+              orderItems: checkout.items || [],
+            }
+
+            const { subject, html } = buildEmail("paymentReceipt", vars, emailCopy)
+
+            await resend.emails.send({
+              from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
+              to: checkout.customer_email,
+              subject,
+              html,
+            })
+
+            console.log("[v0] [sumup-webhook] Receipt email sent")
+          } catch (emailError) {
+            console.error("[v0] [sumup-webhook] Failed to send receipt email:", emailError)
+          }
+        }
       }
     }
 
     return NextResponse.json({ received: true })
   } catch (error: any) {
-    console.error("[sumup-webhook] Error processing webhook:", error)
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
+    console.error("[v0] [sumup-webhook] Error processing webhook:", error)
+    return NextResponse.json({ received: true, error: error.message })
   }
 }

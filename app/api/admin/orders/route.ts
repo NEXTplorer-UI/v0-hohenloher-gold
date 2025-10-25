@@ -1,121 +1,73 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
-import { requireAdmin } from "@/lib/auth/api-auth"
+import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
+
+function createAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
+  if (!url || !key) {
+    throw new Error("Supabase ENV fehlt (URL/Service-Role-Key)")
+  }
+  return createClient(url, key, { auth: { persistSession: false } })
+}
+
+function normalizeStatusForUI(dbStatus: string) {
+  // DB uses: pending, confirmed, ready, completed, cancelled
+  // UI uses "picked_up" -> map back
+  if (dbStatus === "completed") return "picked_up"
+  return dbStatus
+}
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
-export async function GET(request: NextRequest) {
+export async function GET(req: Request) {
   try {
-    await requireAdmin(request)
+    console.log("[v0] [admin/orders] API called")
 
-    console.log("[v0] API: Starting to fetch orders...")
+    const { searchParams } = new URL(req.url)
+    const q = searchParams.get("q") ?? ""
+    const status = searchParams.get("status") ?? ""
+    const limit = Number(searchParams.get("limit") ?? 200)
+    const offset = Number(searchParams.get("offset") ?? 0)
 
+    console.log("[v0] [admin/orders] Creating admin client...")
     const supabase = createAdminClient()
 
-    console.log("[v0] API: Fetching products...")
-    const { data: allProducts, error: productsError } = await supabase
-      .from("products")
-      .select("id, name, unit, weight_kg")
-
-    if (productsError) {
-      console.error("[v0] API: Error fetching products:", productsError)
-      return NextResponse.json({ error: `Products error: ${productsError.message}` }, { status: 500 })
-    }
-
-    console.log("[v0] API: Fetched", allProducts?.length || 0, "products")
-
-    console.log("[v0] API: Fetching orders...")
-    const { data: ordersData, error: ordersError } = await supabase
-      .from("orders")
-      .select(`
-        id,
-        order_number,
-        customer_id,
-        status,
-        total,
-        delivery_method,
-        pickup_location,
-        payment_method,
-        payment_status,
-        notes,
-        created_at,
-        customer:customers (
-          first_name,
-          last_name,
-          email,
-          phone
-        ),
-        order_items (
-          id,
-          product_name,
-          product_size,
-          quantity,
-          unit_price,
-          total_price
-        )
-      `)
-      .order("created_at", { ascending: false })
-
-    if (ordersError) {
-      console.error("[v0] API: Error fetching orders:", ordersError)
-      return NextResponse.json({ error: `Orders error: ${ordersError.message}` }, { status: 500 })
-    }
-
-    console.log("[v0] API: Fetched", ordersData?.length || 0, "orders")
-
-    const enrichedOrders = (ordersData || []).map((order) => {
-      const enrichedItems = order.order_items.map((item) => {
-        console.log("[v0] API: Matching product for:", {
-          product_name: item.product_name,
-          product_size: item.product_size,
-        })
-
-        const product = allProducts?.find((p) => {
-          const nameMatch = p.name === item.product_name
-          const unitMatch = p.unit === item.product_size
-
-          if (nameMatch && !unitMatch) {
-            console.log("[v0] API: Name matched but unit didn't:", {
-              product_unit: p.unit,
-              item_size: item.product_size,
-            })
-          }
-
-          return nameMatch && unitMatch
-        })
-
-        if (product) {
-          console.log("[v0] API: Product found:", {
-            id: product.id,
-            name: product.name,
-            unit: product.unit,
-            weight_kg: product.weight_kg,
-          })
-        } else {
-          console.log("[v0] API: No matching product found for:", item.product_name, item.product_size)
-        }
-
-        return {
-          ...item,
-          product_id: product?.id || null,
-          weight_kg: product?.weight_kg || null,
-        }
-      })
-
-      return {
-        ...order,
-        order_items: enrichedItems,
-      }
+    console.log("[v0] [admin/orders] Calling RPC get_admin_orders...")
+    const { data, error } = await supabase.rpc("get_admin_orders", {
+      q,
+      status_filter: status === "all" ? null : status === "picked_up" ? "completed" : status,
+      limit_count: limit,
+      offset_count: offset,
     })
 
-    console.log("[v0] API: Successfully enriched orders")
-    return NextResponse.json(enrichedOrders)
-  } catch (error) {
-    console.error("[v0] API: Unexpected error fetching orders:", error)
-    return NextResponse.json(
-      { error: `Internal server error: ${error instanceof Error ? error.message : "Unknown error"}` },
-      { status: 500 },
-    )
+    if (error) {
+      console.error("[v0] [admin/orders] RPC error:", error)
+      return NextResponse.json({ error: "Database error", details: error.message }, { status: 500 })
+    }
+
+    console.log("[v0] [admin/orders] Fetched", data?.length || 0, "orders")
+
+    const shaped = (data ?? []).map((row: any) => ({
+      id: row.id,
+      order_number: row.order_number,
+      customer_id: row.customer_id,
+      status: normalizeStatusForUI(row.status),
+      total: Number(row.total),
+      delivery_method: row.delivery_method,
+      pickup_location: row.pickup_location,
+      payment_method: row.payment_method,
+      payment_status: row.payment_status,
+      notes: row.notes,
+      created_at: row.created_at,
+      customer: row.customer ?? { first_name: "", last_name: "", email: "", phone: null },
+      order_items: Array.isArray(row.order_items) ? row.order_items : [],
+    }))
+
+    console.log("[v0] [admin/orders] Successfully shaped orders")
+    return NextResponse.json(shaped, { status: 200 })
+  } catch (e: any) {
+    console.error("[v0] [admin/orders] Unexpected:", e)
+    return NextResponse.json({ error: "Server error", details: e?.message }, { status: 500 })
   }
 }

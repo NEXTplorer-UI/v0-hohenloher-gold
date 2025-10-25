@@ -27,6 +27,7 @@ interface InventoryState {
 type InventoryAction =
   | { type: "SET_ITEMS"; payload: InventoryItem[] }
   | { type: "UPDATE_STOCK"; payload: { id: number; newAmount: number } }
+  | { type: "UPDATE_ITEM_STOCK"; payload: { itemId: number; newStock: number } } // Added for optimistic UI updates
   | { type: "UPDATE_MIN_STOCK"; payload: { id: number; minStock: number } }
   | { type: "SET_SELECTED_CATEGORY"; payload: string }
   | { type: "START_EDITING_MIN_STOCK"; payload: { id: number; currentMinStock: number } }
@@ -63,6 +64,13 @@ function inventoryReducer(state: InventoryState, action: InventoryAction): Inven
         ...state,
         items: state.items.map((item) =>
           item.id === action.payload.id ? { ...item, stock: action.payload.newAmount } : item,
+        ),
+      }
+    case "UPDATE_ITEM_STOCK":
+      return {
+        ...state,
+        items: state.items.map((item) =>
+          item.id === action.payload.itemId ? { ...item, stock: action.payload.newStock } : item,
         ),
       }
     case "UPDATE_MIN_STOCK":
@@ -116,8 +124,8 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       console.log("[v0] Loading inventory from database...")
 
       const [productsResponse, stockResponse] = await Promise.all([
-        fetch("/api/admin/products"),
-        fetch("/api/admin/inventory/current-stock"),
+        fetch("/api/admin/products", { cache: "no-store" }),
+        fetch("/api/admin/inventory/current-stock", { cache: "no-store" }),
       ])
 
       if (!productsResponse.ok || !stockResponse.ok) {

@@ -1,32 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
-async function getCurrentStockForProducts(supabase: any) {
-  console.log("[v0] Loading current inventory stock from database...")
-
-  const { data: movements, error } = await supabase
-    .from("inventory_movements_with_details")
-    .select("product_name, qty")
-    .order("created_at", { ascending: true })
-
-  if (error) {
-    console.error("[v0] Error fetching inventory movements:", error.message)
-    return new Map()
-  }
-
-  console.log(`[v0] Found ${movements?.length || 0} inventory movements`)
-
-  const stockMap = new Map<string, number>()
-  movements?.forEach((movement: any) => {
-    const current = stockMap.get(movement.product_name) || 0
-    stockMap.set(movement.product_name, current + movement.qty)
-  })
-
-  console.log(`[v0] Calculated current stock for ${stockMap.size} products`)
-
-  return stockMap
-}
-
 async function getNextDeliverySchedule(supabase: any) {
   try {
     const { data, error } = await supabase
@@ -53,40 +27,32 @@ export async function GET() {
     console.log("[v0] Products API called")
     const supabase = createAdminClient()
 
-    const [productsResult, stockMap] = await Promise.all([
-      supabase
-        .from("products")
-        .select(`
-          *,
-          categories (
-            id,
-            name
-          )
-        `)
-        .eq("is_active", true)
-        .order("category_id", { ascending: true })
-        .order("name", { ascending: true }),
-      getCurrentStockForProducts(supabase),
-    ])
+    const { data: productsWithStock, error: viewError } = await supabase
+      .from("product_availability")
+      .select("*")
+      .order("name", { ascending: true })
 
-    const nextDelivery = await getNextDeliverySchedule(supabase)
-
-    if (productsResult.error) {
-      console.error("[v0] Database error:", productsResult.error.message)
+    if (viewError) {
+      console.error("[v0] Error loading from product_availability view:", viewError.message)
       return NextResponse.json({ error: "Failed to load products" }, { status: 500 })
     }
 
-    const products = productsResult.data || []
+    const nextDelivery = await getNextDeliverySchedule(supabase)
 
-    const enrichedProducts = products.map((product: any) => {
-      const currentStock = stockMap.get(product.name) || 0
-      const isSouthernFruit = product.categories?.name === "Südfrüchte"
+    const enrichedProducts = (productsWithStock || []).map((product: any) => {
+      const currentStock = product.current_stock || 0
+      const isSouthernFruit = product.category === "Südfrüchte"
 
       let inStock = currentStock > 0
       let availabilityMessage = null
       let nextDeliveryDate = null
+      let isPreorder = false
 
-      if (isSouthernFruit && product.requires_delivery_schedule && nextDelivery) {
+      if (currentStock < 0) {
+        isPreorder = true
+        availabilityMessage = "Vorbestellung - Sie werden über den Liefertermin informiert"
+        inStock = true // Allow ordering
+      } else if (isSouthernFruit && product.requires_delivery_schedule && nextDelivery) {
         const deliveryDate = new Date(nextDelivery.delivery_date)
         const orderDeadline = new Date(nextDelivery.order_deadline)
         const canOrder = orderDeadline >= new Date()
@@ -113,19 +79,29 @@ export async function GET() {
       }
 
       return {
-        ...product,
-        category: product.categories?.name || "Unbekannt",
-        current_stock: Math.max(0, currentStock),
+        id: product.product_id,
+        name: product.name,
+        sku: product.sku,
+        unit: product.unit,
+        price: product.price,
+        category: product.category || "Unbekannt",
+        current_stock: currentStock, // Show actual stock including negatives
         in_stock: inStock,
         availability_message: availabilityMessage,
         next_delivery_date: nextDeliveryDate,
         is_seasonal: isSouthernFruit,
+        is_preorder: isPreorder,
+        stock_status: product.stock_status,
       }
     })
 
-    console.log(`[v0] Found ${enrichedProducts.length} products with stock data`)
+    console.log(`[v0] Found ${enrichedProducts.length} products from product_availability view`)
 
-    return NextResponse.json(enrichedProducts)
+    return NextResponse.json(enrichedProducts, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    })
   } catch (error) {
     console.error("[v0] Error in products API:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

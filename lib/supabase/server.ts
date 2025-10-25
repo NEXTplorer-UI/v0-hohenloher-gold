@@ -5,14 +5,14 @@ import { cookies } from "next/headers"
 /**
  * Creates a Supabase client for server-side operations with user authentication.
  * Uses the anon key and respects Row Level Security (RLS).
- *
- * Especially important if using Fluid compute: Don't put this client in a
- * global variable. Always create a new client within each function when using it.
  */
 export async function createClient() {
   const cookieStore = await cookies()
 
-  return createServerClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll()
@@ -33,21 +33,35 @@ export async function createClient() {
 /**
  * Creates a Supabase admin client for server-side operations that bypass RLS.
  * Uses the service role key for elevated permissions.
- *
- * WARNING: This client bypasses Row Level Security. Use with caution and only
- * in secure server-side contexts (API routes, server actions).
  */
 export function createAdminClient() {
-  const supabaseUrl = process.env.SUPABASE_URL
+  console.log("[v0] [createAdminClient] Creating admin client...")
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
+  console.log("[v0] [createAdminClient] Environment check:", {
+    hasUrl: !!supabaseUrl,
+    hasServiceKey: !!supabaseServiceKey,
+    urlSource: process.env.NEXT_PUBLIC_SUPABASE_URL ? "NEXT_PUBLIC_SUPABASE_URL" : "SUPABASE_URL",
+  })
+
   if (!supabaseUrl || !supabaseServiceKey) {
-    console.error("[v0] Missing Supabase credentials:", {
+    console.error("[v0] [createAdminClient] Missing Supabase credentials:", {
       hasUrl: !!supabaseUrl,
       hasServiceKey: !!supabaseServiceKey,
+      envVars: {
+        NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+        SUPABASE_URL: !!process.env.SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      },
     })
-    throw new Error("Missing Supabase credentials. Please ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.")
+    throw new Error(
+      "Missing Supabase credentials. Please ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.",
+    )
   }
+
+  console.log("[v0] [createAdminClient] Admin client created successfully")
 
   return createSupabaseClient(supabaseUrl, supabaseServiceKey, {
     auth: {

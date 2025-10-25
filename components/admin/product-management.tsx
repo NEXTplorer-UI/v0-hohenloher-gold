@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type React from "react"
 
 import { Button } from "@/components/ui/button"
@@ -356,6 +356,17 @@ export default function ProductManagement() {
       currency: "EUR",
     }).format(value)
   }
+
+  useEffect(() => {
+    if (isDialogOpen) {
+      fetchCategories()
+    }
+  }, [isDialogOpen])
+
+  useEffect(() => {
+    fetchProducts()
+    fetchCategories()
+  }, [])
 
   return (
     <div className="space-y-6">

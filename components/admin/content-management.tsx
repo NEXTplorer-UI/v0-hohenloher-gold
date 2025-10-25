@@ -72,6 +72,7 @@ export default function ContentManagementSystem() {
 
   const uploadImage = async (file: File): Promise<string | null> => {
     try {
+      console.log("[v0] Uploading image...")
       const formData = new FormData()
       formData.append("file", file)
 
@@ -80,15 +81,23 @@ export default function ContentManagementSystem() {
         body: formData,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Upload failed")
+      const contentType = response.headers.get("content-type")
+      if (!contentType?.includes("application/json")) {
+        const text = await response.text()
+        console.error("[v0] Non-JSON response from upload API:", text.substring(0, 200))
+        throw new Error("Server returned an invalid response. Please check the server logs.")
       }
 
-      const { url } = await response.json()
-      return url
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Upload failed")
+      }
+
+      console.log("[v0] Image uploaded successfully:", data.url)
+      return data.url
     } catch (error) {
-      console.error("Error uploading image:", error)
+      console.error("[v0] Error uploading image:", error)
       alert(`Fehler beim Hochladen des Bildes: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`)
       return null
     }
@@ -106,7 +115,13 @@ export default function ContentManagementSystem() {
 
       // Upload new image if selected
       if (imageFile) {
+        console.log("[v0] Uploading image...")
         imageUrl = await uploadImage(imageFile)
+        if (!imageUrl && imageFile) {
+          // Image upload failed but was attempted
+          setUploading(false)
+          return
+        }
       }
 
       // If setting as featured, remove featured status from other articles
@@ -121,19 +136,40 @@ export default function ContentManagementSystem() {
         data: { user },
       } = await supabase.auth.getUser()
 
+      let publishedAt = editingArticle?.published_at || null
+
+      // If status is "published" and no published_at exists, set it to now
+      if (formData.status === "published" && !publishedAt) {
+        publishedAt = new Date().toISOString()
+      }
+
+      // If status is not "published", set published_at to null
+      if (formData.status !== "published") {
+        publishedAt = null
+      }
+
       const articleData = {
         ...formData,
         image_url: imageUrl,
         excerpt: formData.excerpt || formData.content.substring(0, 150) + "...",
-        author_id: user?.id || null, // Added author_id
+        author_id: user?.id || null,
+        published_at: publishedAt,
         updated_at: new Date().toISOString(),
       }
+
+      console.log("[v0] Saving article with data:", {
+        ...articleData,
+        content: articleData.content.substring(0, 50) + "...",
+      })
 
       if (editingArticle) {
         // Update existing article
         const { error } = await supabase.from("articles").update(articleData).eq("id", editingArticle.id)
 
-        if (error) throw error
+        if (error) {
+          console.error("[v0] Error updating article:", error)
+          throw error
+        }
       } else {
         // Create new article
         const { error } = await supabase.from("articles").insert([
@@ -143,15 +179,19 @@ export default function ContentManagementSystem() {
           },
         ])
 
-        if (error) throw error
+        if (error) {
+          console.error("[v0] Error creating article:", error)
+          throw error
+        }
       }
 
+      console.log("[v0] Article saved successfully")
       await loadArticles()
       resetForm()
       setIsDialogOpen(false)
     } catch (error) {
       console.error("Error saving article:", error)
-      alert("Fehler beim Speichern des Artikels.")
+      alert(`Fehler beim Speichern des Artikels: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`)
     } finally {
       setUploading(false)
     }
@@ -371,6 +411,24 @@ export default function ContentManagementSystem() {
                 </div>
               </DialogContent>
             </Dialog>
+            <Button variant="outline" onClick={() => loadArticles()} disabled={loading}>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="mr-2"
+              >
+                <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                <path d="M21 3v5h-5" />
+              </svg>
+              {loading ? "Lädt..." : "Aktualisieren"}
+            </Button>
           </div>
 
           <div className="space-y-4">

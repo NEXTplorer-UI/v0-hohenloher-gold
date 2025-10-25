@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsTrigger, TabsList } from "@/components/ui/tabs"
-import { Leaf, MapPin, Award, Heart, Truck, Sun } from "lucide-react"
+import { Leaf, MapPin, Award, Truck, Sun } from "lucide-react"
 import Link from "next/link"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
 
@@ -240,11 +240,11 @@ export default function ProductsPage() {
                 <Card className="w-full transition-all duration-200 hover:shadow-lg data-[state=active]:ring-2 data-[state=active]:ring-primary">
                   <div className="relative h-96 overflow-hidden rounded-t-lg">
                     <img
-                      src="/dried-figs-organic-natural.png"
+                      src="/images/design-mode/fr%C3%BCchtemandala%20zentrum.jpg"
                       alt="Trockenfrüchte"
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-30" />
                     <div className="absolute bottom-2 left-2 text-white">
                       <Leaf className="w-5 h-5" />
                     </div>
@@ -334,19 +334,6 @@ export default function ProductsPage() {
                     </CardContent>
                   </Card>
                 </div>
-
-                <div className="bg-card p-8 rounded-lg">
-                  <div className="flex items-center space-x-3 mb-4">
-                    <Heart className="w-6 h-6 text-primary" />
-                    <h3 className="font-serif font-bold text-xl">Unsere Philosophie</h3>
-                  </div>
-                  <p className="text-muted-foreground leading-relaxed">
-                    Wir glauben an ehrliche Lebensmittel und faire Partnerschaften. Unsere sizilianischen Bauern
-                    erhalten faire Preise für ihre Arbeit, während Sie als Kunde die bestmögliche Qualität erhalten.
-                    Diese Win-Win-Situation ermöglicht es uns, nachhaltige Beziehungen aufzubauen und die Tradition des
-                    naturnahen Anbaus zu unterstützen.
-                  </p>
-                </div>
               </div>
             </TabsContent>
 
@@ -429,8 +416,7 @@ export default function ProductsPage() {
                 <div className="text-center space-y-4">
                   <h2 className="font-serif font-bold text-3xl text-foreground">Kaltgepresste Öle</h2>
                   <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-                    Unsere Öle werden ausschließlich kalt gepresst und stammen von ausgewählten Produzenten aus Sizilien
-                    und Hohenlohe.
+                    Unsere Öle stammen ausschließlich aus der ersten Pressung und werden schonend verarbeitet.
                   </p>
                 </div>
 
@@ -444,12 +430,10 @@ export default function ProductsPage() {
                     </CardHeader>
                     <CardContent className="pt-0 space-y-4">
                       <p className="text-muted-foreground">
-                        Unser natives Olivenöl extra stammt von jahrhundertealten Olivenbäumen und wird innerhalb von 24
-                        Stunden nach der Ernte kalt gepresst.
+                        Unser natives Olivenöl extra wird innerhalb von 24 Stunden nach der Ernte kalt gepresst.
                       </p>
                       <ul className="space-y-2 text-sm text-muted-foreground">
                         <li>• Erste Kaltpressung unter 27°C</li>
-                        <li>• Säuregehalt unter 0,3%</li>
                         <li>• Fruchtiges Aroma mit leichter Schärfe</li>
                         <li>• Reich an Polyphenolen und Vitamin E</li>
                       </ul>
@@ -464,15 +448,11 @@ export default function ProductsPage() {
                       </div>
                     </CardHeader>
                     <CardContent className="pt-0 space-y-4">
-                      <p className="text-muted-foreground">
-                        Aus Hohenlohe bieten wir kaltgepresste Öle aus Sonnenblumen, Raps und Walnüssen - alle aus
-                        kontrolliert biologischem Anbau.
-                      </p>
+                      <p className="text-muted-foreground">Ist noch in Arbeit :)</p>
                       <ul className="space-y-2 text-sm text-muted-foreground">
-                        <li>• Sonnenblumenöl mit nussigem Geschmack</li>
-                        <li>• Rapsöl reich an Omega-3-Fettsäuren</li>
-                        <li>• Walnussöl für Salate und Desserts</li>
-                        <li>• Alle Öle ungefiltert und naturbelassen</li>
+                        
+                        
+                        <li>• Walnussöl für Feinschmecker</li>
                       </ul>
                     </CardContent>
                   </Card>
@@ -481,15 +461,10 @@ export default function ProductsPage() {
                 <div className="bg-card p-8 rounded-lg">
                   <div className="flex items-center space-x-3 mb-4">
                     <Truck className="w-6 h-6 text-primary" />
-                    <h3 className="font-serif font-bold text-xl">Lagerung & Transport</h3>
+                    <h3 className="font-serif font-bold text-xl">Lagerung</h3>
                   </div>
-                  <p className="text-muted-foreground leading-relaxed mb-4">
-                    Alle unsere Öle werden lichtgeschützt in dunklen Glasflaschen abgefüllt und bei konstanter
-                    Temperatur gelagert. Der Transport erfolgt schonend, um die wertvollen Inhaltsstoffe zu bewahren.
-                  </p>
                   <p className="text-muted-foreground leading-relaxed">
-                    Für die optimale Qualität empfehlen wir, die Öle kühl und dunkel zu lagern und innerhalb von 18
-                    Monaten nach Abfüllung zu verbrauchen.
+                    Für die optimale Qualität empfehlen wir, die Öle kühl und dunkel zu lagern. 
                   </p>
                 </div>
               </div>
@@ -498,8 +473,8 @@ export default function ProductsPage() {
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-16 bg-primary text-primary-foreground">
+      {/* Call to Action */}
+      <section className="py-20 bg-primary text-primary-foreground">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="max-w-2xl mx-auto space-y-6">
             <h2 className="font-serif font-bold text-3xl lg:text-4xl">Bereit zum Einkaufen?</h2>

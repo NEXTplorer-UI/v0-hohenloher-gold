@@ -10,6 +10,7 @@ export const emailCopy = {
     intro: "vielen Dank für Ihre Bestellung bei Südfrüchte Hohenlohe!",
     detailsHeading: "Bestelldetails:",
     orderNumber: "Bestellnummer:",
+    itemsHeading: "Bestellte Artikel:",
     totalAmount: "Gesamtbetrag:",
     paymentMethod: "Zahlungsmethode:",
     pickupDate: "Abholtermin:",
@@ -83,6 +84,89 @@ export const emailCopy = {
     buttonText: "Newsletter-Anmeldung bestätigen",
     alternativeText: "Falls der Button nicht funktioniert, kopieren Sie bitte diesen Link in Ihren Browser:",
     outro: "Wenn Sie sich nicht für unseren Newsletter angemeldet haben, können Sie diese E-Mail einfach ignorieren.",
+    closing: "Mit freundlichen Grüßen",
+    signature: "Ihr Team von Südfrüchte Hohenlohe",
+  },
+
+  // Zahlungsbeleg
+  paymentReceipt: {
+    greeting: "Liebe/r {{customerName}},",
+    intro: "vielen Dank für Ihre Zahlung!",
+    body: "Anbei erhalten Sie Ihren digitalen Zahlungsbeleg für Bestellung <strong>{{orderNumber}}</strong>.",
+    receiptHeading: "Zahlungsbeleg",
+    orderNumber: "Bestellnummer:",
+    orderDate: "Datum:",
+    paymentMethod: "Zahlungsmethode:",
+    itemsHeading: "Bestellte Artikel:",
+    totalAmount: "Gesamtbetrag:",
+    paymentStatus: "Zahlungsstatus:",
+    paymentStatusValue: "Bezahlt",
+    outro: "Vielen Dank für Ihren Einkauf!",
+    closing: "Mit freundlichen Grüßen",
+    signature: "Ihr Team von Südfrüchte Hohenlohe",
+  },
+
+  // Abholbereit
+  readyForPickup: {
+    greeting: "Liebe/r {{customerName}},",
+    intro: "Ihre Bestellung ist bereit zur Abholung!",
+    detailsHeading: "Abholdetails:",
+    orderNumber: "Bestellnummer:",
+    pickupLocation: "Abholort:",
+    reminder: "Bitte bringen Sie diese E-Mail oder Ihre Bestellnummer zur Abholung mit.",
+    outro: "Wir freuen uns auf Sie!",
+    closing: "Mit freundlichen Grüßen",
+    signature: "Ihr Team von Südfrüchte Hohenlohe",
+  },
+
+  // Bestellung bestätigt
+  orderConfirmed: {
+    greeting: "Liebe/r {{customerName}},",
+    intro: "Ihre Bestellung wurde bestätigt und wird vorbereitet.",
+    detailsHeading: "Bestelldetails:",
+    orderNumber: "Bestellnummer:",
+    itemsHeading: "Bestellte Artikel:",
+    body: "Wir werden Sie benachrichtigen, sobald Ihre Bestellung zur Abholung bereit ist.",
+    outro: "Vielen Dank für Ihr Vertrauen!",
+    closing: "Mit freundlichen Grüßen",
+    signature: "Ihr Team von Südfrüchte Hohenlohe",
+  },
+
+  // Bestellung abgeholt
+  orderPickedUp: {
+    greeting: "Liebe/r {{customerName}},",
+    intro: "Vielen Dank für Ihre Bestellung!",
+    body: "Wir hoffen, Sie sind mit unseren Produkten zufrieden.",
+    feedback: "Bei Fragen oder Feedback stehen wir Ihnen gerne zur Verfügung.",
+    outro: "Wir freuen uns auf Ihren nächsten Besuch!",
+    closing: "Mit freundlichen Grüßen",
+    signature: "Ihr Team von Südfrüchte Hohenlohe",
+  },
+
+  // Bestellung storniert
+  orderCancelled: {
+    greeting: "Liebe/r {{customerName}},",
+    intro: "Ihre Bestellung wurde storniert.",
+    detailsHeading: "Stornierte Bestellung:",
+    orderNumber: "Bestellnummer:",
+    body: "Falls Sie Fragen zur Stornierung haben, kontaktieren Sie uns gerne.",
+    contact: "Sie erreichen uns unter <strong>kontakt@suedfruechte-hohenlohe.de</strong> oder telefonisch.",
+    closing: "Mit freundlichen Grüßen",
+    signature: "Ihr Team von Südfrüchte Hohenlohe",
+  },
+
+  // Versandbenachrichtigung (NEU)
+  shippingNotification: {
+    greeting: "Liebe/r {{customerName}},",
+    intro: "Ihre Bestellung ist unterwegs!",
+    detailsHeading: "Versanddetails:",
+    orderNumber: "Bestellnummer:",
+    trackingNumber: "Sendungsnummer:",
+    carrier: "Versanddienstleister:",
+    estimatedDelivery: "Voraussichtliche Zustellung:",
+    body: "Ihre Bestellung wurde heute versandt und sollte in den nächsten Tagen bei Ihnen eintreffen.",
+    trackingInfo: "Sie können Ihre Sendung mit der oben genannten Sendungsnummer verfolgen.",
+    outro: "Wir wünschen Ihnen viel Freude mit Ihren Produkten!",
     closing: "Mit freundlichen Grüßen",
     signature: "Ihr Team von Südfrüchte Hohenlohe",
   },

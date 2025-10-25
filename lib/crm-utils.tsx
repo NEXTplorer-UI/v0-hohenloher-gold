@@ -56,18 +56,30 @@ export async function saveCustomerToCRM(customerData: CustomerData) {
       body: JSON.stringify(customerData),
     })
 
-    const result = await response.json()
+    const contentType = response.headers.get("content-type")
+    let result
+
+    if (contentType && contentType.includes("application/json")) {
+      result = await response.json()
+    } else {
+      const text = await response.text()
+      console.error("[v0] Non-JSON response from CRM API:", text)
+      throw new Error("Server returned non-JSON response")
+    }
 
     if (!response.ok) {
       console.error("[v0] Error saving customer to CRM:", result.error)
-      throw new Error(result.error)
+      throw new Error(result.error || `Failed to save customer (${response.status})`)
     }
 
     console.log("[v0] Customer saved to CRM successfully:", result.data)
     return { success: true, data: result.data }
   } catch (error) {
     console.error("[v0] CRM save error:", error)
-    return { success: false, error }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
   }
 }
 

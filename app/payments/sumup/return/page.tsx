@@ -15,17 +15,25 @@ function ReturnContent() {
   useEffect(() => {
     const checkoutId = searchParams.get("checkoutId")
 
+    console.log("[v0] [SumUp Return] Checkout ID:", checkoutId)
+
     if (!checkoutId) {
+      console.error("[v0] [SumUp Return] No checkout ID provided")
       setStatus("failed")
       return
     }
 
     const verifyPayment = async () => {
       try {
+        console.log("[v0] [SumUp Return] Verifying payment...")
+
         const response = await fetch(`/api/payments/sumup/verify?checkoutId=${checkoutId}`)
         const data = await response.json()
 
+        console.log("[v0] [SumUp Return] Verification response:", data)
+
         if (!response.ok) {
+          console.error("[v0] [SumUp Return] Verification failed:", data)
           setStatus("failed")
           return
         }
@@ -33,17 +41,20 @@ function ReturnContent() {
         setOrderNumber(data.orderNumber)
 
         if (data.status === "PAID") {
+          console.log("[v0] [SumUp Return] Payment successful, order:", data.orderNumber)
           setStatus("success")
           setTimeout(() => {
             router.push(`/order-confirmation?orderNumber=${data.orderNumber}&paymentMethod=sumup`)
           }, 2000)
         } else if (data.status === "PENDING") {
+          console.log("[v0] [SumUp Return] Payment pending")
           setStatus("pending")
         } else {
+          console.log("[v0] [SumUp Return] Payment failed, status:", data.status)
           setStatus("failed")
         }
       } catch (error) {
-        console.error("[sumup-return] Verification error:", error)
+        console.error("[v0] [SumUp Return] Verification error:", error)
         setStatus("failed")
       }
     }

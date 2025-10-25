@@ -4,6 +4,19 @@ import { createClient } from "@supabase/supabase-js"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+function createAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!url || !serviceKey) {
+    throw new Error("Missing Supabase environment variables for admin client")
+  }
+
+  return createClient(url, serviceKey, {
+    auth: { persistSession: false },
+  })
+}
+
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -18,6 +31,8 @@ function getServiceClient() {
 }
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now()
+
   try {
     const bodyText = await request.text()
     let customerData: any
@@ -31,20 +46,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const missing: string[] = []
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) missing.push("NEXT_PUBLIC_SUPABASE_URL")
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY")
-    if (missing.length) {
-      console.error("[/api/crm/customer] Missing env:", missing)
-      return NextResponse.json(
-        { error: `Missing env: ${missing.join(", ")}` },
-        { status: 500, headers: { "content-type": "application/json" } },
-      )
-    }
-
     console.log("[/api/crm/customer] Saving customer to CRM:", customerData.email)
 
-    const supabase = getServiceClient()
+    const supabase = createAdminClient()
+
+    const emailNormalized = customerData.email.toLowerCase().trim()
 
     const fullAddress = `${customerData.street} ${customerData.houseNumber}, ${customerData.zip} ${customerData.city}`
     const accountStatus = customerData.createAccount ? "has_account" : "no_account"
@@ -66,6 +72,7 @@ export async function POST(request: NextRequest) {
       house_number: customerData.houseNumber,
       postal_code: customerData.zip,
       city: customerData.city,
+      country: "DE",
       address: fullAddress,
       favorite_categories: customerData.category ? [customerData.category] : [],
       customer_segment: "new",
@@ -75,15 +82,16 @@ export async function POST(request: NextRequest) {
       marketing_consent_ua: consentUa,
       account_status: accountStatus,
       reminder_notifications: reminderNotifications,
-      created_at: new Date().toISOString(),
+      updated_at: now,
     }
 
-    const { data: existingCustomers, error: checkError } = await supabase
+    const { data: existingCustomer, error: checkError } = await supabase
       .from("customers")
       .select("id, user_id")
-      .eq("email_normalized", customerData.email.toLowerCase().trim())
+      .eq("email_normalized", emailNormalized)
+      .maybeSingle()
 
-    if (checkError) {
+    if (checkError && checkError.code !== "PGRST116") {
       console.error("[/api/crm/customer] Error checking existing customer:", checkError)
       return NextResponse.json(
         { success: false, error: checkError.message },
@@ -92,41 +100,120 @@ export async function POST(request: NextRequest) {
     }
 
     let result
-    if (existingCustomers && existingCustomers.length > 0) {
-      const existingCustomer = existingCustomers[0]
+    if (existingCustomer) {
       console.log("[/api/crm/customer] Updating existing customer:", existingCustomer.id)
 
-      const updateRecord = { ...customerRecord }
-      delete updateRecord.created_at
-
-      result = await supabase
-        .from("customers")
-        .update(updateRecord)
-        .eq("email_normalized", customerData.email.toLowerCase().trim())
-        .select()
+      result = await supabase.from("customers").update(customerRecord).eq("id", existingCustomer.id).select().single()
     } else {
       console.log("[/api/crm/customer] Creating new customer for email:", customerData.email)
-      result = await supabase.from("customers").insert(customerRecord).select()
+
+      const insertRecord = {
+        ...customerRecord,
+        created_at: now,
+      }
+
+      result = await supabase.from("customers").insert(insertRecord).select().single()
     }
 
     const { data, error } = result
 
     if (error) {
       console.error("[/api/crm/customer] Error saving customer to CRM:", error)
+
+      if (error.code === "23505") {
+        return NextResponse.json(
+          { success: false, error: "Customer with this email already exists" },
+          { status: 409, headers: { "content-type": "application/json" } },
+        )
+      }
+
       return NextResponse.json(
         { success: false, error: error.message },
         { status: 500, headers: { "content-type": "application/json" } },
       )
     }
 
-    console.log("[/api/crm/customer] Customer saved to CRM successfully")
-    return NextResponse.json({ success: true, data }, { status: 200, headers: { "content-type": "application/json" } })
+    const tookMs = Date.now() - startTime
+    console.log("[/api/crm/customer] Customer saved to CRM successfully in", tookMs, "ms")
+
+    return NextResponse.json(
+      { success: true, data, tookMs },
+      { status: 200, headers: { "content-type": "application/json" } },
+    )
   } catch (err: any) {
     console.error("[/api/crm/customer] Uncaught ERROR:", err?.stack || err?.message || err)
 
     return NextResponse.json(
       { error: err?.message ?? "Unbekannter Serverfehler" },
       { status: 500, headers: { "content-type": "application/json" } },
+    )
+  }
+}
+
+export async function PUT(req: Request) {
+  console.log("[v0] [/api/crm/customer PUT] Request received")
+  try {
+    const { id, payload } = await req.json()
+
+    if (!id || !payload) {
+      console.error("[v0] [/api/crm/customer PUT] Missing id or payload")
+      return NextResponse.json({ error: "Missing id/payload" }, { status: 400 })
+    }
+
+    console.log("[v0] [/api/crm/customer PUT] Updating customer:", id)
+
+    const supabase = createAdminClient()
+    const { error } = await supabase.from("customers").update(payload).eq("id", id)
+
+    if (error) {
+      console.error("[v0] [/api/crm/customer PUT] Database error:", error)
+      return NextResponse.json({ error: "Database error", details: error.message }, { status: 500 })
+    }
+
+    console.log("[v0] [/api/crm/customer PUT] Customer updated successfully")
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    console.error("[v0] [/api/crm/customer PUT] Unexpected error:", e)
+    return NextResponse.json(
+      {
+        error: "Unexpected error",
+        details: e instanceof Error ? e.message : String(e),
+      },
+      { status: 500 },
+    )
+  }
+}
+
+export async function DELETE(req: Request) {
+  console.log("[v0] [/api/crm/customer DELETE] Request received")
+  try {
+    const { id } = await req.json()
+
+    if (!id) {
+      console.error("[v0] [/api/crm/customer DELETE] Missing id")
+      return NextResponse.json({ error: "Missing id" }, { status: 400 })
+    }
+
+    console.log("[v0] [/api/crm/customer DELETE] Deleting customer:", id)
+
+    const supabase = createAdminClient()
+    const { error } = await supabase.from("customers").delete().eq("id", id)
+
+    if (error) {
+      console.error("[v0] [/api/crm/customer DELETE] Database error:", error)
+      return NextResponse.json({ error: "Database error", details: error.message }, { status: 500 })
+    }
+
+    console.log("[v0] [/api/crm/customer DELETE] Customer deleted successfully")
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    console.error("[v0] [/api/crm/customer DELETE] Unexpected error:", e)
+    return NextResponse.json(
+      {
+        error: "Unexpected error",
+        details: e instanceof Error ? e.message : String(e),
+      },
+      { status: 500 },
     )
   }
 }

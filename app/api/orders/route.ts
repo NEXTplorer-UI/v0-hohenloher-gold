@@ -234,6 +234,8 @@ export async function POST(request: NextRequest) {
     const savedOrder = orderResult[0]
 
     const productNames = orderData.items.map((item: any) => item.name)
+    console.log("[/api/orders] Looking up products:", productNames)
+
     const { data: products, error: productsError } = await supabase
       .from("products")
       .select("id, name")
@@ -244,19 +246,26 @@ export async function POST(request: NextRequest) {
     }
 
     const productMap = new Map(products?.map((p) => [p.name, p.id]) || [])
+    console.log("[/api/orders] Product map created with", productMap.size, "entries")
 
-    const orderItems = orderData.items.map((item: any) => ({
-      order_id: savedOrder.id,
-      product_id: productMap.get(item.name) || null,
-      product_name: item.name,
-      product_category: item.category || "Unbekannt",
-      product_size: item.size || null,
-      quantity: item.quantity,
-      unit_price: item.price,
-      expected_delivery_date: deliveryDate,
-      delivery_schedule_id: scheduleId,
-      created_at: orderTime.toISOString(),
-    }))
+    const orderItems = orderData.items.map((item: any) => {
+      const productId = productMap.get(item.name)
+      if (!productId) {
+        console.warn(`[/api/orders] ⚠️ No product_id found for item: "${item.name}"`)
+      }
+      return {
+        order_id: savedOrder.id,
+        product_id: productId || null,
+        product_name: item.name,
+        product_category: item.category || "Unbekannt",
+        product_size: item.size || null,
+        quantity: item.quantity,
+        unit_price: item.price,
+        expected_delivery_date: deliveryDate,
+        delivery_schedule_id: scheduleId,
+        created_at: orderTime.toISOString(),
+      }
+    })
 
     const { data: itemsResult, error: itemsError } = await supabase.from("order_items").insert(orderItems).select()
 
@@ -314,22 +323,40 @@ export async function POST(request: NextRequest) {
 
     if (savedOrder.status === "confirmed") {
       try {
-        await createMovementsFromOrder(
-          savedOrder.id,
-          savedOrder.order_number,
-          itemsResult.map((item) => ({
-            id: item.id,
-            product_id: item.product_id || 0,
-            product_name: item.product_name,
-            product_category: item.product_category,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-          })),
-          "Kundenbestellung",
+        const itemsWithProductId = itemsResult.filter((item) => item.product_id !== null)
+        const itemsWithoutProductId = itemsResult.filter((item) => item.product_id === null)
+
+        if (itemsWithoutProductId.length > 0) {
+          console.warn(
+            `[/api/orders] ⚠️ ${itemsWithoutProductId.length} items without product_id, inventory movements will not be created for:`,
+            itemsWithoutProductId.map((i) => i.product_name),
+          )
+        }
+
+        if (itemsWithProductId.length > 0) {
+          await createMovementsFromOrder(
+            savedOrder.id,
+            savedOrder.order_number,
+            itemsWithProductId.map((item) => ({
+              id: item.id,
+              product_id: item.product_id,
+              product_name: item.product_name,
+              product_category: item.product_category,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+            })),
+            "Kundenbestellung",
+          )
+          console.log(
+            `[/api/orders] ✅ Created inventory movements for ${itemsWithProductId.length} items in order ${savedOrder.order_number}`,
+          )
+        }
+      } catch (movementError: any) {
+        console.error(
+          `[/api/orders] ❌ Failed to create inventory movements for order ${savedOrder.order_number}:`,
+          movementError.message,
         )
-        console.log(`[/api/orders] Created inventory movements for order ${savedOrder.order_number}`)
-      } catch (movementError) {
-        console.error(`[/api/orders] Failed to create inventory movements:`, movementError)
+        console.error("[/api/orders] Order was saved successfully, but inventory was not updated.")
       }
     }
 

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Calendar, Plus, Edit, Trash2, Check, X, AlertCircle, Clock } from "lucide-react"
+import { Calendar, Plus, Edit, Trash2, Check, X, AlertCircle, Clock, RefreshCw } from "lucide-react"
 import { createBrowserClient } from "@supabase/ssr"
 import { useDeliverySchedulesSWR } from "@/hooks/use-delivery-schedules-swr"
 
@@ -265,10 +265,16 @@ export default function DeliveryScheduleManagement() {
             </CardTitle>
             <CardDescription>Verwalten Sie die Liefertermine für frische Südfrüchte</CardDescription>
           </div>
-          <Button onClick={handleAdd} disabled={isAdding} size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Neuer Termin
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={loadSchedules} variant="outline" size="sm" disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+              Aktualisieren
+            </Button>
+            <Button onClick={handleAdd} disabled={isAdding} size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              Neuer Termin
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

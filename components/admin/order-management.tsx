@@ -7,6 +7,9 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Download, Mail, Search, Filter, Loader2, ChevronDown, ChevronUp } from "lucide-react"
+import { mapDBToUIStatus, getEmailTemplateForStatus } from "@/lib/order-status-mapping"
+import type { EmailTemplateId } from "@/lib/email/build"
+import { useToast } from "@/hooks/use-toast"
 
 interface OrderItem {
   id: string
@@ -46,7 +49,7 @@ const OrderItem = memo(
     onStatusChange,
   }: {
     order: Order
-    onNotify: (orderId: string) => void
+    onNotify: (orderId: string, templateId?: EmailTemplateId) => void
     onStatusChange: (orderId: string, status?: string, paymentStatus?: string) => void
   }) => {
     const [showItems, setShowItems] = useState(false)
@@ -90,6 +93,8 @@ const OrderItem = memo(
           return "Abgeholt"
         case "cancelled":
           return "Storniert"
+        case "pending":
+          return "Ausstehend"
         default:
           return status
       }
@@ -117,13 +122,15 @@ const OrderItem = memo(
       }, 0)
     }, [order.order_items])
 
+    const uiStatus = mapDBToUIStatus(order.status as any)
+
     return (
       <Card className="p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className="font-medium">{order.order_number}</span>
-              <Badge variant={getStatusVariant(order.status)}>{getStatusDisplay(order.status)}</Badge>
+              <Badge variant={getStatusVariant(uiStatus)}>{getStatusDisplay(uiStatus)}</Badge>
             </div>
             <div className="text-sm text-muted-foreground">
               <div>
@@ -166,7 +173,7 @@ const OrderItem = memo(
           <div className="flex flex-col items-end gap-2">
             <span className="font-bold">€{order.total.toFixed(2)}</span>
             <div className="flex gap-2">
-              <Select value={order.status} onValueChange={(value) => onStatusChange(order.id, value, undefined)}>
+              <Select value={uiStatus} onValueChange={(value) => onStatusChange(order.id, value, undefined)}>
                 <SelectTrigger className="w-32">
                   <SelectValue />
                 </SelectTrigger>
@@ -192,7 +199,14 @@ const OrderItem = memo(
                 </SelectContent>
               </Select>
             </div>
-            <Button size="sm" variant="outline" onClick={() => onNotify(order.id)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const templateId = getEmailTemplateForStatus(uiStatus)
+                onNotify(order.id, templateId as EmailTemplateId)
+              }}
+            >
               <Mail className="h-4 w-4 mr-2" />
               Benachrichtigen
             </Button>
@@ -211,6 +225,7 @@ function OrderManagement() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const { toast } = useToast()
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -227,7 +242,6 @@ function OrderManagement() {
           const errorData = await response.json()
           throw new Error(errorData.error || "Failed to fetch orders")
         } else {
-          // Response is not JSON (e.g., HTML error page)
           const errorText = await response.text()
           console.error("[v0] Non-JSON error response:", errorText.substring(0, 200))
           throw new Error(`Server error: ${response.status} ${response.statusText}`)
@@ -294,21 +308,12 @@ function OrderManagement() {
   }, [])
 
   const handleNotify = useCallback(
-    async (orderId: string) => {
+    async (orderId: string, templateId?: EmailTemplateId) => {
       const order = orders.find((o) => o.id === orderId)
       if (!order) return
 
       try {
         console.log(`[v0] Sending notification for order ${order.order_number}`)
-
-        let notificationType = "status_update"
-        if (order.payment_status === "paid" && order.status !== "pending") {
-          notificationType = "payment_receipt"
-        } else if (order.status === "ready") {
-          notificationType = "ready_for_pickup"
-        } else if (order.status === "confirmed") {
-          notificationType = "order_confirmed"
-        }
 
         const response = await fetch("/api/admin/notify-customer", {
           method: "POST",
@@ -317,27 +322,21 @@ function OrderManagement() {
           },
           body: JSON.stringify({
             orderId: order.id,
-            orderNumber: order.order_number,
-            customerEmail: order.customer.email,
-            customerName: `${order.customer.first_name} ${order.customer.last_name}`,
-            status: order.status,
-            pickupLocation: order.pickup_location,
-            paymentStatus: order.payment_status,
-            paymentMethod: order.payment_method,
-            total: order.total,
-            orderItems: order.order_items,
-            notificationType, // Added notification type
+            templateId,
           }),
         })
 
         if (response.ok) {
           console.log(`[v0] Notification sent successfully for order ${order.order_number}`)
-          // Optional: Show success message to admin
+          alert(`Benachrichtigung wurde an ${order.customer.email} gesendet`)
         } else {
-          console.error(`[v0] Failed to send notification for order ${order.order_number}`)
+          const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+          console.error(`[v0] Failed to send notification for order ${order.order_number}:`, errorData)
+          alert(`Fehler: ${errorData.error || "Benachrichtigung konnte nicht gesendet werden"}`)
         }
       } catch (error) {
         console.error(`[v0] Error sending notification:`, error)
+        alert(`Fehler: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`)
       }
     },
     [orders],
@@ -362,13 +361,16 @@ function OrderManagement() {
 
         if (response.ok) {
           console.log(`[v0] Order status updated successfully`)
-          // Refresh orders to show updated status
+          alert("Bestellstatus wurde erfolgreich geändert")
           await fetchOrders()
         } else {
-          console.error(`[v0] Failed to update order status`)
+          const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+          console.error(`[v0] Failed to update order status:`, errorData)
+          alert(`Fehler: ${errorData.error || "Status konnte nicht geändert werden"}`)
         }
       } catch (error) {
         console.error(`[v0] Error updating order status:`, error)
+        alert(`Fehler: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`)
       }
     },
     [fetchOrders],
@@ -439,6 +441,7 @@ function OrderManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Alle Status</SelectItem>
+                <SelectItem value="pending">Ausstehend</SelectItem>
                 <SelectItem value="confirmed">Bestätigt</SelectItem>
                 <SelectItem value="ready">Bereit</SelectItem>
                 <SelectItem value="picked_up">Abgeholt</SelectItem>
