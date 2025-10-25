@@ -292,11 +292,10 @@ export default function NewsPage() {
               Aktuelles
             </Badge>
             <h1 className="font-serif font-bold text-4xl lg:text-6xl text-foreground leading-tight">
-              Aktuelles & <span className="text-primary">Neuigkeiten</span>
+              Aktuelles, Altes & <span className="text-primary">Neuigkeiten</span>
             </h1>
             <p className="text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
-              Bleiben Sie auf dem Laufenden über neue Ernten, Partnerschaften und alles rund um Hohenloher Gold und
-              unsere sizilianischen Südfrüchte.
+              Hier gibt´s Laufendes, alt Bewährtes, wissenwertes &amp; brauchbares rund um Nahrung und Nährendes                         
             </p>
           </div>
         </div>
@@ -312,8 +311,7 @@ export default function NewsPage() {
           <div className="max-w-3xl mx-auto space-y-6">
             <h2 className="font-serif font-bold text-3xl lg:text-4xl">Bleiben Sie informiert</h2>
             <p className="text-lg opacity-90">
-              Abonnieren Sie unseren Newsletter und erfahren Sie als Erste von neuen Ernten, Produkten und besonderen
-              Angeboten.
+              Abonnieren Sie unseren Newsletter und bleiben Sie aktuell   
             </p>
             <form onSubmit={handleNewsletterSubmit} className="pt-4 max-w-md mx-auto space-y-4">
               <div className="flex flex-col sm:flex-row gap-4 justify-center">

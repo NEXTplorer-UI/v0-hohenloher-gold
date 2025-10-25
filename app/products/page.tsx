@@ -189,16 +189,10 @@ export default function ProductsPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center space-y-4">
             <h1 className="font-serif font-bold text-4xl lg:text-5xl text-card-foreground">Unsere Produkte</h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Erfahren Sie mehr über die Herkunft und Qualität unserer sorgfältig ausgewählten Lebensmittel
-            </p>
+
             <div className="mt-8 pt-6 border-t border-border">
-              <h2 className="font-serif font-semibold text-2xl text-primary mb-4">Nicht bio, sondern natürlich</h2>
               <p className="text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                Viele unserer kleinen Partnerbauern können sich die aufwendigen Bio-Zertifizierungen und das teure
-                Bio-Siegel nicht leisten. Dennoch bauen sie ihre Produkte nach höchsten natürlichen Standards an - ohne
-                Pestizide, ohne chemische Zusätze und mit traditionellen Methoden, die seit Generationen weitergegeben
-                werden. Für uns zählt die Qualität und Natürlichkeit, nicht das Siegel.
+                {"Manches Bio - manches unbehandelt.  Die Qualität zählt, nicht das Siegel."}
               </p>
             </div>
           </div>
@@ -251,7 +245,7 @@ export default function ProductsPage() {
                   </div>
                   <CardContent className="p-4 text-center">
                     <h3 className="font-serif font-semibold text-lg mb-1">Trockenfrüchte</h3>
-                    <p className="text-sm text-muted-foreground">Sonnengetrocknet</p>
+                    <p className="text-sm text-muted-foreground">Aus aller Welt</p>
                   </CardContent>
                 </Card>
               </TabsTrigger>
@@ -284,10 +278,9 @@ export default function ProductsPage() {
             <TabsContent value="suedfruechtе">
               <div className="space-y-12">
                 <div className="text-center space-y-4">
-                  <h2 className="font-serif font-bold text-3xl text-foreground">Frische Südfrüchte aus Sizilien</h2>
+                  <h2 className="font-serif font-bold text-3xl text-foreground">Frische Südfrüchte aus Ribera</h2>
                   <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-                    Unsere Südfrüchte kommen direkt von unseren Partnerfamilien in Sizilien und werden ohne chemische
-                    Behandlung angebaut.
+                    {""}
                   </p>
                 </div>
 
@@ -301,14 +294,13 @@ export default function ProductsPage() {
                     </CardHeader>
                     <CardContent className="pt-0 space-y-4">
                       <p className="text-muted-foreground">
-                        Unsere Orangen, Zitronen und Mandarinen wachsen in den fruchtbaren Böden Siziliens, wo das
-                        mediterrane Klima und die vulkanische Erde ideale Bedingungen schaffen.
+                        Unsere Südfrüchte wachsen auf den fruchtbaren Böden Siziliens, wo das mediterrane Klima und die vulkanische Erde ideale Bedingungen für ausergewöhnlichen Geschmack schaffen.
                       </p>
                       <ul className="space-y-2 text-sm text-muted-foreground">
-                        <li>• Traditioneller Anbau ohne Pestizide</li>
-                        <li>• Handverlesene Ernte zum optimalen Reifegrad</li>
-                        <li>• Direkte Partnerschaft mit Familienbetrieben</li>
-                        <li>• Transport innerhalb von 48 Stunden nach Ernte</li>
+                        <li>• Traditionelle Anbaumethoden</li>
+                        <li>•  Ernte zum optimalen Reifegrad</li>
+                        <li>• Direkte Partnerschaften</li>
+                        <li>• Transport innerhalb kürzester Zeit nach Ernte</li>
                       </ul>
                     </CardContent>
                   </Card>
@@ -322,14 +314,13 @@ export default function ProductsPage() {
                     </CardHeader>
                     <CardContent className="pt-0 space-y-4">
                       <p className="text-muted-foreground">
-                        Jede Frucht wird sorgfältig ausgewählt und schonend transportiert, um die natürlichen Aromen und
-                        Nährstoffe zu bewahren.
+                        Frischer gehts nur vom Baum.
                       </p>
                       <ul className="space-y-2 text-sm text-muted-foreground">
                         <li>• Unbehandelte Schalen, essbar und aromatisch</li>
-                        <li>• Hoher Vitamin C-Gehalt durch sonnige Reifung</li>
+                        <li>• Hoher Vitamin C-Gehalt </li>
                         <li>• Keine Wachsbehandlung oder Konservierungsstoffe</li>
-                        <li>• Regelmäßige Qualitätskontrollen</li>
+                        <li>{""}</li>
                       </ul>
                     </CardContent>
                   </Card>
@@ -343,8 +334,7 @@ export default function ProductsPage() {
                 <div className="text-center space-y-4">
                   <h2 className="font-serif font-bold text-3xl text-foreground">Natürlich getrocknete Früchte</h2>
                   <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-                    Unsere Trockenfrüchte werden ausschließlich durch Sonnentrocknung haltbar gemacht - ohne
-                    Zusatzstoffe oder Schwefel.
+                    {""}
                   </p>
                 </div>
 
@@ -362,9 +352,7 @@ export default function ProductsPage() {
                         intensiviert auch den natürlichen Geschmack der Früchte.
                       </p>
                       <ul className="space-y-2 text-sm text-muted-foreground">
-                        <li>• Ausschließlich Sonnentrocknung, keine Öfen</li>
-                        <li>• Langsamer Trocknungsprozess für optimalen Geschmack</li>
-                        <li>• Erhaltung aller natürlichen Enzyme</li>
+                              <li>• Erhaltung aller natürlichen Enzyme</li>
                         <li>• Keine Schwefelung oder chemische Behandlung</li>
                       </ul>
                     </CardContent>
@@ -379,8 +367,7 @@ export default function ProductsPage() {
                     </CardHeader>
                     <CardContent className="pt-0 space-y-4">
                       <p className="text-muted-foreground">
-                        Durch die schonende Trocknung bleiben Vitamine, Mineralien und der intensive, natürliche
-                        Geschmack vollständig erhalten.
+                        Durch die schonende Trocknung bleiben Vitamine, Mineralien und der intensive, natürliche Geschmack weitestgehenst erhalten.
                       </p>
                       <ul className="space-y-2 text-sm text-muted-foreground">
                         <li>• Reich an Ballaststoffen und Antioxidantien</li>
@@ -398,13 +385,10 @@ export default function ProductsPage() {
                     <h3 className="font-serif font-bold text-xl">Sortiment</h3>
                   </div>
                   <p className="text-muted-foreground leading-relaxed mb-4">
-                    Unser Trockenfrüchte-Sortiment umfasst klassische sizilianische Spezialitäten wie getrocknete
-                    Feigen, Mandeln und Rosinen. Jede Frucht wird zum optimalen Reifegrad geerntet und anschließend
-                    sorgfältig in der sizilianischen Sonne getrocknet.
+                    Unser Trockenfrüchte-Sortiment umfasst klassische Spezialitäten aus aller Welt. Die Früchte werden zum optimalen reifegrad geerntet und auf die schonenste Art und Weise weiterverarbeitet.      
                   </p>
                   <p className="text-muted-foreground leading-relaxed">
-                    Perfekt als gesunder Snack, für Müsli und Joghurt oder zum Backen - unsere Trockenfrüchte bringen
-                    mediterranes Flair in Ihre Küche.
+                    Perfekt als gesunder Snack, für Müsli und Joghurt oder zum Backen - unsere Trockenfrüchte bringen vielfalt in Ihre Küche.
                   </p>
                 </div>
               </div>
@@ -450,8 +434,6 @@ export default function ProductsPage() {
                     <CardContent className="pt-0 space-y-4">
                       <p className="text-muted-foreground">Ist noch in Arbeit :)</p>
                       <ul className="space-y-2 text-sm text-muted-foreground">
-                        
-                        
                         <li>• Walnussöl für Feinschmecker</li>
                       </ul>
                     </CardContent>
@@ -464,7 +446,7 @@ export default function ProductsPage() {
                     <h3 className="font-serif font-bold text-xl">Lagerung</h3>
                   </div>
                   <p className="text-muted-foreground leading-relaxed">
-                    Für die optimale Qualität empfehlen wir, die Öle kühl und dunkel zu lagern. 
+                    Für die optimale Qualität empfehlen wir, die Öle kühl und dunkel zu lagern.
                   </p>
                 </div>
               </div>

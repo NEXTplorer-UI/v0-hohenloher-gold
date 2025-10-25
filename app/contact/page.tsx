@@ -134,8 +134,7 @@ export default function ContactPage() {
           <div className="text-center space-y-6 max-w-3xl mx-auto">
             <h1 className="font-serif font-bold text-4xl lg:text-5xl text-foreground">Kontakt</h1>
             <p className="text-lg text-muted-foreground">
-              Haben Sie Fragen zu unseren Produkten oder möchten Sie direkten Kontakt aufnehmen? Wir sind gerne für Sie
-              da.
+              Haben Sie weitere Fragen? Wir sind gerne für Sie da.
             </p>
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-6">
               <p className="text-sm text-amber-800 text-center">
@@ -216,7 +215,7 @@ export default function ContactPage() {
                   <p className="text-sm text-muted-foreground">
                     <strong>Gerlinde Fink</strong> - Geschäftsführerin
                     <br />
-                    Für Partnerschaften, Verteilerprogramm und besondere Anliegen
+                    Für besondere Anliegen
                   </p>
                 </div>
               </CardContent>

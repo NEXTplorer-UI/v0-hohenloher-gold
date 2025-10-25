@@ -92,11 +92,10 @@ export default function DistributorPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center space-y-6 max-w-3xl mx-auto">
             <h1 className="font-serif font-bold text-4xl lg:text-5xl text-card-foreground">
-              Werden Sie Teil unseres Netzwerks
+              {"Werden Sie Teil unseres Verteilnetzwerkes"}
             </h1>
             <p className="text-lg text-muted-foreground">
-              Unser dezentrales Vertriebssystem bringt hochwertige Lebensmittel direkt in Ihre Region. Werden Sie
-              Verteiler oder finden Sie Ihren nächsten Abholort.
+              Den Genuss in Ihre Region bringen    
             </p>
           </div>
         </div>
@@ -349,7 +348,7 @@ export default function DistributorPage() {
               So funktioniert unser Verteilersystem
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Ein nachhaltiges und gemeinschaftliches Konzept für den Vertrieb hochwertiger Lebensmittel
+              {""}
             </p>
           </div>
 
@@ -361,8 +360,7 @@ export default function DistributorPage() {
                 </div>
                 <h3 className="font-serif font-bold text-xl">1. Verteiler werden</h3>
                 <p className="text-muted-foreground">
-                  Melden Sie sich als Verteiler an und werden Sie Teil unseres Netzwerks. Ideal für Hofläden, Bioläden
-                  oder engagierte Privatpersonen.
+                  Werden Sie Verteiler und erhalten Sie mit uns gemeinsam den Genuss der Ribera-Früchte.            
                 </p>
               </CardContent>
             </Card>
@@ -374,8 +372,7 @@ export default function DistributorPage() {
                 </div>
                 <h3 className="font-serif font-bold text-xl">2. Abholort einrichten</h3>
                 <p className="text-muted-foreground">
-                  Wir richten gemeinsam einen Abholort in Ihrer Region ein. Kunden können dort ihre bestellten Produkte
-                  abholen.
+                  Wir richten miteinander einen Abholort in Ihrer Region ein. Kunden können dort ihre bestellten Produkte abholen.
                 </p>
               </CardContent>
             </Card>
@@ -387,8 +384,7 @@ export default function DistributorPage() {
                 </div>
                 <h3 className="font-serif font-bold text-xl">3. Netzwerk stärken</h3>
                 <p className="text-muted-foreground">
-                  Fördern Sie regionale Kreisläufe und bringen Sie hochwertige Lebensmittel direkt zu den Menschen in
-                  Ihrer Nachbarschaft.
+                  Fördern Sie vollwertige Nahrung. Bringen Sie hochwertige Lebensmittel direkt zu den Menschen in Ihrer Nachbarschaft.
                 </p>
               </CardContent>
             </Card>
@@ -441,7 +437,7 @@ export default function DistributorPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="businessType">Art des Geschäfts/Standorts</Label>
+                  <Label htmlFor="businessType">Art des Standorts</Label>
                   <Input id="businessType" placeholder="z.B. Hofladen, Bioladen, Privatperson" />
                 </div>
 
