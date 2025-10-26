@@ -8,6 +8,7 @@ export interface BaseLayoutOptions {
   preheader?: string
   headerColor?: string
   headerGradient?: string
+  unsubscribeEmail?: string
 }
 
 export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions): string {
@@ -16,9 +17,19 @@ export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions
     preheader = "",
     headerColor = "#d4af37",
     headerGradient = "linear-gradient(135deg, #b8941f 0%, #d4af37 100%)",
+    unsubscribeEmail,
   } = options
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://hohenloher-gold.de"
+  const logoUrl = process.env.NEXT_PUBLIC_LOGO_URL || `${siteUrl}/suedfruechte-hohenlohe-logo.png`
+
+  const unsubscribeLink = unsubscribeEmail
+    ? `<p style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #4a5568;">
+         <a href="${siteUrl}/newsletter/unsubscribe?email=${encodeURIComponent(unsubscribeEmail)}" style="color: ${headerColor};">
+           Newsletter abbestellen
+         </a>
+       </p>`
+    : ""
 
   return `<!DOCTYPE html>
 <html lang="de">
@@ -187,7 +198,7 @@ export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions
   <div class="email-wrapper">
     <div class="email-container">
       <div class="email-header">
-        <img src="${siteUrl}/suedfruechte-hohenlohe-logo.png" alt="Südfrüchte Hohenlohe" class="email-logo" />
+        <img src="${logoUrl}" alt="Südfrüchte Hohenlohe" class="email-logo" />
         <h1>Südfrüchte Hohenlohe</h1>
         <p>${title}</p>
       </div>
@@ -204,6 +215,7 @@ export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions
           <a href="mailto:kontakt@suedfruechte-hohenlohe.de">kontakt@suedfruechte-hohenlohe.de</a> | 
           Tel: <a href="tel:+4915735703864">0157 357 038 64</a>
         </p>
+        ${unsubscribeLink}
       </div>
     </div>
   </div>

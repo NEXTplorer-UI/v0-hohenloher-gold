@@ -50,6 +50,7 @@ export function buildEmail(
   let headerTitle = ""
   let headerColor = "#d4af37"
   let headerGradient = "linear-gradient(135deg, #b8941f 0%, #d4af37 100%)"
+  let unsubscribeEmail: string | undefined = undefined
 
   switch (templateId) {
     case "orderConfirmation":
@@ -88,6 +89,7 @@ export function buildEmail(
       subject = `${vars.subject} - Südfrüchte Hohenlohe Newsletter`
       headerTitle = "Newsletter"
       contentHtml = newsletterContent(vars, customCopy)
+      unsubscribeEmail = vars.recipientEmail as string | undefined
       break
 
     case "newsletterConfirmation":
@@ -164,6 +166,7 @@ export function buildEmail(
     title: headerTitle,
     headerColor,
     headerGradient,
+    unsubscribeEmail,
   })
 
   return { subject, html }

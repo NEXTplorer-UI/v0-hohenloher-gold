@@ -20,12 +20,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    const emailResult = buildEmail("newsletter", {
-      subject,
-      content,
-      imageUrl,
-    })
-
     const results = {
       sent: 0,
       failed: 0,
@@ -38,6 +32,13 @@ export async function POST(request: NextRequest) {
 
       const promises = batch.map(async (email: string) => {
         try {
+          const emailResult = buildEmail("newsletter", {
+            subject,
+            content,
+            imageUrl,
+            recipientEmail: email,
+          })
+
           await resend.emails.send({
             from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
             to: email,

@@ -268,6 +268,15 @@ export default function ShopPage() {
     revalidateOnReconnect: false,
   })
 
+  const {
+    data: dbCategories,
+    error: categoriesError,
+    isLoading: categoriesLoading,
+  } = useSWR("/api/categories", fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+  })
+
   useEffect(() => {
     if (cart?.items?.length > 0) {
       console.log("[v0] Cart changed, refreshing product stock data")
@@ -335,10 +344,17 @@ export default function ShopPage() {
   }
 
   const categories = useMemo(() => {
-    if (!dbProducts || dbProducts.length === 0) return ["alle"]
-    const uniqueCategories = [...new Set(dbProducts.map((p: any) => p.category).filter(Boolean))]
-    return ["alle", ...uniqueCategories.sort()]
-  }, [dbProducts])
+    if (categoriesLoading || !dbCategories) {
+      // Fallback to extracting from products while loading
+      if (!dbProducts || dbProducts.length === 0) return ["alle"]
+      const uniqueCategories = [...new Set(dbProducts.map((p: any) => p.category).filter(Boolean))]
+      return ["alle", ...uniqueCategories.sort()]
+    }
+
+    const categoriesArray = dbCategories.categories || dbCategories
+    const categoryNames = categoriesArray.map((cat: any) => cat.name)
+    return ["alle", ...categoryNames]
+  }, [dbCategories, categoriesLoading, dbProducts])
 
   console.log("[v0] Final categories for filter:", categories)
   console.log("[v0] Selected category:", selectedCategory)
@@ -400,7 +416,9 @@ export default function ShopPage() {
                             <div key={index} className="p-3 bg-primary/10 rounded border">
                               <div className="flex justify-between items-start mb-1">
                                 <span className="font-medium">{delivery.date}</span>
-                                {delivery.notes && <span className="text-primary text-sm mx-60 px-0">{delivery.notes}</span>}
+                                {delivery.notes && (
+                                  <span className="text-primary text-sm mx-60 px-0">{delivery.notes}</span>
+                                )}
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 <span className="font-medium">Bestellschluss:</span> {delivery.orderDeadline}
@@ -595,9 +613,10 @@ export default function ShopPage() {
 
       <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
         <DialogContent
-          className="w-[80vw] h-[90vh] max-w-none overflow-y-auto"
+          className="w-[90vw] h-[85vh] md:w-[70vw] md:h-[70vh] lg:w-[55vw] lg:h-[60vh] max-w-none overflow-y-auto"
           style={{
-            width: "80vw", // Changed from 95vw to 80vw
+            width: "90vw",
+            height: "85vh",
             maxWidth: "none",
           }}
         >
@@ -614,7 +633,7 @@ export default function ShopPage() {
                 {/* Product image */}
                 <div className="aspect-square rounded-lg overflow-hidden bg-secondary">
                   <img
-                    src={selectedProduct.images?.[0] || selectedProduct.image_url || "/placeholder.svg"}
+                    src={selectedProduct.image_url || selectedProduct.images?.[0] || "/placeholder.svg"}
                     alt={selectedProduct.name}
                     className="w-full h-full object-cover"
                   />
@@ -710,7 +729,7 @@ function ProductCard({
           onClick={() => onSelect(product)}
         >
           <img
-            src={product.images?.[0] || product.image_url || "/placeholder.svg"}
+            src={product.image_url || product.images?.[0] || "/placeholder.svg"}
             alt={product.name}
             className="w-full h-full object-cover hover:scale-105 transition-transform"
             loading="lazy"

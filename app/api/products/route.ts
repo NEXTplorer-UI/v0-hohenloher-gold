@@ -79,7 +79,10 @@ export async function GET() {
 
       // Parse attributes from jsonb
       const attributes = product.attributes || {}
-      const images = attributes.images || (product.image_url ? [product.image_url] : [])
+      // If image_url exists, use it as the primary image, otherwise fall back to attributes.images
+      const images = product.image_url
+        ? [product.image_url, ...(attributes.images || []).filter((img: string) => img !== product.image_url)]
+        : attributes.images || []
       const organic = attributes.organic || false
       const limitPerPerson = attributes.limit_per_person || null
       const requiresDeliverySchedule = attributes.requires_delivery_schedule || false
