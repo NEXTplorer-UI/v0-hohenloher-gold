@@ -3,19 +3,25 @@ import { NextResponse } from "next/server"
 
 async function getNextDeliverySchedule(supabase: any) {
   try {
-    const { data, error } = await supabase
+    const { data: futureSchedules, error } = await supabase
       .from("delivery_schedules")
       .select("*")
-      .gte("order_deadline", new Date().toISOString().split("T")[0])
+      .gte("delivery_date", new Date().toISOString().split("T")[0])
       .order("delivery_date", { ascending: true })
-      .limit(1)
 
     if (error) {
       console.log("[v0] Delivery schedules table not available yet:", error.message)
       return null
     }
 
-    return data?.[0] || null
+    if (!futureSchedules || futureSchedules.length === 0) {
+      return null
+    }
+
+    const today = new Date().toISOString().split("T")[0]
+    const availableSchedule = futureSchedules.find((schedule: any) => schedule.order_deadline >= today)
+
+    return availableSchedule || null
   } catch (error) {
     console.log("[v0] Could not fetch delivery schedules:", error)
     return null
@@ -114,11 +120,11 @@ export async function GET() {
           availabilityMessage = `Lieferung am ${nextDeliveryDate}`
           inStock = true
         } else {
-          availabilityMessage = "Bestellschluss vorbei - nächster Termin folgt"
+          availabilityMessage = "Bestellschluss vorbei - Bestellung wird nächstem Termin zugeordnet"
           inStock = false
         }
       } else if (isSouthernFruit && requiresDeliverySchedule && !nextDelivery) {
-        availabilityMessage = currentStock > 0 ? "Auf Lager" : "Keine Liefertermine verfügbar"
+        availabilityMessage = currentStock > 0 ? "Auf Lager" : "Aktuell keine Liefertermine verfügbar"
         inStock = currentStock > 0
       }
 

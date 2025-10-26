@@ -1001,7 +1001,18 @@ export default function CheckoutPage() {
                   <p className="text-sm text-yellow-800">{deliveryDateInfo.message}</p>
                   {deliveryDateInfo.deliveryDate && (
                     <p className="text-xs text-yellow-700 mt-1">
-                      Ihre Bestellung enthält frische Südfrüchte und wird zum nächsten verfügbaren Termin geliefert.
+                      Lieferdatum:{" "}
+                      {new Date(deliveryDateInfo.deliveryDate).toLocaleDateString("de-DE", {
+                        day: "2-digit",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </p>
+                  )}
+                  {!deliveryDateInfo.deliveryDate && (
+                    <p className="text-xs text-red-700 mt-1 font-medium">
+                      Bitte beachten Sie: Ihre Bestellung kann erst bearbeitet werden, wenn ein neuer Liefertermin
+                      verfügbar ist.
                     </p>
                   )}
                   {deliveryDateInfo.pickupStartTime && deliveryDateInfo.pickupEndTime && (

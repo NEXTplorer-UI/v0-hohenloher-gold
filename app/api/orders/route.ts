@@ -109,7 +109,7 @@ async function findPickupLocationId(
 async function determineDeliveryDate(
   items: any[],
   supabase: ReturnType<typeof getServiceClient>,
-): Promise<{ deliveryDate: string | null; scheduleId: string | null }> {
+): Promise<{ deliveryDate: string | null; scheduleId: string | null; message?: string }> {
   const hasSouthernFruits = items.some(
     (item) => item.category === "Südfrüchte" || item.category === "Frische Südfrüchte",
   )
@@ -118,22 +118,55 @@ async function determineDeliveryDate(
     return { deliveryDate: null, scheduleId: null }
   }
 
-  const { data: nextSchedule, error } = await supabase
+  const { data: futureSchedules, error } = await supabase
     .from("delivery_schedules")
     .select("*")
-    .gte("order_deadline", new Date().toISOString().split("T")[0])
+    .gte("delivery_date", new Date().toISOString().split("T")[0])
     .order("delivery_date", { ascending: true })
-    .limit(1)
-    .single()
 
-  if (error || !nextSchedule) {
-    console.log("[/api/orders] No delivery schedule found, order will be fulfilled when next schedule is available")
-    return { deliveryDate: null, scheduleId: null }
+  if (error || !futureSchedules || futureSchedules.length === 0) {
+    console.log("[/api/orders] No future delivery schedules found")
+    return {
+      deliveryDate: null,
+      scheduleId: null,
+      message:
+        "Aktuell sind keine Liefertermine verfügbar. Ihre Bestellung wird gespeichert und dem nächsten verfügbaren Termin zugeordnet.",
+    }
   }
 
+  const today = new Date().toISOString().split("T")[0]
+  const availableSchedule = futureSchedules.find((schedule) => schedule.order_deadline >= today)
+
+  if (!availableSchedule) {
+    console.log("[/api/orders] All order deadlines have passed, no available delivery schedule")
+    return {
+      deliveryDate: null,
+      scheduleId: null,
+      message: "Alle Bestellschlüsse sind vorbei. Aktuell sind keine Liefertermine verfügbar.",
+    }
+  }
+
+  const isNextDelivery = futureSchedules[0].id !== availableSchedule.id
+  const deliveryDateFormatted = new Date(availableSchedule.delivery_date).toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  })
+
+  const message = isNextDelivery
+    ? `Der Bestellschluss für die aktuelle Lieferung ist vorbei. Ihre Südfrüchte-Bestellung wird der nächsten Lieferung am ${deliveryDateFormatted} zugeordnet.`
+    : `Ihre Südfrüchte-Bestellung wird am ${deliveryDateFormatted} geliefert.`
+
+  console.log("[/api/orders] Assigned to delivery schedule:", {
+    scheduleId: availableSchedule.id,
+    deliveryDate: availableSchedule.delivery_date,
+    isNextDelivery,
+  })
+
   return {
-    deliveryDate: nextSchedule.delivery_date,
-    scheduleId: nextSchedule.id,
+    deliveryDate: availableSchedule.delivery_date,
+    scheduleId: availableSchedule.id,
+    message,
   }
 }
 
@@ -196,7 +229,7 @@ export async function POST(request: NextRequest) {
     const shippingCost = orderData.deliveryMethod === "delivery" ? 4.9 : 0
     const total = subtotal + shippingCost
 
-    const { deliveryDate, scheduleId } = await determineDeliveryDate(orderData.items, supabase)
+    const { deliveryDate, scheduleId, message } = await determineDeliveryDate(orderData.items, supabase)
     console.log("[/api/orders] Determined delivery date:", deliveryDate, "Schedule ID:", scheduleId)
 
     const pickupLocationId = await findPickupLocationId(supabase, orderData)
@@ -366,6 +399,7 @@ export async function POST(request: NextRequest) {
         data: {
           order: savedOrder,
           items: itemsResult,
+          message: message,
         },
       },
       { status: 200, headers: { "content-type": "application/json" } },
