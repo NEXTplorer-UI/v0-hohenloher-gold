@@ -21,10 +21,8 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Querying customers table for newsletter subscribers...")
     const { data: subscribers, error: subscribersError } = await supabase
       .from("customers")
-      .select("id, email, created_at, newsletter_subscribed, newsletter_confirmed, newsletter_confirmed_at")
+      .select("id, email, created_at, newsletter_subscribed")
       .eq("newsletter_subscribed", true)
-      .eq("newsletter_confirmed", true)
-      .not("newsletter_confirmed_at", "is", null)
 
     if (subscribersError) {
       console.error("[v0] Error loading subscribers:", subscribersError)
@@ -33,29 +31,37 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Found subscribers:", subscribers?.length || 0)
 
-    // For now, we'll use placeholder data for sent newsletters and open rates
-    // In a real system, you'd track these in separate tables
+    // Calculate stats
     const totalSubscribers = subscribers?.length || 0
-    const newslettersSent = 0 // TODO: Track in newsletter_campaigns table
-    const openRate = 0 // TODO: Track email opens
+
+    // Calculate new subscribers in last 30 days
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const newSubscribers30d = subscribers?.filter((sub) => new Date(sub.created_at) >= thirtyDaysAgo).length || 0
+
+    // Calculate new subscribers in last 7 days
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    const newSubscribers7d = subscribers?.filter((sub) => new Date(sub.created_at) >= sevenDaysAgo).length || 0
 
     console.log("[v0] Newsletter stats loaded successfully:", {
       subscribers: totalSubscribers,
-      sent: newslettersSent,
-      openRate: openRate,
+      new30d: newSubscribers30d,
+      new7d: newSubscribers7d,
     })
 
     const response = {
       subscribers: totalSubscribers,
-      newslettersSent,
-      openRate,
+      newSubscribers30d,
+      newSubscribers7d,
+      newslettersSent: 0, // TODO: Track in newsletter_campaigns table
+      openRate: 0, // TODO: Track email opens
       subscribersList:
         subscribers?.map((sub) => ({
           id: sub.id,
           email: sub.email,
           subscribed_at: sub.created_at,
           source: "website",
-          confirmed_at: sub.newsletter_confirmed_at,
         })) || [],
     }
 

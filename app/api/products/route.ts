@@ -27,21 +27,62 @@ export async function GET() {
     console.log("[v0] Products API called")
     const supabase = createAdminClient()
 
-    const { data: productsWithStock, error: viewError } = await supabase
-      .from("product_availability")
-      .select("*")
+    const { data: products, error: productsError } = await supabase
+      .from("products")
+      .select(
+        `
+        id,
+        name,
+        sku,
+        description,
+        image_url,
+        price,
+        unit,
+        origin,
+        weight_kg,
+        is_active,
+        attributes,
+        created_at,
+        categories!inner (
+          id,
+          name,
+          slug
+        )
+      `,
+      )
+      .eq("is_active", true)
       .order("name", { ascending: true })
 
-    if (viewError) {
-      console.error("[v0] Error loading from product_availability view:", viewError.message)
+    if (productsError) {
+      console.error("[v0] Error loading products:", productsError.message)
       return NextResponse.json({ error: "Failed to load products" }, { status: 500 })
+    }
+
+    const { data: inventory, error: inventoryError } = await supabase
+      .from("inventory_movements")
+      .select("product_id, qty")
+
+    const stockByProduct = new Map<number, number>()
+    if (!inventoryError && inventory) {
+      inventory.forEach((movement: any) => {
+        const current = stockByProduct.get(movement.product_id) || 0
+        stockByProduct.set(movement.product_id, current + movement.qty)
+      })
     }
 
     const nextDelivery = await getNextDeliverySchedule(supabase)
 
-    const enrichedProducts = (productsWithStock || []).map((product: any) => {
-      const currentStock = product.current_stock || 0
-      const isSouthernFruit = product.category === "Südfrüchte"
+    const enrichedProducts = (products || []).map((product: any) => {
+      const currentStock = stockByProduct.get(product.id) || 0
+      const category = product.categories?.name || "Unbekannt"
+      const isSouthernFruit = category === "Südfrüchte"
+
+      // Parse attributes from jsonb
+      const attributes = product.attributes || {}
+      const images = attributes.images || (product.image_url ? [product.image_url] : [])
+      const organic = attributes.organic || false
+      const limitPerPerson = attributes.limit_per_person || null
+      const requiresDeliverySchedule = attributes.requires_delivery_schedule || false
 
       let inStock = currentStock > 0
       let availabilityMessage = null
@@ -51,8 +92,8 @@ export async function GET() {
       if (currentStock < 0) {
         isPreorder = true
         availabilityMessage = "Vorbestellung - Sie werden über den Liefertermin informiert"
-        inStock = true // Allow ordering
-      } else if (isSouthernFruit && product.requires_delivery_schedule && nextDelivery) {
+        inStock = true
+      } else if (isSouthernFruit && requiresDeliverySchedule && nextDelivery) {
         const deliveryDate = new Date(nextDelivery.delivery_date)
         const orderDeadline = new Date(nextDelivery.order_deadline)
         const canOrder = orderDeadline >= new Date()
@@ -73,29 +114,37 @@ export async function GET() {
           availabilityMessage = "Bestellschluss vorbei - nächster Termin folgt"
           inStock = false
         }
-      } else if (isSouthernFruit && product.requires_delivery_schedule && !nextDelivery) {
+      } else if (isSouthernFruit && requiresDeliverySchedule && !nextDelivery) {
         availabilityMessage = currentStock > 0 ? "Auf Lager" : "Keine Liefertermine verfügbar"
         inStock = currentStock > 0
       }
 
       return {
-        id: product.product_id,
+        id: product.id,
         name: product.name,
         sku: product.sku,
         unit: product.unit,
         price: product.price,
-        category: product.category || "Unbekannt",
-        current_stock: currentStock, // Show actual stock including negatives
+        category: category,
+        description: product.description || "",
+        image_url: product.image_url || "/placeholder.svg",
+        images: images,
+        origin: product.origin || "Unbekannt",
+        weight_kg: product.weight_kg || 1.0,
+        organic: organic,
+        limitPerPerson: limitPerPerson,
+        current_stock: currentStock,
         in_stock: inStock,
         availability_message: availabilityMessage,
         next_delivery_date: nextDeliveryDate,
-        is_seasonal: isSouthernFruit,
+        is_seasonal: isSouthernFruit && requiresDeliverySchedule,
         is_preorder: isPreorder,
-        stock_status: product.stock_status,
+        requires_delivery_schedule: requiresDeliverySchedule,
+        created_at: product.created_at,
       }
     })
 
-    console.log(`[v0] Found ${enrichedProducts.length} products from product_availability view`)
+    console.log(`[v0] Found ${enrichedProducts.length} products with full details`)
 
     return NextResponse.json(enrichedProducts, {
       headers: {
