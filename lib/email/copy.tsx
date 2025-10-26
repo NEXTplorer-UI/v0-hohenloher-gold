@@ -16,7 +16,7 @@ export const emailCopy = {
     pickupDate: "Abholtermin:",
     bankDetailsHeading: "Bankverbindung für Überweisung",
     bankRecipient: "Empfänger:",
-    bankRecipientValue: "Stimme und Struktur",
+    bankRecipientValue: "Gerlinde Fink",
     bankIban: "IBAN:",
     bankIbanValue: "DE89 3704 0044 0532 0130 00",
     bankBic: "BIC:",

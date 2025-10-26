@@ -146,6 +146,12 @@ export async function sendOrderConfirmationEmail(orderData: OrderData) {
       email: orderData.email,
     })
 
+    const orderItems = orderData.items.map((item) => ({
+      product_name: item.name,
+      quantity: item.quantity,
+      unit: item.unit,
+    }))
+
     const response = await fetch("/api/send-order-confirmation", {
       method: "POST",
       headers: {
@@ -159,6 +165,7 @@ export async function sendOrderConfirmationEmail(orderData: OrderData) {
         paymentMethod: orderData.paymentMethod,
         deliveryMethod: orderData.deliveryMethod,
         pickupDate: orderData.deliveryMethod === "pickup" ? "15. Dezember 2024" : undefined,
+        orderItems,
       }),
     })
 

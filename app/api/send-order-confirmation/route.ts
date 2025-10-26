@@ -4,7 +4,8 @@ import { EmailService } from "@/lib/email/email-service"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { customerEmail, customerName, orderId, orderTotal, paymentMethod, deliveryMethod, pickupDate } = body
+    const { customerEmail, customerName, orderId, orderTotal, paymentMethod, deliveryMethod, pickupDate, orderItems } =
+      body
 
     if (!customerEmail || !customerName || !orderId || !orderTotal || !paymentMethod) {
       return NextResponse.json(
@@ -18,9 +19,10 @@ export async function POST(request: NextRequest) {
       customerName,
       orderId,
       orderTotal,
-      paymentMethod, // Added paymentMethod parameter
-      deliveryMethod, // Added deliveryMethod parameter
+      paymentMethod,
+      deliveryMethod,
       pickupDate,
+      orderItems,
     )
 
     if (success) {

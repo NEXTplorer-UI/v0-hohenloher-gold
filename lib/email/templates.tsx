@@ -140,9 +140,18 @@ export function pickupReminderContent(vars: TemplateVars, customCopy?: EmailCopy
     
     <div class="highlight-box">
       <h3>${copy.pickupReminder.detailsHeading}</h3>
-      <p><strong>${copy.pickupReminder.orderNumber}</strong> {{orderId}}</p>
-      <p><strong>${copy.pickupReminder.pickupDate}</strong> {{pickupDate}}</p>
-      <p><strong>${copy.pickupReminder.pickupLocation}</strong> {{pickupLocation}}</p>
+      <div class="data-row">
+        <span class="data-label">${copy.pickupReminder.orderNumber}</span>
+        <span class="data-value">{{orderId}}</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">${copy.pickupReminder.pickupDate}</span>
+        <span class="data-value">{{pickupDate}}</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">${copy.pickupReminder.pickupLocation}</span>
+        <span class="data-value">{{pickupLocation}}</span>
+      </div>
     </div>
     
     <p>${copy.pickupReminder.reminder}</p>
@@ -235,7 +244,21 @@ export function distributorApplicationContent(vars: TemplateVars, customCopy?: E
 
 // Newsletter Content
 export function newsletterContent(vars: TemplateVars, customCopy?: EmailCopyType): string {
-  return renderTemplate(String(vars.content || ""), vars)
+  const imageSection = vars.imageUrl
+    ? `<div style="text-align: center; margin: 20px 0;">
+         <img src="${vars.imageUrl}" alt="Newsletter Bild" style="max-width: 100%; height: auto; border-radius: 8px;" />
+       </div>`
+    : ""
+
+  const template = `
+    <h2>{{subject}}</h2>
+    ${imageSection}
+    <div style="line-height: 1.6;">
+      {{content}}
+    </div>
+  `
+
+  return renderTemplate(template, vars)
 }
 
 export function newsletterConfirmationContent(vars: TemplateVars, customCopy?: EmailCopyType): string {

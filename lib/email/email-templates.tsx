@@ -70,7 +70,7 @@ export class EmailTemplates {
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
           <div>
             <strong>Empfänger:</strong><br>
-            Stimme und Struktur
+            Gerlinde Fink
           </div>
           <div>
             <strong>IBAN:</strong><br>

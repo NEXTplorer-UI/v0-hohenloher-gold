@@ -5,9 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Mail, Send, Users, Eye, RefreshCw, TrendingUp } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Mail, Send, Users, Eye, RefreshCw, TrendingUp, ImageIcon } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import NewsletterConfirmationDialog from "./newsletter-confirmation-dialog"
+import { buildEmail } from "@/lib/email/build"
 
 interface NewsletterStats {
   subscribers: number
@@ -24,6 +26,7 @@ interface NewsletterStats {
 export default function NewsletterSystem() {
   const [subject, setSubject] = useState("")
   const [content, setContent] = useState("")
+  const [imageUrl, setImageUrl] = useState("")
   const [stats, setStats] = useState<NewsletterStats>({
     subscribers: 0,
     newslettersSent: 0,
@@ -34,6 +37,8 @@ export default function NewsletterSystem() {
   const [isUpdating, setIsUpdating] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [isSending, setIsSending] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [previewHtml, setPreviewHtml] = useState("")
   const { toast } = useToast()
 
   const loadStats = async () => {
@@ -97,6 +102,7 @@ export default function NewsletterSystem() {
         body: JSON.stringify({
           subject,
           content,
+          imageUrl,
           recipients,
           type: "newsletter",
         }),
@@ -115,6 +121,7 @@ export default function NewsletterSystem() {
       // Reset form
       setSubject("")
       setContent("")
+      setImageUrl("")
       setShowConfirmation(false)
 
       // Reload stats
@@ -129,6 +136,25 @@ export default function NewsletterSystem() {
     } finally {
       setIsSending(false)
     }
+  }
+
+  const handlePreview = () => {
+    if (!subject.trim() || !content.trim()) {
+      toast({
+        title: "Keine Vorschau möglich",
+        description: "Bitte füllen Sie Betreff und Inhalt aus",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const emailResult = buildEmail("newsletter", {
+      subject,
+      content,
+      imageUrl,
+    })
+    setPreviewHtml(emailResult.html)
+    setShowPreview(true)
   }
 
   return (
@@ -183,6 +209,23 @@ export default function NewsletterSystem() {
               />
             </div>
             <div>
+              <label className="text-sm font-medium">Bild-URL (optional)</label>
+              <div className="flex gap-2">
+                <Input
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="https://beispiel.de/bild.jpg"
+                  disabled={isLoading}
+                />
+                <Button variant="outline" size="icon" disabled>
+                  <ImageIcon className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Fügen Sie eine Bild-URL hinzu, um ein Bild im Newsletter anzuzeigen
+              </p>
+            </div>
+            <div>
               <label className="text-sm font-medium">Inhalt</label>
               <Textarea
                 value={content}
@@ -193,7 +236,11 @@ export default function NewsletterSystem() {
               />
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" disabled={isLoading}>
+              <Button
+                variant="outline"
+                disabled={isLoading || !subject.trim() || !content.trim()}
+                onClick={handlePreview}
+              >
                 <Eye className="h-4 w-4 mr-2" />
                 Vorschau
               </Button>
@@ -205,6 +252,16 @@ export default function NewsletterSystem() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Newsletter Vorschau</DialogTitle>
+            <DialogDescription>So wird der Newsletter bei Ihren Kunden aussehen</DialogDescription>
+          </DialogHeader>
+          <div className="border rounded-lg p-4 bg-white" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+        </DialogContent>
+      </Dialog>
 
       <NewsletterConfirmationDialog
         isOpen={showConfirmation}

@@ -6,5 +6,4 @@ export const swrConfig: SWRConfiguration = {
   dedupingInterval: 2000,
   errorRetryCount: 3,
   errorRetryInterval: 5000,
-  // SWR will use default fetcher: (url) => fetch(url).then(r => r.json())
 }

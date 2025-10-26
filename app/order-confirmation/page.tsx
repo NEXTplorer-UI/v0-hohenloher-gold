@@ -235,7 +235,7 @@ function OrderConfirmationContent() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
                         <p className="text-sm text-muted-foreground">Empfänger</p>
-                        <p className="font-medium text-sm sm:text-base">Stimme und Struktur</p>
+                        <p className="font-medium text-sm sm:text-base">Gerlinde Fink</p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">IBAN</p>
@@ -244,6 +244,7 @@ function OrderConfirmationContent() {
                         </p>
                       </div>
                     </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
                         <p className="text-sm text-muted-foreground">BIC</p>
@@ -333,7 +334,7 @@ function OrderConfirmationContent() {
             <p className="text-xs sm:text-sm text-muted-foreground px-4">
               Bei Fragen zu Ihrer Bestellung erreichen Sie uns unter:
               <br />
-              <strong className="text-sm sm:text-base">0157 357 038 64</strong> oder{" "}
+              <strong className="text-sm sm:text-base">0157 3704 0044 0532 0130 00</strong> oder{" "}
               <strong className="break-all">kontakt@suedfruechte-hohenlohe.de</strong>
             </p>
 

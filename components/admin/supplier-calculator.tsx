@@ -82,24 +82,34 @@ export default function SupplierOrderCalculator() {
   const itemsToOrder = supplierOrders.filter((item) => item.totalCost > 0).length
 
   const handleExportOrderList = () => {
-    // Generate CSV export
+    const escapeCSV = (value: string | number): string => {
+      const stringValue = String(value)
+      // Escape double quotes by doubling them and wrap in quotes if contains comma, quote, or newline
+      if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
+        return `"${stringValue.replace(/"/g, '""')}"`
+      }
+      return stringValue
+    }
+
+    // Generate CSV export with properly escaped fields
     const csvContent = [
       ["Produkt", "Kategorie", "Lieferant", "Zu bestellen", "Einzelpreis", "Gesamtpreis"],
       ...supplierOrders
         .filter((item) => item.totalCost > 0)
         .map((item) => [
-          item.product,
-          item.category,
-          item.supplier,
-          item.recommendation,
-          `€${item.unitPrice.toFixed(2)}`,
-          `€${item.totalCost.toFixed(2)}`,
+          escapeCSV(item.product),
+          escapeCSV(item.category),
+          escapeCSV(item.supplier),
+          escapeCSV(item.recommendation),
+          escapeCSV(`€${item.unitPrice.toFixed(2)}`),
+          escapeCSV(`€${item.totalCost.toFixed(2)}`),
         ]),
     ]
       .map((row) => row.join(","))
       .join("\n")
 
-    const blob = new Blob([csvContent], { type: "text/csv" })
+    // Add UTF-8 BOM for proper Excel compatibility with German characters
+    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url

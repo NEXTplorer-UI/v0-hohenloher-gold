@@ -17,24 +17,46 @@ interface DeliverySchedule {
   }>
 }
 
+const fetcher = async (url: string) => {
+  console.log("[v0] Delivery schedules fetcher called for:", url)
+
+  try {
+    const res = await fetch(url)
+
+    if (!res.ok) {
+      console.error("[v0] Delivery schedules API error:", res.status, res.statusText)
+      throw new Error(`API error: ${res.status} ${res.statusText}`)
+    }
+
+    const data = await res.json()
+    console.log("[v0] Delivery schedules fetched successfully:", data?.length || 0, "schedules")
+    return data
+  } catch (error) {
+    console.error("[v0] Delivery schedules fetcher error:", error)
+    throw error
+  }
+}
+
 export function useDeliverySchedulesSWR() {
-  const { data, error, isLoading, mutate } = useSWR<DeliverySchedule[]>("/api/delivery-schedules", {
+  const { data, error, isLoading, mutate } = useSWR<DeliverySchedule[]>("/api/delivery-schedules", fetcher, {
     revalidateOnMount: true,
     dedupingInterval: 30000, // Cache for 30 seconds
   })
 
+  const schedules = Array.isArray(data) ? data : []
+
   return {
-    schedules: data || [],
+    schedules,
     isLoading,
     isError: error,
     refresh: mutate,
     getNextDelivery: () => {
-      if (!data || data.length === 0) return null
+      if (schedules.length === 0) return null
 
       const today = new Date()
       today.setHours(0, 0, 0, 0)
 
-      const futureSchedules = data.filter((schedule) => {
+      const futureSchedules = schedules.filter((schedule) => {
         const deliveryDate = new Date(schedule.delivery_date)
         deliveryDate.setHours(0, 0, 0, 0)
         return deliveryDate >= today

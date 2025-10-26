@@ -58,10 +58,6 @@ export async function createMovementsFromOrder(
 
     console.log(`[v0] Successfully created ${data.length} inventory movements for order ${orderNumber}`)
 
-    await supabaseAdmin.rpc("refresh_product_availability").catch((err: any) => {
-      console.warn("[v0] Could not refresh product_availability view:", err.message)
-    })
-
     return data
   } catch (error) {
     console.error(`[v0] Failed to create inventory movements:`, error)

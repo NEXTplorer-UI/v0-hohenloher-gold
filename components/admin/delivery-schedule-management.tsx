@@ -413,181 +413,183 @@ export default function DeliveryScheduleManagement() {
             </div>
           )}
 
-          {schedules.map((schedule) => (
-            <div key={schedule.id} className="p-4 border rounded-lg hover:shadow-sm transition-shadow">
-              {editingId === schedule.id ? (
-                <div className="space-y-4">
-                  <h3 className="font-semibold">Liefertermin bearbeiten</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor={`edit_delivery_date_${schedule.id}`}>Lieferdatum *</Label>
-                      <Input
-                        id={`edit_delivery_date_${schedule.id}`}
-                        type="date"
-                        value={formData.delivery_date}
-                        onChange={(e) => setFormData({ ...formData, delivery_date: e.target.value })}
-                      />
+          {schedules &&
+            schedules.length > 0 &&
+            schedules.map((schedule) => (
+              <div key={schedule.id} className="p-4 border rounded-lg hover:shadow-sm transition-shadow">
+                {editingId === schedule.id ? (
+                  <div className="space-y-4">
+                    <h3 className="font-semibold">Liefertermin bearbeiten</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor={`edit_delivery_date_${schedule.id}`}>Lieferdatum *</Label>
+                        <Input
+                          id={`edit_delivery_date_${schedule.id}`}
+                          type="date"
+                          value={formData.delivery_date}
+                          onChange={(e) => setFormData({ ...formData, delivery_date: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor={`edit_order_deadline_${schedule.id}`}>Bestellschluss *</Label>
+                        <Input
+                          id={`edit_order_deadline_${schedule.id}`}
+                          type="date"
+                          value={formData.order_deadline}
+                          onChange={(e) => setFormData({ ...formData, order_deadline: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor={`edit_pickup_start_time_${schedule.id}`} className="flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          Abholung von
+                        </Label>
+                        <Input
+                          id={`edit_pickup_start_time_${schedule.id}`}
+                          type="time"
+                          value={formData.pickup_start_time}
+                          onChange={(e) => setFormData({ ...formData, pickup_start_time: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor={`edit_pickup_end_time_${schedule.id}`}>Abholung bis</Label>
+                        <Input
+                          id={`edit_pickup_end_time_${schedule.id}`}
+                          type="time"
+                          value={formData.pickup_end_time}
+                          onChange={(e) => setFormData({ ...formData, pickup_end_time: e.target.value })}
+                        />
+                      </div>
                     </div>
                     <div>
-                      <Label htmlFor={`edit_order_deadline_${schedule.id}`}>Bestellschluss *</Label>
-                      <Input
-                        id={`edit_order_deadline_${schedule.id}`}
-                        type="date"
-                        value={formData.order_deadline}
-                        onChange={(e) => setFormData({ ...formData, order_deadline: e.target.value })}
-                      />
+                      <Label>Verfügbare Produkte auswählen *</Label>
+                      <div className="mt-2 mb-3">
+                        <select
+                          value={selectedCategory}
+                          onChange={(e) => setSelectedCategory(e.target.value)}
+                          className="w-full p-2 border rounded text-sm"
+                        >
+                          <option value="all">Alle Kategorien</option>
+                          {categories.map((cat) => (
+                            <option key={cat.id} value={cat.id.toString()}>
+                              {cat.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="mt-2 max-h-60 overflow-y-auto border rounded-lg p-3 space-y-2">
+                        {filteredProducts.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">Keine Produkte in dieser Kategorie</p>
+                        ) : (
+                          filteredProducts.map((product) => (
+                            <div key={product.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`edit-product-${product.id}`}
+                                checked={formData.selectedProductIds.includes(product.id)}
+                                onCheckedChange={() => toggleProduct(product.id)}
+                              />
+                              <label
+                                htmlFor={`edit-product-${product.id}`}
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                              >
+                                {product.name}
+                                {product.categories && (
+                                  <span className="text-muted-foreground ml-2">({product.categories.name})</span>
+                                )}
+                              </label>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formData.selectedProductIds.length} Produkt(e) ausgewählt
+                      </p>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor={`edit_pickup_start_time_${schedule.id}`} className="flex items-center gap-2">
-                        <Clock className="h-4 w-4" />
-                        Abholung von
-                      </Label>
-                      <Input
-                        id={`edit_pickup_start_time_${schedule.id}`}
-                        type="time"
-                        value={formData.pickup_start_time}
-                        onChange={(e) => setFormData({ ...formData, pickup_start_time: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor={`edit_pickup_end_time_${schedule.id}`}>Abholung bis</Label>
-                      <Input
-                        id={`edit_pickup_end_time_${schedule.id}`}
-                        type="time"
-                        value={formData.pickup_end_time}
-                        onChange={(e) => setFormData({ ...formData, pickup_end_time: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label>Verfügbare Produkte auswählen *</Label>
-                    <div className="mt-2 mb-3">
+                      <Label htmlFor={`edit_status_${schedule.id}`}>Status</Label>
                       <select
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="w-full p-2 border rounded text-sm"
+                        id={`edit_status_${schedule.id}`}
+                        value={formData.status}
+                        onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                        className="w-full p-2 border rounded"
                       >
-                        <option value="all">Alle Kategorien</option>
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.id.toString()}>
-                            {cat.name}
-                          </option>
-                        ))}
+                        <option value="planned">Geplant</option>
+                        <option value="confirmed">Bestätigt</option>
+                        <option value="completed">Abgeschlossen</option>
+                        <option value="cancelled">Abgesagt</option>
                       </select>
                     </div>
-                    <div className="mt-2 max-h-60 overflow-y-auto border rounded-lg p-3 space-y-2">
-                      {filteredProducts.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Keine Produkte in dieser Kategorie</p>
-                      ) : (
-                        filteredProducts.map((product) => (
-                          <div key={product.id} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`edit-product-${product.id}`}
-                              checked={formData.selectedProductIds.includes(product.id)}
-                              onCheckedChange={() => toggleProduct(product.id)}
-                            />
-                            <label
-                              htmlFor={`edit-product-${product.id}`}
-                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                            >
-                              {product.name}
-                              {product.categories && (
-                                <span className="text-muted-foreground ml-2">({product.categories.name})</span>
-                              )}
-                            </label>
-                          </div>
-                        ))
-                      )}
+                    <div>
+                      <Label htmlFor={`edit_notes_${schedule.id}`}>Notizen</Label>
+                      <Input
+                        id={`edit_notes_${schedule.id}`}
+                        placeholder="Optionale Notizen zum Liefertermin"
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {formData.selectedProductIds.length} Produkt(e) ausgewählt
-                    </p>
-                  </div>
-                  <div>
-                    <Label htmlFor={`edit_status_${schedule.id}`}>Status</Label>
-                    <select
-                      id={`edit_status_${schedule.id}`}
-                      value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                      className="w-full p-2 border rounded"
-                    >
-                      <option value="planned">Geplant</option>
-                      <option value="confirmed">Bestätigt</option>
-                      <option value="completed">Abgeschlossen</option>
-                      <option value="cancelled">Abgesagt</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor={`edit_notes_${schedule.id}`}>Notizen</Label>
-                    <Input
-                      id={`edit_notes_${schedule.id}`}
-                      placeholder="Optionale Notizen zum Liefertermin"
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button onClick={handleSave} size="sm" disabled={formData.selectedProductIds.length === 0}>
-                      <Check className="h-4 w-4 mr-2" />
-                      Speichern
-                    </Button>
-                    <Button onClick={handleCancel} variant="outline" size="sm">
-                      <X className="h-4 w-4 mr-2" />
-                      Abbrechen
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-semibold text-lg">{formatDate(schedule.delivery_date)}</h3>
-                      {getStatusBadge(schedule.status)}
-                      {isDeadlinePassed(schedule.order_deadline) && schedule.status !== "completed" && (
-                        <Badge variant="outline" className="text-xs text-amber-600 border-amber-600">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          Bestellschluss vorbei
-                        </Badge>
-                      )}
+                    <div className="flex gap-2">
+                      <Button onClick={handleSave} size="sm" disabled={formData.selectedProductIds.length === 0}>
+                        <Check className="h-4 w-4 mr-2" />
+                        Speichern
+                      </Button>
+                      <Button onClick={handleCancel} variant="outline" size="sm">
+                        <X className="h-4 w-4 mr-2" />
+                        Abbrechen
+                      </Button>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      <p>
-                        <strong>Bestellschluss:</strong> {formatDate(schedule.order_deadline)}
-                      </p>
-                      {formatTimeRange(schedule.pickup_start_time, schedule.pickup_end_time) && (
-                        <p className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          <strong>Abholzeit:</strong>{" "}
-                          {formatTimeRange(schedule.pickup_start_time, schedule.pickup_end_time)}
-                        </p>
-                      )}
-                      <p>
-                        <strong>Verfügbare Produkte:</strong>{" "}
-                        {schedule.products && schedule.products.length > 0
-                          ? schedule.products.map((p) => p.name).join(", ")
-                          : "Keine Produkte zugeordnet"}
-                      </p>
-                      {schedule.notes && (
+                  </div>
+                ) : (
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <h3 className="font-semibold text-lg">{formatDate(schedule.delivery_date)}</h3>
+                        {getStatusBadge(schedule.status)}
+                        {isDeadlinePassed(schedule.order_deadline) && schedule.status !== "completed" && (
+                          <Badge variant="outline" className="text-xs text-amber-600 border-amber-600">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            Bestellschluss vorbei
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
                         <p>
-                          <strong>Notizen:</strong> {schedule.notes}
+                          <strong>Bestellschluss:</strong> {formatDate(schedule.order_deadline)}
                         </p>
-                      )}
+                        {formatTimeRange(schedule.pickup_start_time, schedule.pickup_end_time) && (
+                          <p className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            <strong>Abholzeit:</strong>{" "}
+                            {formatTimeRange(schedule.pickup_start_time, schedule.pickup_end_time)}
+                          </p>
+                        )}
+                        <p>
+                          <strong>Verfügbare Produkte:</strong>{" "}
+                          {schedule.products && schedule.products.length > 0
+                            ? schedule.products.map((p) => p.name).join(", ")
+                            : "Keine Produkte zugeordnet"}
+                        </p>
+                        {schedule.notes && (
+                          <p>
+                            <strong>Notizen:</strong> {schedule.notes}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={() => handleEdit(schedule)} variant="outline" size="sm">
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button onClick={() => handleDelete(schedule.id)} variant="outline" size="sm">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button onClick={() => handleEdit(schedule)} variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button onClick={() => handleDelete(schedule.id)} variant="outline" size="sm">
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            ))}
         </div>
       </CardContent>
     </Card>

@@ -40,10 +40,6 @@ export async function POST(request: NextRequest) {
       console.log(`[v0] Calculated new stock for product ${productId}: ${newStock}`)
     }
 
-    await supabase.rpc("refresh_product_availability").catch((err: any) => {
-      console.warn("[v0] Could not refresh product_availability view:", err.message)
-    })
-
     return NextResponse.json({
       success: true,
       data: movement,

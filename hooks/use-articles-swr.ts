@@ -17,22 +17,43 @@ interface Article {
   updated_at: string
 }
 
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+
+  // If response is not OK, throw a descriptive error
+  if (!res.ok) {
+    const error = new Error(`API error: ${res.status} ${res.statusText}`)
+    console.error("[v0] Articles fetcher error:", error)
+    throw error
+  }
+
+  // Parse JSON safely
+  try {
+    return await res.json()
+  } catch (e) {
+    console.error("[v0] Articles JSON parse error:", e)
+    throw new Error("Invalid JSON response from articles API")
+  }
+}
+
 export function useArticlesSWR() {
-  const { data, error, isLoading, mutate } = useSWR<Article[]>("/api/articles", {
+  const { data, error, isLoading, mutate } = useSWR<Article[]>("/api/articles", fetcher, {
     revalidateOnMount: true,
     dedupingInterval: 60000, // Cache for 1 minute
   })
 
+  const articles = Array.isArray(data) ? data : []
+
   return {
-    articles: data || [],
+    articles,
     isLoading,
     isError: error,
     refresh: mutate,
     getFeaturedArticle: () => {
-      return (data || []).find((article) => article.featured && article.status === "published")
+      return articles.find((article) => article.featured && article.status === "published")
     },
     getPublishedArticles: () => {
-      return (data || []).filter((article) => article.status === "published")
+      return articles.filter((article) => article.status === "published")
     },
   }
 }

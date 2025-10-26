@@ -432,62 +432,62 @@ export default function ContentManagementSystem() {
           </div>
 
           <div className="space-y-4">
-            {articles.map((article) => (
-              <Card key={article.id} className={`p-4 ${article.featured ? "border-yellow-400 bg-yellow-50" : ""}`}>
-                <div className="flex items-start justify-between">
-                  <div className="space-y-2 flex-1">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{article.title}</span>
-                      {article.featured && <Star className="h-4 w-4 text-yellow-500 fill-current" />}
-                      <Badge
-                        variant={
-                          article.status === "published"
-                            ? "default"
+            {articles && articles.length > 0 ? (
+              articles.map((article) => (
+                <Card key={article.id} className={`p-4 ${article.featured ? "border-yellow-400 bg-yellow-50" : ""}`}>
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-2 flex-1">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{article.title}</span>
+                        {article.featured && <Star className="h-4 w-4 text-yellow-500 fill-current" />}
+                        <Badge
+                          variant={
+                            article.status === "published"
+                              ? "default"
+                              : article.status === "draft"
+                                ? "secondary"
+                                : "outline"
+                          }
+                        >
+                          {article.status === "published"
+                            ? "Veröffentlicht"
                             : article.status === "draft"
-                              ? "secondary"
-                              : "outline"
-                        }
-                      >
-                        {article.status === "published"
-                          ? "Veröffentlicht"
-                          : article.status === "draft"
-                            ? "Entwurf"
-                            : "Archiviert"}
-                      </Badge>
-                      <Badge variant="outline">{article.category === "article" ? "Artikel" : "Rezept"}</Badge>
-                    </div>
-                    <div className="text-xs text-muted-foreground font-mono">/{article.slug}</div>
-                    <div className="text-sm text-muted-foreground">
-                      Von {article.author} • Erstellt: {new Date(article.created_at).toLocaleDateString("de-DE")}
-                      {article.published_at && article.status === "published" && (
-                        <> • Veröffentlicht: {new Date(article.published_at).toLocaleDateString("de-DE")}</>
+                              ? "Entwurf"
+                              : "Archiviert"}
+                        </Badge>
+                        <Badge variant="outline">{article.category === "article" ? "Artikel" : "Rezept"}</Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground font-mono">/{article.slug}</div>
+                      <div className="text-sm text-muted-foreground">
+                        Von {article.author} • Erstellt: {new Date(article.created_at).toLocaleDateString("de-DE")}
+                        {article.published_at && article.status === "published" && (
+                          <> • Veröffentlicht: {new Date(article.published_at).toLocaleDateString("de-DE")}</>
+                        )}
+                      </div>
+                      {article.excerpt && <p className="text-sm text-muted-foreground">{article.excerpt}</p>}
+                      {article.image_url && (
+                        <img
+                          src={article.image_url || "/placeholder.svg"}
+                          alt={article.title}
+                          className="w-24 h-24 object-cover rounded mt-2"
+                        />
                       )}
                     </div>
-                    {article.excerpt && <p className="text-sm text-muted-foreground">{article.excerpt}</p>}
-                    {article.image_url && (
-                      <img
-                        src={article.image_url || "/placeholder.svg"}
-                        alt={article.title}
-                        className="w-24 h-24 object-cover rounded mt-2"
-                      />
-                    )}
+                    <div className="flex items-center gap-2 ml-4">
+                      <Button size="sm" variant="outline" onClick={() => startEdit(article)}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Bearbeiten
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => deleteArticle(article.id)}>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Löschen
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 ml-4">
-                    <Button size="sm" variant="outline" onClick={() => startEdit(article)}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Bearbeiten
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => deleteArticle(article.id)}>
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Löschen
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            ))}
-
-            {articles.length === 0 && (
+                </Card>
+              ))
+            ) : (
               <div className="text-center py-8 text-muted-foreground">
                 Noch keine Artikel vorhanden. Erstellen Sie Ihren ersten Artikel!
               </div>

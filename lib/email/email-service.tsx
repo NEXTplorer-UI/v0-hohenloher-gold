@@ -95,6 +95,7 @@ export class EmailService {
     paymentMethod: string,
     deliveryMethod?: string,
     pickupDate?: string,
+    orderItems?: Array<{ product_name: string; quantity: number; unit?: string }>,
   ): Promise<boolean> {
     const emailData: EmailData = {
       to: customerEmail,
@@ -106,6 +107,7 @@ export class EmailService {
         paymentMethod,
         deliveryMethod,
         pickupDate,
+        orderItems,
       ),
     }
 
@@ -173,6 +175,7 @@ export class EmailService {
     paymentMethod: string,
     deliveryMethod?: string,
     pickupDate?: string,
+    orderItems?: Array<{ product_name: string; quantity: number; unit?: string }>,
   ): string {
     const paymentMethodText =
       paymentMethod === "transfer"
@@ -191,7 +194,7 @@ export class EmailService {
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
           <div>
             <strong>Empfänger:</strong><br>
-            Stimme und Struktur
+            Gerlinde Fink
           </div>
           <div>
             <strong>IBAN:</strong><br>
@@ -227,6 +230,25 @@ export class EmailService {
     `
         : ""
 
+    const orderItemsSection =
+      orderItems && orderItems.length > 0
+        ? `
+      <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="color: #a16207; margin-top: 0;">Bestellte Artikel:</h3>
+        ${orderItems
+          .map(
+            (item) => `
+          <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+            <span style="font-weight: 500;">${item.product_name}</span>
+            <span>${item.quantity} ${item.unit || "Stück"}</span>
+          </div>
+        `,
+          )
+          .join("")}
+      </div>
+    `
+        : ""
+
     return `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #a16207 0%, #d97706 100%); color: white; padding: 20px; text-align: center;">
@@ -247,6 +269,7 @@ export class EmailService {
             ${pickupDate ? `<p><strong>Abholtermin:</strong> ${pickupDate}</p>` : ""}
           </div>
           
+          ${orderItemsSection}
           ${bankDetailsSection}
           ${shippingNotice}
           
