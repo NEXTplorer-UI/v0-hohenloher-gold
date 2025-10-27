@@ -52,8 +52,8 @@ const nextConfig = {
 
     const sumupCSP = [
       "script-src https://gateway.sumup.com https://js.sumup.com",
-      "connect-src https://gateway.sumup.com https://api.sumup.com https://js.sumup.com https://*.sumup.com",
-      "frame-src https://gateway.sumup.com",
+      "connect-src https://gateway.sumup.com https://api.sumup.com https://js.sumup.com https://*.sumup.com https://cdn.optimizely.com https://*.optimizely.com",
+      "frame-src https://gateway.sumup.com https://api.sumup.com https://*.sumup.com",
       "img-src https://static.sumup.com",
     ].join("; ")
 
