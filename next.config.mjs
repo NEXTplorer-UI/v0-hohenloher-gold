@@ -51,16 +51,16 @@ const nextConfig = {
     ].join("; ")
 
     const sumupCSP = [
-      "script-src https://gateway.sumup.com",
-      "connect-src https://gateway.sumup.com https://api.sumup.com",
+      "script-src https://gateway.sumup.com https://js.sumup.com",
+      "connect-src https://gateway.sumup.com https://api.sumup.com https://js.sumup.com https://*.sumup.com",
       "frame-src https://gateway.sumup.com",
       "img-src https://static.sumup.com",
     ].join("; ")
 
     const cardVerificationCSP = [
-      "frame-src https://*.mycardplace.com https://*.3dsecure.io https://*.mastercard.com https://*.visa.com https://*.ppipe.net",
-      "connect-src https://*.mycardplace.com https://*.3dsecure.io https://*.mastercard.com https://*.visa.com https://*.ppipe.net",
-      "script-src https://*.mycardplace.com https://*.3dsecure.io https://*.ppipe.net",
+      "frame-src https://*.mycardplace.com https://*.3dsecure.io https://*.mastercard.com https://*.visa.com https://*.ppipe.net https://oppwa.com https://*.oppwa.com",
+      "connect-src https://*.mycardplace.com https://*.3dsecure.io https://*.mastercard.com https://*.visa.com https://*.ppipe.net https://oppwa.com https://*.oppwa.com",
+      "script-src https://*.mycardplace.com https://*.3dsecure.io https://*.ppipe.net https://oppwa.com https://*.oppwa.com",
     ].join("; ")
 
     let finalCSP = mergeCsp(baseCSP, sumupCSP)
