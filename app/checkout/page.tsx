@@ -1066,6 +1066,11 @@ export default function CheckoutPage() {
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
                       />
+                      <div className="mt-2 text-right">
+                        <Link href="/customer/forgot-password" className="text-sm text-primary hover:underline">
+                          Passwort vergessen?
+                        </Link>
+                      </div>
                     </div>
                     <Button onClick={handleLogin} className="w-full">
                       Anmelden
