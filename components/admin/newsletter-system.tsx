@@ -1,12 +1,14 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Mail, Send, Users, Eye, RefreshCw, TrendingUp, ImageIcon } from "lucide-react"
+import { Mail, Send, Users, Eye, RefreshCw, TrendingUp, ImageIcon, Paperclip, X, Upload } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import NewsletterConfirmationDialog from "./newsletter-confirmation-dialog"
 import { buildEmail } from "@/lib/email/build"
@@ -23,10 +25,19 @@ interface NewsletterStats {
   }>
 }
 
+interface Attachment {
+  filename: string
+  url: string
+  size: number
+  type: string
+}
+
 export default function NewsletterSystem() {
   const [subject, setSubject] = useState("")
   const [content, setContent] = useState("")
   const [imageUrl, setImageUrl] = useState("")
+  const [attachment, setAttachment] = useState<Attachment | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
   const [stats, setStats] = useState<NewsletterStats>({
     subscribers: 0,
     newslettersSent: 0,
@@ -67,6 +78,91 @@ export default function NewsletterSystem() {
     loadStats()
   }, [])
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file size (max 25MB for email attachments)
+    const maxSize = 25 * 1024 * 1024 // 25MB
+    if (file.size > maxSize) {
+      toast({
+        title: "Datei zu groß",
+        description: "Die Datei darf maximal 25MB groß sein",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate file type
+    const allowedTypes = [
+      "audio/mpeg",
+      "audio/wav",
+      "audio/mp3",
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/jpg",
+      "application/zip",
+    ]
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: "Ungültiger Dateityp",
+        description: "Erlaubte Formate: MP3, WAV, PDF, JPG, PNG, ZIP",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const response = await fetch("/api/upload-attachment", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) throw new Error("Upload failed")
+
+      const data = await response.json()
+      setAttachment({
+        filename: data.filename,
+        url: data.url,
+        size: data.size,
+        type: data.type,
+      })
+
+      toast({
+        title: "Datei hochgeladen",
+        description: `${data.filename} wurde erfolgreich hochgeladen`,
+      })
+    } catch (error) {
+      console.error("[v0] Error uploading file:", error)
+      toast({
+        title: "Upload fehlgeschlagen",
+        description: "Die Datei konnte nicht hochgeladen werden",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handleRemoveAttachment = () => {
+    setAttachment(null)
+    toast({
+      title: "Anhang entfernt",
+      description: "Der Anhang wurde entfernt",
+    })
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + " B"
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB"
+  }
+
   const handleSendNewsletter = async () => {
     if (!subject.trim() || !content.trim()) {
       toast({
@@ -103,6 +199,7 @@ export default function NewsletterSystem() {
           subject,
           content,
           imageUrl,
+          attachment, // Include attachment data
           recipients,
           type: "newsletter",
         }),
@@ -122,6 +219,7 @@ export default function NewsletterSystem() {
       setSubject("")
       setContent("")
       setImageUrl("")
+      setAttachment(null) // Reset attachment
       setShowConfirmation(false)
 
       // Reload stats
@@ -225,6 +323,39 @@ export default function NewsletterSystem() {
                 Fügen Sie eine Bild-URL hinzu, um ein Bild im Newsletter anzuzeigen
               </p>
             </div>
+
+            <div>
+              <label className="text-sm font-medium">Anhang (optional)</label>
+              {!attachment ? (
+                <div className="flex gap-2">
+                  <Input
+                    type="file"
+                    accept=".mp3,.wav,.pdf,.jpg,.jpeg,.png,.zip"
+                    onChange={handleFileUpload}
+                    disabled={isUploading || isLoading}
+                    className="cursor-pointer"
+                  />
+                  <Button variant="outline" size="icon" disabled={isUploading}>
+                    {isUploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted">
+                  <Paperclip className="h-4 w-4 text-muted-foreground" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{attachment.filename}</p>
+                    <p className="text-xs text-muted-foreground">{formatFileSize(attachment.size)}</p>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={handleRemoveAttachment}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                Erlaubte Formate: MP3, WAV, PDF, JPG, PNG, ZIP (max. 25MB)
+              </p>
+            </div>
+
             <div>
               <label className="text-sm font-medium">Inhalt</label>
               <Textarea
