@@ -21,7 +21,10 @@ export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions
   } = options
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://hohenloher-gold.de"
-  const logoUrl = process.env.NEXT_PUBLIC_LOGO_URL || `${siteUrl}/suedfruechte-hohenlohe-logo.png`
+  const logoUrl =
+    process.env.NEXT_PUBLIC_NEWS_LOGO_URL ||
+    process.env.NEXT_PUBLIC_LOGO_URL ||
+    `${siteUrl}/suedfruechte-hohenlohe-logo.png`
 
   const unsubscribeLink = unsubscribeEmail
     ? `<p style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #4a5568;">

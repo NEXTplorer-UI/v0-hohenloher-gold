@@ -67,7 +67,7 @@ export const metadata: Metadata = {
     siteName: "Hohenloher Gold",
     images: [
       {
-        url: "/logo-hohenloher-gold.png",
+        url: process.env.NEXT_PUBLIC_LOGO_URL || "/placeholder.svg?height=630&width=1200",
         width: 1200,
         height: 630,
         alt: "Hohenloher Gold Logo",
@@ -80,7 +80,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Hohenloher Gold - Regionale Lebensmittel & Sizilianische Südfrüchte",
     description: "Hochwertige, unbehandelte Lebensmittel aus Hohenlohe und frische Südfrüchte direkt aus Sizilien.",
-    images: ["/logo-hohenloher-gold.png"],
+    images: [process.env.NEXT_PUBLIC_LOGO_URL || "/placeholder.svg?height=630&width=1200"],
   },
   robots: {
     index: true,
@@ -118,7 +118,7 @@ export default function RootLayout({
               description:
                 "Hochwertige, unbehandelte Lebensmittel aus Hohenlohe und frische Südfrüchte direkt aus Sizilien",
               url: "https://hohenloher-gold.de",
-              logo: "https://hohenloher-gold.de/logo-hohenloher-gold.png",
+              logo: process.env.NEXT_PUBLIC_LOGO_URL || "https://hohenloher-gold.de/placeholder.svg",
               contactPoint: {
                 "@type": "ContactPoint",
                 telephone: "+49-xxx-xxxxxxx",

@@ -338,6 +338,41 @@ export default function ShopPage() {
     return groupProductsByBaseName(sortedProducts)
   }, [sortedProducts])
 
+  useEffect(() => {
+    const newSelectedSizes = new Map(selectedSizes)
+    let hasChanges = false
+
+    productGroups.forEach((variants, baseName) => {
+      if (variants.length <= 1) return // Skip single-variant products
+
+      const currentIndex = selectedSizes.get(baseName) ?? 0
+      const currentVariant = variants[currentIndex]
+
+      // Check if current variant is out of stock or unavailable
+      const availability = getProductStatus(currentVariant)
+      const isUnavailable =
+        !currentVariant.in_stock || availability.status === "out-of-stock" || availability.status === "deadline-passed"
+
+      if (isUnavailable) {
+        // Find first available variant
+        const firstAvailableIndex = variants.findIndex((v) => {
+          const vAvailability = getProductStatus(v)
+          return v.in_stock && vAvailability.status !== "out-of-stock" && vAvailability.status !== "deadline-passed"
+        })
+
+        if (firstAvailableIndex !== -1 && firstAvailableIndex !== currentIndex) {
+          console.log(`[v0] Auto-selecting available variant for ${baseName}: ${variants[firstAvailableIndex].name}`)
+          newSelectedSizes.set(baseName, firstAvailableIndex)
+          hasChanges = true
+        }
+      }
+    })
+
+    if (hasChanges) {
+      setSelectedSizes(newSelectedSizes)
+    }
+  }, [productGroups, cart?.items]) // Re-run when products or cart changes
+
   const getSelectedVariant = (baseName: string, variants: any[]) => {
     const selectedIndex = selectedSizes.get(baseName) || 0
     return variants[selectedIndex] || variants[0]
@@ -378,7 +413,7 @@ export default function ShopPage() {
         <div className="container mx-auto px-4 py-8">
           <div className="text-center py-12">
             <h2 className="text-2xl font-bold text-destructive mb-4">Fehler beim Laden der Produkte</h2>
-            <p className="text-muted-foreground">{error || schedulesError}</p>
+            <p className="text-sm text-muted-foreground">{error || schedulesError}</p>
           </div>
         </div>
       </div>
@@ -720,6 +755,18 @@ function ProductCard({
   const canAddToCart =
     product.in_stock && availability.status !== "out-of-stock" && availability.status !== "deadline-passed"
 
+  const imageUrl = product.image_url || product.images?.[0] || "/images/banana-chips-placeholder.jpg"
+
+  // Log products without images to help debug
+  if (!product.image_url && (!product.images || product.images.length === 0)) {
+    console.log("[v0] Product without image:", {
+      name: product.name,
+      image_url: product.image_url,
+      images: product.images,
+      fallbackUsed: imageUrl,
+    })
+  }
+
   return (
     <Card className="h-full flex flex-col hover:shadow-lg transition-shadow bg-accent/10 border border-accent/20">
       <CardHeader className="pb-2">
@@ -729,10 +776,17 @@ function ProductCard({
           onClick={() => onSelect(product)}
         >
           <img
-            src={product.image_url || product.images?.[0] || "/placeholder.svg"}
+            src={imageUrl || "/placeholder.svg"}
             alt={product.name}
             className="w-full h-full object-cover hover:scale-105 transition-transform"
             loading="lazy"
+            onError={(e) => {
+              console.log("[v0] Image failed to load:", {
+                name: product.name,
+                src: imageUrl,
+                error: e,
+              })
+            }}
           />
         </div>
 
