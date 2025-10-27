@@ -120,11 +120,22 @@ export class EmailService {
     orderId: string,
     pickupDate: string,
     pickupLocation: string,
+    paymentMethod: string,
+    orderItems?: Array<{ product_name: string; quantity: number; unit?: string }>,
   ): Promise<boolean> {
+    const html = buildEmail("pickupReminder", {
+      customerName,
+      orderId,
+      pickupDate,
+      pickupLocation,
+      paymentMethod,
+      orderItems,
+    })
+
     const emailData: EmailData = {
       to: customerEmail,
-      subject: `Erinnerung: Abholung Ihrer Bestellung ${orderId} - Südfrüchte Hohenlohe`,
-      html: this.getPickupReminderTemplate(customerName, orderId, pickupDate, pickupLocation),
+      subject: `Erinnerung: Abholung Ihrer Bestellung ${orderId} in 3 Tagen - Südfrüchte Hohenlohe`,
+      html,
     }
 
     return await this.sendEmail(emailData)
@@ -328,3 +339,5 @@ export class EmailService {
     `
   }
 }
+
+import { buildEmail } from "./build"

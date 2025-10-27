@@ -78,6 +78,10 @@ export async function GET() {
 
     const nextDelivery = await getNextDeliverySchedule(supabase)
 
+    const localImageProducts: string[] = []
+    const supabaseImageProducts: string[] = []
+    const noImageProducts: string[] = []
+
     const enrichedProducts = (products || []).map((product: any) => {
       const currentStock = stockByProduct.get(product.id) || 0
       const category = product.categories?.name || "Unbekannt"
@@ -92,6 +96,14 @@ export async function GET() {
       const organic = attributes.organic || false
       const limitPerPerson = attributes.limit_per_person || null
       const requiresDeliverySchedule = attributes.requires_delivery_schedule || false
+
+      if (!product.image_url || product.image_url === "/placeholder.svg") {
+        noImageProducts.push(product.name)
+      } else if (product.image_url.startsWith("http")) {
+        supabaseImageProducts.push(product.name)
+      } else {
+        localImageProducts.push(product.name)
+      }
 
       let inStock = currentStock > 0
       let availabilityMessage = null
@@ -152,6 +164,16 @@ export async function GET() {
         created_at: product.created_at,
       }
     })
+
+    console.log(`[v0] Image URL Statistics:`)
+    console.log(`[v0] - Products with Supabase URLs: ${supabaseImageProducts.length}`)
+    console.log(`[v0] - Products with local paths: ${localImageProducts.length}`)
+    console.log(`[v0] - Products without images: ${noImageProducts.length}`)
+
+    if (localImageProducts.length > 0) {
+      console.log(`[v0] Products using LOCAL image paths (need to be updated to Supabase):`)
+      localImageProducts.forEach((name) => console.log(`[v0]   - ${name}`))
+    }
 
     console.log(`[v0] Found ${enrichedProducts.length} products with full details`)
 

@@ -134,6 +134,27 @@ export function invoiceContent(vars: TemplateVars, customCopy?: EmailCopyType): 
 export function pickupReminderContent(vars: TemplateVars, customCopy?: EmailCopyType): string {
   const copy = customCopy || emailCopy
 
+  const paymentMethodText =
+    vars.paymentMethod === "transfer"
+      ? "Überweisung"
+      : vars.paymentMethod === "cash"
+        ? "Barzahlung bei Abholung"
+        : vars.paymentMethod === "card"
+          ? "Kartenzahlung"
+          : "Unbekannt"
+
+  const itemsList = vars.orderItems
+    ? (vars.orderItems as any[])
+        .map(
+          (item) =>
+            `<div class="data-row">
+          <span class="data-label">${item.product_name}</span>
+          <span class="data-value">${item.quantity} ${item.unit || "Stück"}</span>
+        </div>`,
+        )
+        .join("")
+    : ""
+
   const template = `
     <h2>${copy.pickupReminder.greeting}</h2>
     <p>${copy.pickupReminder.intro}</p>
@@ -152,7 +173,13 @@ export function pickupReminderContent(vars: TemplateVars, customCopy?: EmailCopy
         <span class="data-label">${copy.pickupReminder.pickupLocation}</span>
         <span class="data-value">{{pickupLocation}}</span>
       </div>
+      <div class="data-row">
+        <span class="data-label">Zahlungsmethode</span>
+        <span class="data-value">${paymentMethodText}</span>
+      </div>
     </div>
+    
+    ${itemsList ? `<div class="data-section"><h3>Ihre Bestellung:</h3>${itemsList}</div>` : ""}
     
     <p>${copy.pickupReminder.reminder}</p>
     <p>${copy.pickupReminder.outro}</p>

@@ -212,7 +212,6 @@ export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions
       
       <div class="email-footer">
         <p><strong>Südfrüchte Hohenlohe</strong></p>
-        <p>Süßfrüchte aus Sizilien und Hohenlohe</p>
         <p>Weststraße 28 | 74629 Pfedelbach</p>
         <p>
           <a href="mailto:kontakt@suedfruechte-hohenlohe.de">kontakt@suedfruechte-hohenlohe.de</a> | 
