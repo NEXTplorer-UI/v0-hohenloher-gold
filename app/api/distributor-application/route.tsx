@@ -224,6 +224,12 @@ export async function POST(request: NextRequest) {
       newsletterSignup: data.newsletterSignup,
     })
 
+    const emailResults = {
+      adminSent: false,
+      applicantSent: false,
+      errors: [] as string[],
+    }
+
     try {
       await EmailService.sendEmail({
         to: ADMIN_EMAIL,
@@ -231,9 +237,11 @@ export async function POST(request: NextRequest) {
         html: adminEmail.html,
       })
       console.log("[v0] [distributor-application] Admin email sent successfully")
+      emailResults.adminSent = true
     } catch (adminEmailError) {
-      console.error("[v0] [distributor-application] Failed to send admin email:", adminEmailError)
-      // Continue to send applicant email even if admin email fails
+      const errorMsg = adminEmailError instanceof Error ? adminEmailError.message : String(adminEmailError)
+      console.error("[v0] [distributor-application] Failed to send admin email:", errorMsg)
+      emailResults.errors.push(`Admin-E-Mail: ${errorMsg}`)
     }
 
     const applicantEmail = buildEmail("distributorApplication", {
@@ -258,9 +266,11 @@ export async function POST(request: NextRequest) {
         html: applicantEmail.html,
       })
       console.log("[v0] [distributor-application] Applicant email sent successfully")
+      emailResults.applicantSent = true
     } catch (applicantEmailError) {
-      console.error("[v0] [distributor-application] Failed to send applicant email:", applicantEmailError)
-      // Don't fail the entire request if applicant email fails
+      const errorMsg = applicantEmailError instanceof Error ? applicantEmailError.message : String(applicantEmailError)
+      console.error("[v0] [distributor-application] Failed to send applicant email:", errorMsg)
+      emailResults.errors.push(`Bestätigungs-E-Mail: ${errorMsg}`)
     }
 
     if (ENABLE_DB_LOG) {
@@ -289,6 +299,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (emailResults.errors.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Ihre Bewerbung wurde gespeichert, aber es gab Probleme beim E-Mail-Versand.",
+          details: {
+            adminEmailSent: emailResults.adminSent,
+            applicantEmailSent: emailResults.applicantSent,
+            errors: emailResults.errors,
+          },
+        },
+        { status: 207 }, // 207 Multi-Status
+      )
+    }
+
     return NextResponse.json({
       success: true,
       message: "Vielen Dank! Wir haben Ihre Bewerbung erhalten und melden uns bald bei Ihnen.",
@@ -299,6 +324,7 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         message: "Es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.",
+        error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
     )

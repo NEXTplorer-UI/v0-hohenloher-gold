@@ -20,6 +20,10 @@ import {
   X,
   Upload,
   HelpCircle,
+  Save,
+  FolderOpen,
+  Trash2,
+  TestTube,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import NewsletterConfirmationDialog from "./newsletter-confirmation-dialog"
@@ -45,6 +49,17 @@ interface Attachment {
   type: string
 }
 
+interface Draft {
+  id: string
+  title: string
+  subject: string
+  content: string
+  image_url: string | null
+  attachment: Attachment | null
+  created_at: string
+  updated_at: string
+}
+
 export default function NewsletterSystem() {
   const [subject, setSubject] = useState("")
   const [content, setContent] = useState("")
@@ -65,6 +80,14 @@ export default function NewsletterSystem() {
   const [previewHtml, setPreviewHtml] = useState("")
   const { toast } = useToast()
   const [showMarkdownHelp, setShowMarkdownHelp] = useState(false)
+  const [drafts, setDrafts] = useState<Draft[]>([])
+  const [showDrafts, setShowDrafts] = useState(false)
+  const [showSaveDraft, setShowSaveDraft] = useState(false)
+  const [draftTitle, setDraftTitle] = useState("")
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null)
+  const [isSavingDraft, setIsSavingDraft] = useState(false)
+  const [testEmail, setTestEmail] = useState("")
+  const [isSendingTest, setIsSendingTest] = useState(false)
 
   const loadStats = async () => {
     setIsUpdating(true)
@@ -88,16 +111,33 @@ export default function NewsletterSystem() {
     }
   }
 
+  const loadDrafts = async () => {
+    try {
+      const response = await fetch("/api/newsletter/drafts")
+      if (!response.ok) throw new Error("Failed to load drafts")
+
+      const data = await response.json()
+      setDrafts(data.drafts || [])
+    } catch (error) {
+      console.error("[v0] Error loading drafts:", error)
+      toast({
+        title: "Fehler",
+        description: "Entwürfe konnten nicht geladen werden",
+        variant: "destructive",
+      })
+    }
+  }
+
   useEffect(() => {
     loadStats()
+    loadDrafts()
   }, [])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Validate file size (max 25MB for email attachments)
-    const maxSize = 25 * 1024 * 1024 // 25MB
+    const maxSize = 25 * 1024 * 1024
     if (file.size > maxSize) {
       toast({
         title: "Datei zu groß",
@@ -107,7 +147,6 @@ export default function NewsletterSystem() {
       return
     }
 
-    // Validate file type
     const allowedTypes = [
       "audio/mpeg",
       "audio/wav",
@@ -213,7 +252,7 @@ export default function NewsletterSystem() {
           subject,
           content,
           imageUrl,
-          attachment, // Include attachment data
+          attachment,
           recipients,
           type: "newsletter",
         }),
@@ -229,14 +268,12 @@ export default function NewsletterSystem() {
         description: `Newsletter wurde erfolgreich an ${result.results.sent} Empfänger gesendet`,
       })
 
-      // Reset form
       setSubject("")
       setContent("")
       setImageUrl("")
-      setAttachment(null) // Reset attachment
+      setAttachment(null)
       setShowConfirmation(false)
 
-      // Reload stats
       await loadStats()
     } catch (error) {
       console.error("[v0] Error sending newsletter:", error)
@@ -269,6 +306,170 @@ export default function NewsletterSystem() {
     })
     setPreviewHtml(emailResult.html)
     setShowPreview(true)
+  }
+
+  const handleSaveDraft = async () => {
+    if (!draftTitle.trim() || !subject.trim() || !content.trim()) {
+      toast({
+        title: "Fehler",
+        description: "Bitte füllen Sie Titel, Betreff und Inhalt aus",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSavingDraft(true)
+    try {
+      const url = currentDraftId ? `/api/newsletter/drafts/${currentDraftId}` : "/api/newsletter/drafts"
+      const method = currentDraftId ? "PUT" : "POST"
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: draftTitle,
+          subject,
+          content,
+          imageUrl,
+          attachment,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to save draft")
+
+      toast({
+        title: "Entwurf gespeichert",
+        description: currentDraftId ? "Entwurf wurde aktualisiert" : "Entwurf wurde erstellt",
+      })
+
+      setShowSaveDraft(false)
+      setDraftTitle("")
+      await loadDrafts()
+    } catch (error) {
+      console.error("[v0] Error saving draft:", error)
+      toast({
+        title: "Fehler",
+        description: "Entwurf konnte nicht gespeichert werden",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSavingDraft(false)
+    }
+  }
+
+  const handleLoadDraft = (draft: Draft) => {
+    setSubject(draft.subject)
+    setContent(draft.content)
+    setImageUrl(draft.image_url || "")
+    setAttachment(draft.attachment)
+    setDraftTitle(draft.title)
+    setCurrentDraftId(draft.id)
+    setShowDrafts(false)
+
+    toast({
+      title: "Entwurf geladen",
+      description: `"${draft.title}" wurde geladen`,
+    })
+  }
+
+  const handleDeleteDraft = async (draftId: string) => {
+    if (!confirm("Möchten Sie diesen Entwurf wirklich löschen?")) return
+
+    try {
+      const response = await fetch(`/api/newsletter/drafts/${draftId}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) throw new Error("Failed to delete draft")
+
+      toast({
+        title: "Entwurf gelöscht",
+        description: "Der Entwurf wurde erfolgreich gelöscht",
+      })
+
+      await loadDrafts()
+    } catch (error) {
+      console.error("[v0] Error deleting draft:", error)
+      toast({
+        title: "Fehler",
+        description: "Entwurf konnte nicht gelöscht werden",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleSendTestEmail = async () => {
+    if (!testEmail.trim()) {
+      toast({
+        title: "Fehler",
+        description: "Bitte geben Sie eine Test-E-Mail-Adresse ein",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!subject.trim() || !content.trim()) {
+      toast({
+        title: "Fehler",
+        description: "Bitte füllen Sie Betreff und Inhalt aus",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSendingTest(true)
+    try {
+      console.log("[v0] Sending test email to", testEmail)
+
+      const response = await fetch("/api/newsletter/send-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject,
+          content,
+          imageUrl,
+          attachment,
+          testEmail,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to send test email")
+      }
+
+      toast({
+        title: "Test-E-Mail gesendet!",
+        description: `Newsletter wurde als Test an ${testEmail} gesendet`,
+      })
+
+      console.log("[v0] Test email sent successfully")
+    } catch (error) {
+      console.error("[v0] Error sending test email:", error)
+      toast({
+        title: "Fehler beim Senden",
+        description: error instanceof Error ? error.message : "Test-E-Mail konnte nicht gesendet werden",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSendingTest(false)
+    }
+  }
+
+  const handleOpenSaveDraft = () => {
+    if (!subject.trim() || !content.trim()) {
+      toast({
+        title: "Fehler",
+        description: "Bitte füllen Sie Betreff und Inhalt aus",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!draftTitle && !currentDraftId) {
+      setDraftTitle(`Entwurf ${new Date().toLocaleDateString("de-DE")}`)
+    }
+    setShowSaveDraft(true)
   }
 
   return (
@@ -374,7 +575,7 @@ export default function NewsletterSystem() {
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium">Inhalt (Markdown unterstützt)</label>
+                <label className="text-sm font-medium">Inhalt (Markdown & HTML unterstützt)</label>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -382,42 +583,81 @@ export default function NewsletterSystem() {
                   className="h-8 text-xs"
                 >
                   <HelpCircle className="h-4 w-4 mr-1" />
-                  Markdown-Hilfe
+                  Formatierungs-Hilfe
                 </Button>
               </div>
 
               {showMarkdownHelp && (
-                <div className="mb-3 p-4 bg-muted rounded-lg text-sm space-y-2">
-                  <p className="font-semibold text-foreground">Markdown-Formatierung:</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-muted-foreground">
-                    <div>
-                      <code className="bg-background px-2 py-1 rounded">**fett**</code> → <strong>fett</strong>
-                    </div>
-                    <div>
-                      <code className="bg-background px-2 py-1 rounded">*kursiv*</code> → <em>kursiv</em>
-                    </div>
-                    <div>
-                      <code className="bg-background px-2 py-1 rounded"># Überschrift 1</code> → Große Überschrift
-                    </div>
-                    <div>
-                      <code className="bg-background px-2 py-1 rounded">## Überschrift 2</code> → Mittlere Überschrift
-                    </div>
-                    <div>
-                      <code className="bg-background px-2 py-1 rounded">[Link](url)</code> → Klickbarer Link
-                    </div>
-                    <div>
-                      <code className="bg-background px-2 py-1 rounded">![Bild](url)</code> → Bild einfügen
-                    </div>
-                    <div>
-                      <code className="bg-background px-2 py-1 rounded">- Listenpunkt</code> → Aufzählungsliste
-                    </div>
-                    <div>
-                      <code className="bg-background px-2 py-1 rounded">---</code> → Trennlinie
+                <div className="mb-3 p-4 bg-muted rounded-lg text-sm space-y-3">
+                  <div>
+                    <p className="font-semibold text-foreground mb-2">Markdown-Formatierung:</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-muted-foreground">
+                      <div>
+                        <code className="bg-background px-2 py-1 rounded">**fett**</code> → <strong>fett</strong>
+                      </div>
+                      <div>
+                        <code className="bg-background px-2 py-1 rounded">*kursiv*</code> → <em>kursiv</em>
+                      </div>
+                      <div>
+                        <code className="bg-background px-2 py-1 rounded"># Überschrift 1</code> → Große Überschrift
+                      </div>
+                      <div>
+                        <code className="bg-background px-2 py-1 rounded">## Überschrift 2</code> → Mittlere Überschrift
+                      </div>
+                      <div>
+                        <code className="bg-background px-2 py-1 rounded">[Link](url)</code> → Klickbarer Link
+                      </div>
+                      <div>
+                        <code className="bg-background px-2 py-1 rounded">![Bild](url)</code> → Bild einfügen
+                      </div>
+                      <div>
+                        <code className="bg-background px-2 py-1 rounded">- Listenpunkt</code> → Aufzählungsliste
+                      </div>
+                      <div>
+                        <code className="bg-background px-2 py-1 rounded">---</code> → Trennlinie
+                      </div>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Doppelte Zeilenumbrüche erstellen neue Absätze. Einfache Zeilenumbrüche werden als Zeilenumbruch
-                    dargestellt.
+
+                  <div className="border-t pt-3">
+                    <p className="font-semibold text-foreground mb-2">HTML-Befehle (für E-Mails):</p>
+                    <div className="space-y-2 text-muted-foreground">
+                      <div>
+                        <p className="text-xs font-medium mb-1">Bild einfügen:</p>
+                        <code className="bg-background px-2 py-1 rounded text-xs block overflow-x-auto">
+                          {`<img src="URL" alt="Beschreibung" style="max-width: 100%; height: auto;" />`}
+                        </code>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium mb-1">Link mit Farbe:</p>
+                        <code className="bg-background px-2 py-1 rounded text-xs block overflow-x-auto">
+                          {`<a href="URL" style="color: #10b981;">Linktext</a>`}
+                        </code>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium mb-1">Überschriften:</p>
+                        <code className="bg-background px-2 py-1 rounded text-xs block overflow-x-auto">
+                          {`<h2 style="font-size: 22px; font-weight: 600;">Überschrift</h2>`}
+                        </code>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium mb-1">Zentrierter Text:</p>
+                        <code className="bg-background px-2 py-1 rounded text-xs block overflow-x-auto">
+                          {`<div style="text-align: center;">Zentrierter Inhalt</div>`}
+                        </code>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium mb-1">Trennlinie:</p>
+                        <code className="bg-background px-2 py-1 rounded text-xs block overflow-x-auto">
+                          {`<hr style="border: none; border-top: 2px solid #e5e7eb; margin: 25px 0;" />`}
+                        </code>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground mt-2 border-t pt-2">
+                    <strong>Wichtig:</strong> In E-Mails müssen Sie Inline-Styles verwenden (style="..."), da externe
+                    CSS-Klassen nicht unterstützt werden. Sie können Markdown und HTML beliebig mischen.
                   </p>
                 </div>
               )}
@@ -425,13 +665,60 @@ export default function NewsletterSystem() {
               <Textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="Newsletter Inhalt eingeben... (Markdown wird unterstützt)&#10;&#10;Beispiel:&#10;# Willkommen&#10;&#10;Besuchen Sie unseren [Shop](https://...)&#10;&#10;**Neue Produkte:**&#10;- Sizilianische Orangen&#10;- Bio-Mandeln"
+                placeholder="Newsletter Inhalt eingeben... (Markdown & HTML werden unterstützt)&#10;&#10;Beispiel:&#10;# Willkommen&#10;&#10;Besuchen Sie unseren [Shop](https://...)&#10;&#10;**Neue Produkte:**&#10;- Sizilianische Orangen&#10;- Bio-Mandeln&#10;&#10;Oder mit HTML:&#10;<img src='...' alt='Produkt' style='max-width: 100%;' />"
                 rows={12}
                 disabled={isLoading}
                 className="font-mono text-sm"
               />
             </div>
-            <div className="flex gap-2">
+
+            <div className="border-t pt-4">
+              <label className="text-sm font-medium">Test-E-Mail senden</label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Senden Sie den Newsletter zuerst als Test an eine beliebige E-Mail-Adresse
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  value={testEmail}
+                  onChange={(e) => setTestEmail(e.target.value)}
+                  placeholder="test@beispiel.de"
+                  disabled={isSendingTest || isLoading}
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleSendTestEmail}
+                  disabled={isSendingTest || isLoading || !subject.trim() || !content.trim() || !testEmail.trim()}
+                >
+                  {isSendingTest ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Sende...
+                    </>
+                  ) : (
+                    <>
+                      <TestTube className="h-4 w-4 mr-2" />
+                      Test senden
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={handleOpenSaveDraft}
+                disabled={isLoading || !subject.trim() || !content.trim()}
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Als Entwurf speichern
+              </Button>
+              <Button variant="outline" onClick={() => setShowDrafts(true)} disabled={isLoading}>
+                <FolderOpen className="h-4 w-4 mr-2" />
+                Entwürfe laden ({drafts.length})
+              </Button>
               <Button
                 variant="outline"
                 disabled={isLoading || !subject.trim() || !content.trim()}
@@ -456,6 +743,81 @@ export default function NewsletterSystem() {
             <DialogDescription>So wird der Newsletter bei Ihren Kunden aussehen</DialogDescription>
           </DialogHeader>
           <div className="border rounded-lg p-4 bg-white" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSaveDraft} onOpenChange={setShowSaveDraft}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Entwurf speichern</DialogTitle>
+            <DialogDescription>Geben Sie einen Titel für den Entwurf ein</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Titel</label>
+              <Input
+                value={draftTitle}
+                onChange={(e) => setDraftTitle(e.target.value)}
+                placeholder="z.B. Weihnachts-Newsletter 2025"
+                disabled={isSavingDraft}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowSaveDraft(false)} disabled={isSavingDraft}>
+                Abbrechen
+              </Button>
+              <Button onClick={handleSaveDraft} disabled={isSavingDraft}>
+                {isSavingDraft ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Speichern...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Speichern
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDrafts} onOpenChange={setShowDrafts}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Gespeicherte Entwürfe</DialogTitle>
+            <DialogDescription>Wählen Sie einen Entwurf zum Laden oder Löschen</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {drafts.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">Keine Entwürfe vorhanden</p>
+            ) : (
+              drafts.map((draft) => (
+                <Card key={draft.id} className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium truncate">{draft.title}</h4>
+                      <p className="text-sm text-muted-foreground truncate">{draft.subject}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Zuletzt bearbeitet: {new Date(draft.updated_at).toLocaleString("de-DE")}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleLoadDraft(draft)}>
+                        <FolderOpen className="h-4 w-4 mr-1" />
+                        Laden
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleDeleteDraft(draft.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

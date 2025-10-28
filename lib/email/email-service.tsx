@@ -62,7 +62,10 @@ export async function sendEmail(data: EmailData): Promise<SendEmailResult> {
 export class EmailService {
   static async sendEmail(data: EmailData): Promise<boolean> {
     const result = await sendEmail(data)
-    return result.success
+    if (!result.success) {
+      throw new Error(result.error || "Failed to send email")
+    }
+    return true
   }
 
   static async sendInvoiceEmail(
