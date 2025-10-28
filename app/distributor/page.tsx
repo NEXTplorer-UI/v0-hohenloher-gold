@@ -94,9 +94,7 @@ export default function DistributorPage() {
             <h1 className="font-serif font-bold text-4xl lg:text-5xl text-card-foreground">
               {"Werden Sie Teil unseres Verteilnetzwerkes"}
             </h1>
-            <p className="text-lg text-muted-foreground">
-              Den Genuss in Ihre Region bringen    
-            </p>
+            <p className="text-lg text-muted-foreground">Den Genuss in Ihre Region bringen</p>
           </div>
         </div>
       </section>
@@ -347,9 +345,7 @@ export default function DistributorPage() {
             <h2 className="font-serif font-bold text-3xl lg:text-4xl text-card-foreground">
               So funktioniert unser Verteilersystem
             </h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              {""}
-            </p>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">{""}</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
@@ -360,7 +356,7 @@ export default function DistributorPage() {
                 </div>
                 <h3 className="font-serif font-bold text-xl">1. Verteiler werden</h3>
                 <p className="text-muted-foreground">
-                  Werden Sie Verteiler und erhalten Sie mit uns gemeinsam den Genuss der Ribera-Früchte.            
+                  Werden Sie Verteiler und erhalten Sie mit uns gemeinsam den Genuss der Ribera-Früchte.
                 </p>
               </CardContent>
             </Card>
@@ -372,7 +368,8 @@ export default function DistributorPage() {
                 </div>
                 <h3 className="font-serif font-bold text-xl">2. Abholort einrichten</h3>
                 <p className="text-muted-foreground">
-                  Wir richten miteinander einen Abholort in Ihrer Region ein. Kunden können dort ihre bestellten Produkte abholen.
+                  Wir richten miteinander einen Abholort in Ihrer Region ein. Kunden können dort ihre bestellten
+                  Produkte abholen.
                 </p>
               </CardContent>
             </Card>
@@ -384,7 +381,8 @@ export default function DistributorPage() {
                 </div>
                 <h3 className="font-serif font-bold text-xl">3. Netzwerk stärken</h3>
                 <p className="text-muted-foreground">
-                  Fördern Sie vollwertige Nahrung. Bringen Sie hochwertige Lebensmittel direkt zu den Menschen in Ihrer Nachbarschaft.
+                  Fördern Sie vollwertige Nahrung. Bringen Sie hochwertige Lebensmittel direkt zu den Menschen in Ihrer
+                  Nachbarschaft.
                 </p>
               </CardContent>
             </Card>
@@ -509,7 +507,7 @@ export default function DistributorPage() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button variant="secondary" size="lg" className="text-lg px-8">
                 <Phone className="w-5 h-5 mr-2" />
-                +49 1573 5703864
+                01573 5703864
               </Button>
               <Button
                 variant="outline"

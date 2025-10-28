@@ -135,6 +135,33 @@ export default function RootLayout({
             }),
           }}
         />
+        <Script
+          id="cookie-manager-init"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                // Check if analytics consent is given
+                const consent = localStorage.getItem('cookie-consent');
+                if (consent) {
+                  try {
+                    const preferences = JSON.parse(consent);
+                    // Only load analytics if consent is given
+                    if (preferences.analytics && !window.va) {
+                      // Vercel Analytics will be loaded here when implemented
+                      // const script = document.createElement('script');
+                      // script.src = '/_vercel/insights/script.js';
+                      // script.defer = true;
+                      // document.head.appendChild(script);
+                    }
+                  } catch (e) {
+                    console.error('Failed to parse cookie consent', e);
+                  }
+                }
+              })();
+            `,
+          }}
+        />
         <SWRConfig value={swrConfig}>
           <CartProvider>
             <PricingProvider>

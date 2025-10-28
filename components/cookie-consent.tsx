@@ -173,18 +173,21 @@ export function CookieConsent() {
                       <Label className="font-medium">Analyse-Cookies</Label>
                       <p className="text-xs text-muted-foreground mt-1">
                         Helfen uns zu verstehen, wie Besucher unsere Website nutzen, um die Benutzererfahrung zu
-                        verbessern.
+                        verbessern. Alle Daten werden anonymisiert und DSGVO-konform verarbeitet.
                       </p>
                       <div className="mt-2 text-xs text-muted-foreground">
-                        <strong>Verwendete Cookies:</strong>
+                        <strong>Verwendete Dienste:</strong>
                         <ul className="list-disc list-inside mt-1 space-y-1">
-                          <li>Google Analytics (_ga, _ga_*) - Besucherstatistiken</li>
+                          <li>Vercel Analytics - Anonymisierte Besucherstatistiken (keine IP-Speicherung)</li>
                           <li>Seitenaufrufe und Verweildauer</li>
                           <li>Beliebte Produkte und Suchbegriffe</li>
-                          <li>Geräte- und Browserinformationen</li>
+                          <li>Geräte- und Browserinformationen (anonymisiert)</li>
                         </ul>
                         <p className="mt-2">
-                          <strong>Speicherdauer:</strong> 2 Jahre
+                          <strong>Datenspeicherung:</strong> EU-Rechenzentren (Frankfurt)
+                        </p>
+                        <p className="mt-1">
+                          <strong>Speicherdauer:</strong> 90 Tage
                         </p>
                       </div>
                     </div>
@@ -208,16 +211,11 @@ export function CookieConsent() {
                       <div className="mt-2 text-xs text-muted-foreground">
                         <strong>Verwendete Cookies:</strong>
                         <ul className="list-disc list-inside mt-1 space-y-1">
-                          <li>Facebook Pixel (_fbp, _fbc) - Werbeanzeigen</li>
-                          <li>Google Ads (conversion tracking)</li>
                           <li>Newsletter-Präferenzen</li>
                           <li>Produktempfehlungen basierend auf Ihren Interessen</li>
                         </ul>
                         <p className="mt-2">
                           <strong>Speicherdauer:</strong> 1 Jahr
-                        </p>
-                        <p className="mt-1">
-                          <strong>Datenübertragung:</strong> USA (angemessenes Schutzniveau)
                         </p>
                       </div>
                     </div>

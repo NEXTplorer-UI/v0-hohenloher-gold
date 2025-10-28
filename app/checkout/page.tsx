@@ -340,6 +340,15 @@ export default function CheckoutPage() {
   const handleOrderSubmission = useCallback(async () => {
     console.log("[v0] [Checkout] Order submission started")
 
+    // Added checks for AGB and Datenschutz acceptance
+    const acceptAGB = (document.getElementById("acceptAGB") as HTMLInputElement)?.checked
+    const acceptPrivacy = (document.getElementById("acceptPrivacy") as HTMLInputElement)?.checked
+
+    if (!acceptAGB || !acceptPrivacy) {
+      alert("Bitte bestätigen Sie die AGB und die Datenschutzerklärung.")
+      return
+    }
+
     if (!firstName || !lastName || !email) {
       console.log("[v0] [Checkout] Missing required fields")
       alert("Bitte füllen Sie alle Pflichtfelder aus.")
@@ -1623,7 +1632,7 @@ export default function CheckoutPage() {
                             <CreditCard className="w-4 h-4 text-primary" />
                             <div>
                               <div className="font-medium text-sm">Online bezahlen</div>
-                              <div className="text-xs text-muted-foreground">Kreditkarte, Debitkarte</div>
+                              <div className="text-xs text-muted-foreground">Kreditkarte, Debitkarte, PayPal</div>
                             </div>
                           </div>
                         </Label>
@@ -1650,6 +1659,46 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="border-t pt-4">
+                  <div className="space-y-4 mb-6">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="acceptAGB"
+                        required
+                        className="mt-0.5 w-4 h-4 flex-shrink-0 rounded border-2 border-primary bg-transparent data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                      />
+                      <Label htmlFor="acceptAGB" className="text-sm leading-normal cursor-pointer flex-1">
+                        <span className="text-balance">
+                          Ich habe die{" "}
+                          <Link href="/agb" target="_blank" className="text-primary hover:underline font-medium">
+                            Allgemeinen Geschäftsbedingungen
+                          </Link>{" "}
+                          und die{" "}
+                          <Link href="/widerruf" target="_blank" className="text-primary hover:underline font-medium">
+                            Widerrufsbelehrung
+                          </Link>{" "}
+                          gelesen und akzeptiere diese. *
+                        </span>
+                      </Label>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="acceptPrivacy"
+                        required
+                        className="mt-0.5 w-4 h-4 flex-shrink-0 rounded border-2 border-primary bg-transparent data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                      />
+                      <Label htmlFor="acceptPrivacy" className="text-sm leading-normal cursor-pointer flex-1">
+                        <span className="text-balance">
+                          Ich habe die{" "}
+                          <Link href="/privacy" target="_blank" className="text-primary hover:underline font-medium">
+                            Datenschutzerklärung
+                          </Link>{" "}
+                          zur Kenntnis genommen. *
+                        </span>
+                      </Label>
+                    </div>
+                  </div>
+
                   <Button
                     onClick={() => {
                       handleOrderSubmission()

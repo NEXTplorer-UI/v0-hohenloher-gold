@@ -27,7 +27,7 @@ export default function ImpressumPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <h3 className="font-semibold mb-2">Hohenloher Gold GmbH</h3>
+                    <h3 className="font-semibold mb-2">Gerlinde Fink </h3>
                     <p className="text-muted-foreground">
                       Weststraße 28
                       <br />
@@ -69,7 +69,7 @@ export default function ImpressumPage() {
                     </div>
                     <div>
                       <h4 className="font-medium mb-1">Registernummer</h4>
-                      <p className="text-muted-foreground">HRB 123456</p>
+                      <p className="text-muted-foreground">{""}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -82,7 +82,7 @@ export default function ImpressumPage() {
                 <CardContent>
                   <div>
                     <h4 className="font-medium mb-1">Umsatzsteuer-Identifikationsnummer</h4>
-                    <p className="text-muted-foreground">DE123456789</p>
+                    <p className="text-muted-foreground">DE 244 622 911</p>
                   </div>
                 </CardContent>
               </Card>
@@ -92,7 +92,7 @@ export default function ImpressumPage() {
                   <CardTitle>Geschäftsführung</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-muted-foreground">Max Mustermann</p>
+                  <p className="text-muted-foreground">Gerlinde Fink</p>
                 </CardContent>
               </Card>
 
@@ -102,11 +102,11 @@ export default function ImpressumPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground">
-                    Max Mustermann
+                    Maximilian Fink
                     <br />
-                    Weststraße 28
+                    Jäkleinstraße 19
                     <br />
-                    74629 Pfedelbach
+                    74080 Heilbronn
                   </p>
                 </CardContent>
               </Card>

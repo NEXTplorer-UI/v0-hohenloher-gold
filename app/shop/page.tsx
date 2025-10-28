@@ -434,7 +434,7 @@ export default function ShopPage() {
                   <h3 className="font-semibold text-primary mb-2 text-xl">Südfrüchte Saison 2025</h3>
                   <p className="text-sm text-muted-foreground mb-4">
                     Frische Südfrüchte sind Saisonware und nur zu bestimmten Terminen verfügbar.
-                    <strong> Bestellschluss ist jeweils 14 Tage vor dem Liefertermin.</strong>
+                    <strong> Bestellschluss ist jeweils 14 Tage vor dem Liefertermin. </strong>
                     Bestellungen nach Bestellschluss werden automatisch dem nächsten verfügbaren Termin zugeordnet.
                   </p>
 

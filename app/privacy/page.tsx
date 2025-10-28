@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Shield, Mail, Database, Cookie, Eye, Lock } from "lucide-react"
+import { Shield, Mail, Database, Cookie, Eye, Lock, Server, CreditCard, Cloud } from "lucide-react"
 import Link from "next/link"
+import { DataProtectionContactForm } from "@/components/data-protection-contact-form"
 
 export default function PrivacyPage() {
   return (
@@ -50,6 +51,213 @@ export default function PrivacyPage() {
                   <p className="text-muted-foreground text-sm">
                     Bei Teilnahme am Verteilerprogramm speichern wir zusätzlich Ihre Bankdaten für
                     Provisionsauszahlungen und Ihre Verkaufsstatistiken.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Server className="w-5 h-5" />
+                  <span>Eingesetzte Dienstleister</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <Database className="w-4 h-4" />
+                    Supabase (Datenbank & Authentifizierung)
+                  </h3>
+                  <p className="text-muted-foreground text-sm mb-2">
+                    Wir nutzen Supabase Inc. für die Speicherung Ihrer Bestelldaten, Kundenkontoinformationen und
+                    Authentifizierung.
+                  </p>
+                  <ul className="text-muted-foreground text-sm space-y-1 ml-4 list-disc">
+                    <li>
+                      <strong>Verarbeitete Daten:</strong> Name, E-Mail, Telefon, Bestellhistorie, Login-Daten
+                    </li>
+                    <li>
+                      <strong>Zweck:</strong> Vertragserfüllung, Kundenkontoverwaltung (Art. 6 Abs. 1 lit. b DSGVO)
+                    </li>
+                    <li>
+                      <strong>Speicherort:</strong> EU-Rechenzentrum Frankfurt, Deutschland
+                    </li>
+                    <li>
+                      <strong>Aufbewahrung:</strong> Dauer der Geschäftsbeziehung + gesetzliche Aufbewahrungsfristen
+                    </li>
+                    <li>
+                      <strong>Datenschutz:</strong>{" "}
+                      <a
+                        href="https://supabase.com/privacy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
+                        supabase.com/privacy
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <CreditCard className="w-4 h-4" />
+                    SumUp (Zahlungsabwicklung)
+                  </h3>
+                  <p className="text-muted-foreground text-sm mb-2">
+                    Für Online-Kartenzahlungen und PayPal-Zahlungen nutzen wir SumUp Payments Limited als
+                    Zahlungsdienstleister.
+                  </p>
+                  <ul className="text-muted-foreground text-sm space-y-1 ml-4 list-disc">
+                    <li>
+                      <strong>Verarbeitete Daten:</strong> Zahlungsdaten (Karteninformationen, PayPal-Transaktionsdaten)
+                    </li>
+                    <li>
+                      <strong>Zweck:</strong> Zahlungsabwicklung (Art. 6 Abs. 1 lit. b DSGVO)
+                    </li>
+                    <li>
+                      <strong>Speicherort:</strong> EU (SumUp ist PCI-DSS zertifiziert)
+                    </li>
+                    <li>
+                      <strong>Aufbewahrung:</strong> Gemäß gesetzlicher Vorgaben für Zahlungstransaktionen
+                    </li>
+                    <li>
+                      <strong>Datenschutz:</strong>{" "}
+                      <a
+                        href="https://sumup.de/datenschutz/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
+                        sumup.de/datenschutz
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <CreditCard className="w-4 h-4" />
+                    PayPal (Zahlungsabwicklung)
+                  </h3>
+                  <p className="text-muted-foreground text-sm mb-2">
+                    Bei Auswahl von PayPal als Zahlungsmethode wird die Zahlung über PayPal (Europe) S.à r.l. et Cie,
+                    S.C.A. abgewickelt.
+                  </p>
+                  <ul className="text-muted-foreground text-sm space-y-1 ml-4 list-disc">
+                    <li>
+                      <strong>Verarbeitete Daten:</strong> PayPal-Kontodaten, Transaktionsdaten, E-Mail-Adresse
+                    </li>
+                    <li>
+                      <strong>Zweck:</strong> Zahlungsabwicklung (Art. 6 Abs. 1 lit. b DSGVO)
+                    </li>
+                    <li>
+                      <strong>Speicherort:</strong> EU (PayPal Europe mit Sitz in Luxemburg)
+                    </li>
+                    <li>
+                      <strong>Aufbewahrung:</strong> Gemäß PayPal-Richtlinien und gesetzlicher Vorgaben
+                    </li>
+                    <li>
+                      <strong>Cookies:</strong> PayPal setzt während des Zahlungsvorgangs eigene Cookies (siehe
+                      Cookie-Richtlinie)
+                    </li>
+                    <li>
+                      <strong>Datenschutz:</strong>{" "}
+                      <a
+                        href="https://www.paypal.com/de/webapps/mpp/ua/privacy-full"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
+                        paypal.com/de/datenschutz
+                      </a>
+                    </li>
+                  </ul>
+                  <p className="text-xs text-muted-foreground mt-2 italic">
+                    Hinweis: PayPal wird über SumUp als Zahlungsoption bereitgestellt. Die Datenverarbeitung erfolgt
+                    direkt durch PayPal gemäß deren Datenschutzbestimmungen.
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <Mail className="w-4 h-4" />
+                    Resend (E-Mail-Versand)
+                  </h3>
+                  <p className="text-muted-foreground text-sm mb-2">
+                    Für den Versand von Bestellbestätigungen, Rechnungen und Newsletter nutzen wir Resend Inc.
+                  </p>
+                  <ul className="text-muted-foreground text-sm space-y-1 ml-4 list-disc">
+                    <li>
+                      <strong>Verarbeitete Daten:</strong> E-Mail-Adresse, Name, Bestellinformationen
+                    </li>
+                    <li>
+                      <strong>Zweck:</strong> Vertragserfüllung, Kommunikation (Art. 6 Abs. 1 lit. b DSGVO)
+                    </li>
+                    <li>
+                      <strong>Speicherort:</strong> USA (Standardvertragsklauseln gemäß Art. 46 DSGVO)
+                    </li>
+                    <li>
+                      <strong>Aufbewahrung:</strong> E-Mails werden nach Zustellung nicht dauerhaft gespeichert
+                    </li>
+                    <li>
+                      <strong>Datenschutz:</strong>{" "}
+                      <a
+                        href="https://resend.com/legal/privacy-policy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
+                        resend.com/legal/privacy-policy
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <Cloud className="w-4 h-4" />
+                    Vercel (Hosting & Dateispeicherung)
+                  </h3>
+                  <p className="text-muted-foreground text-sm mb-2">
+                    Unsere Website wird auf der Vercel-Plattform gehostet. Dateien (z.B. Newsletter-Anhänge) werden über
+                    Vercel Blob Storage gespeichert.
+                  </p>
+                  <ul className="text-muted-foreground text-sm space-y-1 ml-4 list-disc">
+                    <li>
+                      <strong>Verarbeitete Daten:</strong> IP-Adresse (temporär), hochgeladene Dateien
+                      (Newsletter-Anhänge wie PDFs, Bilder), technische Logs
+                    </li>
+                    <li>
+                      <strong>Zweck:</strong> Bereitstellung der Website, technischer Betrieb, Newsletter-Versand (Art.
+                      6 Abs. 1 lit. f DSGVO)
+                    </li>
+                    <li>
+                      <strong>Speicherort:</strong> EU-Rechenzentren (Frankfurt)
+                    </li>
+                    <li>
+                      <strong>Aufbewahrung:</strong> Logs 30 Tage, Newsletter-Anhänge bis zur manuellen Löschung
+                    </li>
+                    <li>
+                      <strong>Datenschutz:</strong>{" "}
+                      <a
+                        href="https://vercel.com/legal/privacy-policy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
+                        vercel.com/legal/privacy-policy
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="bg-muted/50 p-4 rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Auftragsverarbeitung:</strong> Mit allen genannten Dienstleistern haben wir
+                    Auftragsverarbeitungsverträge (AVV) gemäß Art. 28 DSGVO abgeschlossen, die die datenschutzkonforme
+                    Verarbeitung Ihrer Daten sicherstellen.
                   </p>
                 </div>
               </CardContent>
@@ -116,8 +324,9 @@ export default function PrivacyPage() {
                 <div>
                   <h3 className="font-semibold mb-2">Verschlüsselung</h3>
                   <p className="text-muted-foreground text-sm">
-                    Alle Datenübertragungen erfolgen verschlüsselt über HTTPS. Ihre Daten werden sicher in deutschen
-                    Rechenzentren gespeichert.
+                    Alle Datenübertragungen erfolgen verschlüsselt über HTTPS. Ihre Daten werden ausschließlich in
+                    EU-Rechenzentren (Frankfurt, Deutschland) gespeichert und unterliegen der DSGVO. Wir nutzen Supabase
+                    als Datenbank-Provider mit EU-Hosting.
                   </p>
                 </div>
                 <div>
@@ -167,6 +376,8 @@ export default function PrivacyPage() {
                 </div>
               </CardContent>
             </Card>
+
+            <DataProtectionContactForm />
 
             <Card>
               <CardHeader>

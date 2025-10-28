@@ -15,9 +15,7 @@ export function Footer() {
               />
               <span className="font-serif font-bold text-lg text-sidebar-foreground">{"Hohenloher Gold"}</span>
             </div>
-            <p className="text-sm text-muted-foreground">
-              ursprünglich, echt, gesellig      
-            </p>
+            <p className="text-sm text-muted-foreground">ursprünglich, echt, gesellig</p>
           </div>
           <div className="space-y-4">
             <h4 className="font-semibold text-sidebar-foreground">Navigation</h4>
@@ -68,15 +66,24 @@ export function Footer() {
         </div>
         <div className="border-t border-sidebar-border mt-8 pt-8 text-center text-sm text-muted-foreground">
           <div className="flex flex-col sm:flex-row items-center justify-center space-y-2 sm:space-y-0 sm:space-x-6 mb-4">
+            <Link href="/agb" className="hover:text-sidebar-primary transition-colors">
+              AGB
+            </Link>
+            <Link href="/widerruf" className="hover:text-sidebar-primary transition-colors">
+              Widerrufsbelehrung
+            </Link>
             <Link href="/privacy" className="hover:text-sidebar-primary transition-colors">
               Datenschutz
+            </Link>
+            <Link href="/cookie-policy" className="hover:text-sidebar-primary transition-colors">
+              Cookie-Richtlinie
             </Link>
             <CookieSettingsLink />
             <Link href="/impressum" className="hover:text-sidebar-primary transition-colors">
               Impressum
             </Link>
           </div>
-          <p>&copy; 2024 Hohenloher Gold. Alle Rechte vorbehalten.</p>
+          <p>&copy; 2025 Hohenloher Gold. Alle Rechte vorbehalten.</p>
         </div>
       </div>
     </footer>
