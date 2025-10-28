@@ -13,18 +13,26 @@ export interface EmailTemplateResult {
 
 type EmailCopyType = typeof emailCopy
 
+function getPaymentMethodLabel(method: string): string {
+  switch (method) {
+    case "transfer":
+      return "Überweisung"
+    case "cash":
+      return "Barzahlung bei Abholung"
+    case "card":
+      return "Kartenzahlung"
+    case "sumup":
+      return "Kartenzahlung (SumUp)"
+    default:
+      return "Unbekannt"
+  }
+}
+
 // Bestellbestätigung Content
 export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailCopyType): string {
   const copy = customCopy || emailCopy
 
-  const paymentMethodText =
-    vars.paymentMethod === "transfer"
-      ? "Überweisung"
-      : vars.paymentMethod === "cash"
-        ? "Barzahlung bei Abholung"
-        : vars.paymentMethod === "card"
-          ? "Kartenzahlung"
-          : "Unbekannt"
+  const paymentMethodDisplay = getPaymentMethodLabel(vars.paymentMethod)
 
   const itemsList = vars.orderItems
     ? (vars.orderItems as any[])
@@ -85,7 +93,7 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
       <h3>${copy.orderConfirmation.detailsHeading}</h3>
       <p><strong>${copy.orderConfirmation.orderNumber}</strong> {{orderId}}</p>
       <p><strong>${copy.orderConfirmation.totalAmount}</strong> {{orderTotal}}</p>
-      <p><strong>${copy.orderConfirmation.paymentMethod}</strong> ${paymentMethodText}</p>
+      <p><strong>${copy.orderConfirmation.paymentMethod}</strong> ${paymentMethodDisplay}</p>
       {{#if pickupDate}}<p><strong>${copy.orderConfirmation.pickupDate}</strong> {{pickupDate}}</p>{{/if}}
     </div>
     
@@ -134,14 +142,7 @@ export function invoiceContent(vars: TemplateVars, customCopy?: EmailCopyType): 
 export function pickupReminderContent(vars: TemplateVars, customCopy?: EmailCopyType): string {
   const copy = customCopy || emailCopy
 
-  const paymentMethodText =
-    vars.paymentMethod === "transfer"
-      ? "Überweisung"
-      : vars.paymentMethod === "cash"
-        ? "Barzahlung bei Abholung"
-        : vars.paymentMethod === "card"
-          ? "Kartenzahlung"
-          : "Unbekannt"
+  const paymentMethodDisplay = getPaymentMethodLabel(vars.paymentMethod)
 
   const itemsList = vars.orderItems
     ? (vars.orderItems as any[])
@@ -175,7 +176,7 @@ export function pickupReminderContent(vars: TemplateVars, customCopy?: EmailCopy
       </div>
       <div class="data-row">
         <span class="data-label">Zahlungsmethode</span>
-        <span class="data-value">${paymentMethodText}</span>
+        <span class="data-value">${paymentMethodDisplay}</span>
       </div>
     </div>
     
@@ -327,19 +328,6 @@ export function newsletterConfirmationContent(vars: TemplateVars, customCopy?: E
 export function paymentReceiptContent(vars: TemplateVars, customCopy?: EmailCopyType): string {
   const copy = customCopy || emailCopy
 
-  const getPaymentMethodDisplay = (method: string) => {
-    switch (method) {
-      case "cash":
-        return "Barzahlung"
-      case "card":
-        return "Kartenzahlung"
-      case "bank_transfer":
-        return "Überweisung"
-      default:
-        return method
-    }
-  }
-
   const itemsList = vars.orderItems
     ? (vars.orderItems as any[])
         .map(
@@ -369,7 +357,7 @@ export function paymentReceiptContent(vars: TemplateVars, customCopy?: EmailCopy
       </div>
       <div class="data-row">
         <span class="data-label">${copy.paymentReceipt.paymentMethod}</span>
-        <span class="data-value">${getPaymentMethodDisplay(String(vars.paymentMethod || ""))}</span>
+        <span class="data-value">${getPaymentMethodLabel(String(vars.paymentMethod || ""))}</span>
       </div>
     </div>
     

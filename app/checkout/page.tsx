@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useCallback, useEffect, useMemo } from "react"
 import { useCart } from "@/contexts/cart-context"
 import { usePricing } from "@/components/pricing-context"
@@ -31,95 +29,17 @@ import {
 } from "lucide-react"
 import { saveCustomerToCRM, createUserAccount, sendOrderConfirmationEmail } from "@/lib/crm-utils"
 import { PaymentSumUp } from "@/components/payment-sumup"
-import { createBrowserClient } from "@supabase/ssr"
 import Link from "next/link"
 import { EnhancedErrorHandler, classifyError, type ErrorInfo } from "@/components/enhanced-error-handler"
 import { useRetryLogic } from "@/hooks/use-retry-logic"
 import { determineOrderDeliveryDate } from "@/lib/delivery-schedule-utils"
 import { safeJson } from "@/lib/utils/safe-json"
-import { useStripe, useElements, PaymentElement } from "@stripe/react-stripe-js" // Import Stripe components
 import { useNearbyPickups } from "@/lib/hooks/use-nearby-pickups"
+import { createClient } from "@/lib/supabase/client" // Import the singleton client
 
 const NEXT_PICKUP_DATE = "15. Dezember 2024"
 
-function StripePaymentForm({
-  orderData,
-  onSuccess,
-  onError,
-}: {
-  orderData: any
-  onSuccess: () => void
-  onError: (error: string) => void
-}) {
-  const stripe = useStripe()
-  const elements = useElements()
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [paymentError, setPaymentError] = useState<ErrorInfo | null>(null)
-  const { executeWithRetry, isRetrying } = useRetryLogic({
-    maxAttempts: 3,
-    baseDelay: 2000,
-  })
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault()
-
-    if (!stripe || !elements) {
-      return
-    }
-
-    setIsProcessing(true)
-    setPaymentError(null)
-
-    try {
-      await executeWithRetry(async () => {
-        const { error } = await stripe.confirmPayment({
-          elements,
-          confirmParams: {
-            return_url: `${window.location.origin}/order-confirmation?orderNumber=${orderData.orderNumber}&paymentMethod=stripe`,
-          },
-        })
-
-        if (error) {
-          const classifiedError = classifyError(error)
-          setPaymentError(classifiedError)
-          throw error
-        } else {
-          onSuccess()
-        }
-      })
-    } catch (error) {
-      console.error("Payment error:", error)
-      if (!paymentError) {
-        const classifiedError = classifyError(error)
-        setPaymentError(classifiedError)
-      }
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const retryPayment = async () => {
-    setPaymentError(null)
-    await handleSubmit(new Event("submit") as any)
-  }
-
-  return (
-    <div className="space-y-6">
-      <EnhancedErrorHandler
-        error={paymentError}
-        onRetry={paymentError?.retryable ? retryPayment : undefined}
-        onDismiss={() => setPaymentError(null)}
-      />
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <PaymentElement />
-        <Button type="submit" disabled={!stripe || isProcessing || isRetrying} className="w-full" size="lg">
-          {isProcessing || isRetrying ? "Zahlung wird verarbeitet..." : `€${orderData.total} bezahlen`}
-        </Button>
-      </form>
-    </div>
-  )
-}
+// Removed StripePaymentForm component
 
 export default function CheckoutPage() {
   const { state, dispatch } = useCart()
@@ -185,14 +105,7 @@ export default function CheckoutPage() {
     }
   }, [nearestLocations, selectedLocation])
 
-  const supabase = useMemo(() => {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (!url || !anon) {
-      console.error("[v0] [Supabase] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY")
-    }
-    return createBrowserClient(url!, anon!)
-  }, [])
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     let isMounted = true

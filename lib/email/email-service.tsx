@@ -97,18 +97,20 @@ export class EmailService {
     pickupDate?: string,
     orderItems?: Array<{ product_name: string; quantity: number; unit?: string }>,
   ): Promise<boolean> {
+    const html = buildEmail("orderConfirmation", {
+      customerName,
+      orderId,
+      orderTotal,
+      paymentMethod,
+      deliveryMethod,
+      pickupDate,
+      orderItems,
+    })
+
     const emailData: EmailData = {
       to: customerEmail,
       subject: `Bestellbestätigung ${orderId} - Südfrüchte Hohenlohe`,
-      html: this.getOrderConfirmationTemplate(
-        customerName,
-        orderId,
-        orderTotal,
-        paymentMethod,
-        deliveryMethod,
-        pickupDate,
-        orderItems,
-      ),
+      html,
     }
 
     return await this.sendEmail(emailData)
@@ -166,125 +168,6 @@ export class EmailService {
           </div>
           
           <p>Wir freuen uns auf Ihren nächsten Besuch!</p>
-          
-          <p>Mit freundlichen Grüßen<br>
-          Ihr Team von Südfrüchte Hohenlohe</p>
-        </div>
-        
-        <div style="background: #333; color: white; padding: 15px; text-align: center; font-size: 12px;">
-          <p>Südfrüchte Hohenlohe | Weststraße 28 | 74629 Pfedelbach</p>
-          <p>E-Mail: kontakt@suedfruechte-hohenlohe.de | Tel: 0157 357 038 64</p>
-        </div>
-      </div>
-    `
-  }
-
-  private static getOrderConfirmationTemplate(
-    customerName: string,
-    orderId: string,
-    orderTotal: string,
-    paymentMethod: string,
-    deliveryMethod?: string,
-    pickupDate?: string,
-    orderItems?: Array<{ product_name: string; quantity: number; unit?: string }>,
-  ): string {
-    const paymentMethodText =
-      paymentMethod === "transfer"
-        ? "Überweisung"
-        : paymentMethod === "cash"
-          ? "Barzahlung bei Abholung"
-          : paymentMethod === "card"
-            ? "Kartenzahlung"
-            : "Unbekannt"
-
-    const bankDetailsSection =
-      paymentMethod === "transfer"
-        ? `
-      <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 8px; margin: 20px 0;">
-        <h3 style="color: #856404; margin-top: 0;">Bankverbindung für Überweisung</h3>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-          <div>
-            <strong>Empfänger:</strong><br>
-            Gerlinde Fink
-          </div>
-          <div>
-            <strong>IBAN:</strong><br>
-            DE89 3704 0044 0532 0130 00
-          </div>
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-          <div>
-            <strong>BIC:</strong><br>
-            COBADEFFXXX
-          </div>
-          <div>
-            <strong>Verwendungszweck:</strong><br>
-            Bestellung ${orderId}
-          </div>
-        </div>
-        <p style="margin: 0; padding: 10px; background: #f8f9fa; border-radius: 4px; font-size: 14px;">
-          <strong>Wichtig:</strong> Bitte geben Sie unbedingt die Bestellnummer als Verwendungszweck an.
-        </p>
-      </div>
-    `
-        : ""
-
-    const shippingNotice =
-      paymentMethod === "transfer" && deliveryMethod === "delivery"
-        ? `
-      <div style="background: #e3f2fd; border: 1px solid #90caf9; padding: 15px; border-radius: 8px; margin: 20px 0;">
-        <h4 style="color: #1565c0; margin-top: 0;">📦 Versandhinweis</h4>
-        <p style="margin: 0; color: #1565c0;">
-          Ihre Ware wird innerhalb von 1-3 Tagen nach Zahlungseingang versandt.
-        </p>
-      </div>
-    `
-        : ""
-
-    const orderItemsSection =
-      orderItems && orderItems.length > 0
-        ? `
-      <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
-        <h3 style="color: #a16207; margin-top: 0;">Bestellte Artikel:</h3>
-        ${orderItems
-          .map(
-            (item) => `
-          <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
-            <span style="font-weight: 500;">${item.product_name}</span>
-            <span>${item.quantity} ${item.unit || "Stück"}</span>
-          </div>
-        `,
-          )
-          .join("")}
-      </div>
-    `
-        : ""
-
-    return `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #a16207 0%, #d97706 100%); color: white; padding: 20px; text-align: center;">
-          <h1 style="margin: 0;">Südfrüchte Hohenlohe</h1>
-          <p style="margin: 5px 0 0 0;">Bestellbestätigung</p>
-        </div>
-        
-        <div style="padding: 20px; background: #f9f9f9;">
-          <h2>Liebe/r ${customerName},</h2>
-          
-          <p>vielen Dank für Ihre Bestellung bei Südfrüchte Hohenlohe!</p>
-          
-          <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="color: #a16207; margin-top: 0;">Bestelldetails:</h3>
-            <p><strong>Bestellnummer:</strong> ${orderId}</p>
-            <p><strong>Gesamtbetrag:</strong> ${orderTotal}</p>
-            <p><strong>Zahlungsmethode:</strong> ${paymentMethodText}</p>
-            ${pickupDate ? `<p><strong>Abholtermin:</strong> ${pickupDate}</p>` : ""}
-          </div>
-          
-          ${orderItemsSection}
-          ${bankDetailsSection}
-          ${shippingNotice}
-          
-          <p>Wir werden Ihre Bestellung sorgfältig vorbereiten und Sie informieren, sobald sie zur Abholung bereit ist.</p>
           
           <p>Mit freundlichen Grüßen<br>
           Ihr Team von Südfrüchte Hohenlohe</p>

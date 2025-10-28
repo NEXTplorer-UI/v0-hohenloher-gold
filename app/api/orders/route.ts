@@ -245,7 +245,7 @@ export async function POST(request: NextRequest) {
       pickup_location: orderData.pickupLocation || null,
       pickup_location_id: pickupLocationId, // Now uses robust lookup
       payment_method: orderData.paymentMethod,
-      payment_status: orderData.paymentMethod === "stripe" ? "paid" : "pending",
+      payment_status: orderData.paymentMethod === "sumup" ? "paid" : "pending",
       status: "confirmed",
       notes: orderData.notes || null,
       pickup_reminders: orderData.emailReminder || false,
@@ -353,6 +353,34 @@ export async function POST(request: NextRequest) {
       deliveryDate: deliveryDate,
       itemCount: itemsResult.length,
     })
+
+    if (savedOrder.payment_status === "paid") {
+      try {
+        console.log("[/api/orders] Generating invoice for paid order:", savedOrder.order_number)
+
+        // Generate invoice in background (don't block order response)
+        fetch(`${request.nextUrl.origin}/api/generate-invoice`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: savedOrder.id,
+            orderNumber: savedOrder.order_number,
+            customerEmail: orderData.email,
+            customerName: `${orderData.firstName || ""} ${orderData.lastName || ""}`.trim(),
+            items: itemsResult,
+            subtotal: savedOrder.subtotal,
+            shippingCost: savedOrder.shipping_cost,
+            total: savedOrder.total,
+            paymentMethod: savedOrder.payment_method,
+          }),
+        }).catch((err) => {
+          console.error("[/api/orders] Failed to trigger invoice generation:", err)
+        })
+      } catch (invoiceError) {
+        console.error("[/api/orders] Error triggering invoice generation:", invoiceError)
+        // Don't fail the order if invoice generation fails
+      }
+    }
 
     if (savedOrder.status === "confirmed") {
       try {
