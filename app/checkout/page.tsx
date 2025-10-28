@@ -55,6 +55,9 @@ export default function CheckoutPage() {
   const [createAccount, setCreateAccount] = useState(false)
   const [isEditingCart, setIsEditingCart] = useState(false)
 
+  const [acceptedAGB, setAcceptedAGB] = useState(false)
+  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false)
+
   const [deliveryDateInfo, setDeliveryDateInfo] = useState<{
     deliveryDate: string | null
     scheduleId: string | null
@@ -340,11 +343,7 @@ export default function CheckoutPage() {
   const handleOrderSubmission = useCallback(async () => {
     console.log("[v0] [Checkout] Order submission started")
 
-    // Added checks for AGB and Datenschutz acceptance
-    const acceptAGB = (document.getElementById("acceptAGB") as HTMLInputElement)?.checked
-    const acceptPrivacy = (document.getElementById("acceptPrivacy") as HTMLInputElement)?.checked
-
-    if (!acceptAGB || !acceptPrivacy) {
+    if (!acceptedAGB || !acceptedPrivacy) {
       alert("Bitte bestätigen Sie die AGB und die Datenschutzerklärung.")
       return
     }
@@ -616,6 +615,8 @@ export default function CheckoutPage() {
     checkEmailExists, // Added checkEmailExists to dependencies - this is the fix
     setLoginEmail, // Added setLoginEmail to dependencies
     setIsLoginMode, // Added setIsLoginMode to dependencies
+    acceptedAGB, // Added to dependencies
+    acceptedPrivacy, // Added to dependencies
   ])
 
   const handleSumUpFailed = async (failureData: any) => {
@@ -1632,7 +1633,7 @@ export default function CheckoutPage() {
                             <CreditCard className="w-4 h-4 text-primary" />
                             <div>
                               <div className="font-medium text-sm">Online bezahlen</div>
-                              <div className="text-xs text-muted-foreground">Kreditkarte, Debitkarte, PayPal</div>
+                              <div className="text-xs text-muted-foreground">Kreditkarte, Debitkarte, PayPa</div>
                             </div>
                           </div>
                         </Label>
@@ -1663,6 +1664,8 @@ export default function CheckoutPage() {
                     <div className="flex items-start gap-3">
                       <Checkbox
                         id="acceptAGB"
+                        checked={acceptedAGB}
+                        onCheckedChange={(checked) => setAcceptedAGB(checked as boolean)}
                         required
                         className="mt-0.5 w-4 h-4 flex-shrink-0 rounded border-2 border-primary bg-transparent data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
                       />
@@ -1684,6 +1687,8 @@ export default function CheckoutPage() {
                     <div className="flex items-start gap-3">
                       <Checkbox
                         id="acceptPrivacy"
+                        checked={acceptedPrivacy}
+                        onCheckedChange={(checked) => setAcceptedPrivacy(checked as boolean)}
                         required
                         className="mt-0.5 w-4 h-4 flex-shrink-0 rounded border-2 border-primary bg-transparent data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
                       />

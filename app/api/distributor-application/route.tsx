@@ -178,7 +178,6 @@ function applicantHtml(data: z.infer<typeof distributorApplicationSchema>) {
           
           <div class="footer">
             <p><strong>Hohenloher Gold</strong><br>
-            Süßfrüchte aus Sizilien und Hohenlohe<br>
             kontakt@suedfruechte-hohenlohe.de</p>
           </div>
         </div>
@@ -205,6 +204,11 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data
 
+    console.log("[v0] [distributor-application] Sending emails to:", {
+      admin: ADMIN_EMAIL,
+      applicant: data.email,
+    })
+
     const adminEmail = buildEmail("distributorApplication", {
       firstName: data.firstName,
       lastName: data.lastName,
@@ -220,12 +224,17 @@ export async function POST(request: NextRequest) {
       newsletterSignup: data.newsletterSignup,
     })
 
-    // Send admin notification
-    await EmailService.sendEmail({
-      to: ADMIN_EMAIL,
-      subject: `Neue Verteiler-Bewerbung: ${data.firstName} ${data.lastName} (${data.plz} ${data.city})`,
-      html: adminEmail.html,
-    })
+    try {
+      await EmailService.sendEmail({
+        to: ADMIN_EMAIL,
+        subject: `Neue Verteiler-Bewerbung: ${data.firstName} ${data.lastName} (${data.plz} ${data.city})`,
+        html: adminEmail.html,
+      })
+      console.log("[v0] [distributor-application] Admin email sent successfully")
+    } catch (adminEmailError) {
+      console.error("[v0] [distributor-application] Failed to send admin email:", adminEmailError)
+      // Continue to send applicant email even if admin email fails
+    }
 
     const applicantEmail = buildEmail("distributorApplication", {
       firstName: data.firstName,
@@ -242,12 +251,17 @@ export async function POST(request: NextRequest) {
       newsletterSignup: data.newsletterSignup,
     })
 
-    // Send confirmation to applicant
-    await EmailService.sendEmail({
-      to: data.email,
-      subject: applicantEmail.subject,
-      html: applicantEmail.html,
-    })
+    try {
+      await EmailService.sendEmail({
+        to: data.email,
+        subject: applicantEmail.subject,
+        html: applicantEmail.html,
+      })
+      console.log("[v0] [distributor-application] Applicant email sent successfully")
+    } catch (applicantEmailError) {
+      console.error("[v0] [distributor-application] Failed to send applicant email:", applicantEmailError)
+      // Don't fail the entire request if applicant email fails
+    }
 
     if (ENABLE_DB_LOG) {
       try {
