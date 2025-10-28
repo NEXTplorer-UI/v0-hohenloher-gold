@@ -8,10 +8,23 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Mail, Send, Users, Eye, RefreshCw, TrendingUp, ImageIcon, Paperclip, X, Upload } from "lucide-react"
+import {
+  Mail,
+  Send,
+  Users,
+  Eye,
+  RefreshCw,
+  TrendingUp,
+  ImageIcon,
+  Paperclip,
+  X,
+  Upload,
+  HelpCircle,
+} from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import NewsletterConfirmationDialog from "./newsletter-confirmation-dialog"
 import { buildEmail } from "@/lib/email/build"
+import { markdownToHtml } from "@/lib/markdown"
 
 interface NewsletterStats {
   subscribers: number
@@ -51,6 +64,7 @@ export default function NewsletterSystem() {
   const [showPreview, setShowPreview] = useState(false)
   const [previewHtml, setPreviewHtml] = useState("")
   const { toast } = useToast()
+  const [showMarkdownHelp, setShowMarkdownHelp] = useState(false)
 
   const loadStats = async () => {
     setIsUpdating(true)
@@ -246,9 +260,11 @@ export default function NewsletterSystem() {
       return
     }
 
+    const htmlContent = markdownToHtml(content)
+
     const emailResult = buildEmail("newsletter", {
       subject,
-      content,
+      content: htmlContent,
       imageUrl,
     })
     setPreviewHtml(emailResult.html)
@@ -357,13 +373,62 @@ export default function NewsletterSystem() {
             </div>
 
             <div>
-              <label className="text-sm font-medium">Inhalt</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">Inhalt (Markdown unterstützt)</label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowMarkdownHelp(!showMarkdownHelp)}
+                  className="h-8 text-xs"
+                >
+                  <HelpCircle className="h-4 w-4 mr-1" />
+                  Markdown-Hilfe
+                </Button>
+              </div>
+
+              {showMarkdownHelp && (
+                <div className="mb-3 p-4 bg-muted rounded-lg text-sm space-y-2">
+                  <p className="font-semibold text-foreground">Markdown-Formatierung:</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-muted-foreground">
+                    <div>
+                      <code className="bg-background px-2 py-1 rounded">**fett**</code> → <strong>fett</strong>
+                    </div>
+                    <div>
+                      <code className="bg-background px-2 py-1 rounded">*kursiv*</code> → <em>kursiv</em>
+                    </div>
+                    <div>
+                      <code className="bg-background px-2 py-1 rounded"># Überschrift 1</code> → Große Überschrift
+                    </div>
+                    <div>
+                      <code className="bg-background px-2 py-1 rounded">## Überschrift 2</code> → Mittlere Überschrift
+                    </div>
+                    <div>
+                      <code className="bg-background px-2 py-1 rounded">[Link](url)</code> → Klickbarer Link
+                    </div>
+                    <div>
+                      <code className="bg-background px-2 py-1 rounded">![Bild](url)</code> → Bild einfügen
+                    </div>
+                    <div>
+                      <code className="bg-background px-2 py-1 rounded">- Listenpunkt</code> → Aufzählungsliste
+                    </div>
+                    <div>
+                      <code className="bg-background px-2 py-1 rounded">---</code> → Trennlinie
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Doppelte Zeilenumbrüche erstellen neue Absätze. Einfache Zeilenumbrüche werden als Zeilenumbruch
+                    dargestellt.
+                  </p>
+                </div>
+              )}
+
               <Textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="Newsletter Inhalt eingeben..."
-                rows={8}
+                placeholder="Newsletter Inhalt eingeben... (Markdown wird unterstützt)&#10;&#10;Beispiel:&#10;# Willkommen&#10;&#10;Besuchen Sie unseren [Shop](https://...)&#10;&#10;**Neue Produkte:**&#10;- Sizilianische Orangen&#10;- Bio-Mandeln"
+                rows={12}
                 disabled={isLoading}
+                className="font-mono text-sm"
               />
             </div>
             <div className="flex gap-2">

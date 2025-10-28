@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
 import { buildEmail } from "@/lib/email/build"
 import { requireAdmin } from "@/lib/auth/api-auth"
+import { markdownToHtml } from "@/lib/markdown"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -30,6 +31,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
+    const htmlContent = type === "newsletter" ? markdownToHtml(content) : content
+
     const results = {
       sent: 0,
       failed: 0,
@@ -44,7 +47,7 @@ export async function POST(request: NextRequest) {
         try {
           const emailResult = buildEmail("newsletter", {
             subject,
-            content,
+            content: htmlContent, // Use converted HTML content
             imageUrl,
             recipientEmail: email,
           })
