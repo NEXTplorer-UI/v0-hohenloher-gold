@@ -24,6 +24,10 @@ import {
   FolderOpen,
   Trash2,
   TestTube,
+  History,
+  AlertCircle,
+  CheckCircle,
+  Clock,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import NewsletterConfirmationDialog from "./newsletter-confirmation-dialog"
@@ -60,6 +64,28 @@ interface Draft {
   updated_at: string
 }
 
+interface SendHistory {
+  id: string
+  subject: string
+  recipient_count: number
+  sent_at: string
+  created_at: string
+  stats: {
+    sent: number
+    failed: number
+    pending: number
+  }
+}
+
+interface EmailSend {
+  id: string
+  recipient_email: string
+  status: "sent" | "failed" | "pending"
+  error_message: string | null
+  sent_at: string | null
+  created_at: string
+}
+
 export default function NewsletterSystem() {
   const [subject, setSubject] = useState("")
   const [content, setContent] = useState("")
@@ -88,6 +114,12 @@ export default function NewsletterSystem() {
   const [isSavingDraft, setIsSavingDraft] = useState(false)
   const [testEmail, setTestEmail] = useState("")
   const [isSendingTest, setIsSendingTest] = useState(false)
+  const [showSendHistory, setShowSendHistory] = useState(false)
+  const [sendHistory, setSendHistory] = useState<SendHistory[]>([])
+  const [selectedSend, setSelectedSend] = useState<SendHistory | null>(null)
+  const [emailSends, setEmailSends] = useState<EmailSend[]>([])
+  const [showSendDetails, setShowSendDetails] = useState(false)
+  const [isResending, setIsResending] = useState(false)
 
   const loadStats = async () => {
     setIsUpdating(true)
@@ -123,6 +155,41 @@ export default function NewsletterSystem() {
       toast({
         title: "Fehler",
         description: "Entwürfe konnten nicht geladen werden",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const loadSendHistory = async () => {
+    try {
+      const response = await fetch("/api/newsletter/send-history")
+      if (!response.ok) throw new Error("Failed to load send history")
+
+      const data = await response.json()
+      setSendHistory(data.sends || [])
+    } catch (error) {
+      console.error("[v0] Error loading send history:", error)
+      toast({
+        title: "Fehler",
+        description: "Versandhistorie konnte nicht geladen werden",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const loadSendDetails = async (sendId: string) => {
+    try {
+      const response = await fetch(`/api/newsletter/send-history/${sendId}`)
+      if (!response.ok) throw new Error("Failed to load send details")
+
+      const data = await response.json()
+      setEmailSends(data.emailSends || [])
+      setShowSendDetails(true)
+    } catch (error) {
+      console.error("[v0] Error loading send details:", error)
+      toast({
+        title: "Fehler",
+        description: "Versanddetails konnten nicht geladen werden",
         variant: "destructive",
       })
     }
@@ -263,10 +330,20 @@ export default function NewsletterSystem() {
       const result = await response.json()
       console.log("[v0] Newsletter sent successfully:", result)
 
+      const message =
+        result.results.failed > 0
+          ? `${result.results.sent} erfolgreich, ${result.results.failed} fehlgeschlagen`
+          : `Erfolgreich an ${result.results.sent} Empfänger gesendet`
+
       toast({
-        title: "Newsletter gesendet!",
-        description: `Newsletter wurde erfolgreich an ${result.results.sent} Empfänger gesendet`,
+        title: result.results.failed > 0 ? "Teilweise gesendet" : "Newsletter gesendet!",
+        description: message,
+        variant: result.results.failed > 0 ? "destructive" : "default",
       })
+
+      if (result.results.errors && result.results.errors.length > 0) {
+        console.error("[v0] Send errors:", result.results.errors)
+      }
 
       setSubject("")
       setContent("")
@@ -275,6 +352,7 @@ export default function NewsletterSystem() {
       setShowConfirmation(false)
 
       await loadStats()
+      await loadSendHistory()
     } catch (error) {
       console.error("[v0] Error sending newsletter:", error)
       toast({
@@ -472,6 +550,44 @@ export default function NewsletterSystem() {
     setShowSaveDraft(true)
   }
 
+  const handleResendFailed = async (newsletterSendId: string) => {
+    if (!confirm("Möchten Sie den Newsletter erneut an alle fehlgeschlagenen Empfänger senden?")) return
+
+    setIsResending(true)
+    try {
+      const response = await fetch("/api/newsletter/resend-failed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newsletterSendId }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to resend")
+      }
+
+      const result = await response.json()
+
+      toast({
+        title: "Erneut gesendet!",
+        description: `${result.results.sent} E-Mails erfolgreich versendet, ${result.results.failed} fehlgeschlagen`,
+      })
+
+      // Reload details
+      await loadSendDetails(newsletterSendId)
+      await loadSendHistory()
+    } catch (error) {
+      console.error("[v0] Error resending failed emails:", error)
+      toast({
+        title: "Fehler",
+        description: error instanceof Error ? error.message : "Erneutes Senden fehlgeschlagen",
+        variant: "destructive",
+      })
+    } finally {
+      setIsResending(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -480,10 +596,23 @@ export default function NewsletterSystem() {
             <CardTitle>Newsletter System</CardTitle>
             <CardDescription>Newsletter erstellen und an Kunden versenden</CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={loadStats} disabled={isUpdating}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${isUpdating ? "animate-spin" : ""}`} />
-            Aktualisieren
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setShowSendHistory(true)
+                loadSendHistory()
+              }}
+            >
+              <History className="h-4 w-4 mr-2" />
+              Versandhistorie
+            </Button>
+            <Button variant="outline" size="sm" onClick={loadStats} disabled={isUpdating}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${isUpdating ? "animate-spin" : ""}`} />
+              Aktualisieren
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
@@ -735,6 +864,126 @@ export default function NewsletterSystem() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={showSendHistory} onOpenChange={setShowSendHistory}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Versandhistorie</DialogTitle>
+            <DialogDescription>Übersicht aller versendeten Newsletter</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {sendHistory.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">Keine Versandhistorie vorhanden</p>
+            ) : (
+              sendHistory.map((send) => (
+                <Card key={send.id} className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium truncate">{send.subject}</h4>
+                      <div className="flex gap-4 mt-2 text-sm">
+                        <div className="flex items-center gap-1 text-green-600">
+                          <CheckCircle className="h-4 w-4" />
+                          <span>{send.stats.sent} gesendet</span>
+                        </div>
+                        {send.stats.failed > 0 && (
+                          <div className="flex items-center gap-1 text-red-600">
+                            <AlertCircle className="h-4 w-4" />
+                            <span>{send.stats.failed} fehlgeschlagen</span>
+                          </div>
+                        )}
+                        {send.stats.pending > 0 && (
+                          <div className="flex items-center gap-1 text-yellow-600">
+                            <Clock className="h-4 w-4" />
+                            <span>{send.stats.pending} ausstehend</span>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(send.sent_at).toLocaleString("de-DE")}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedSend(send)
+                          loadSendDetails(send.id)
+                        }}
+                      >
+                        Details
+                      </Button>
+                      {send.stats.failed > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleResendFailed(send.id)}
+                          disabled={isResending}
+                        >
+                          {isResending ? (
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Send className="h-4 w-4 mr-1" />
+                              Erneut senden
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSendDetails} onOpenChange={setShowSendDetails}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Versanddetails</DialogTitle>
+            <DialogDescription>
+              {selectedSend?.subject} - {emailSends.length} Empfänger
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {emailSends.map((emailSend) => (
+              <div key={emailSend.id} className="flex items-center justify-between p-3 border rounded-lg">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{emailSend.recipient_email}</p>
+                  {emailSend.error_message && <p className="text-xs text-red-600 mt-1">{emailSend.error_message}</p>}
+                  {emailSend.sent_at && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {new Date(emailSend.sent_at).toLocaleString("de-DE")}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  {emailSend.status === "sent" && (
+                    <div className="flex items-center gap-1 text-green-600">
+                      <CheckCircle className="h-4 w-4" />
+                      <span className="text-sm">Gesendet</span>
+                    </div>
+                  )}
+                  {emailSend.status === "failed" && (
+                    <div className="flex items-center gap-1 text-red-600">
+                      <AlertCircle className="h-4 w-4" />
+                      <span className="text-sm">Fehlgeschlagen</span>
+                    </div>
+                  )}
+                  {emailSend.status === "pending" && (
+                    <div className="flex items-center gap-1 text-yellow-600">
+                      <Clock className="h-4 w-4" />
+                      <span className="text-sm">Ausstehend</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">

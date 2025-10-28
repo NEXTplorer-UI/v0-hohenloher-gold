@@ -23,6 +23,17 @@ export async function POST(request: NextRequest) {
     const { subject, content, imageUrl, attachment, testEmail } = await request.json()
 
     console.log(`[v0] [send-test] Sending test email to ${testEmail}`)
+    console.log(
+      `[v0] [send-test] Attachment received:`,
+      attachment
+        ? {
+            filename: attachment.filename,
+            url: attachment.url,
+            type: attachment.type,
+            size: attachment.size,
+          }
+        : "No attachment",
+    )
 
     if (!subject || !content || !testEmail) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -57,6 +68,7 @@ export async function POST(request: NextRequest) {
           path: attachment.url,
         },
       ]
+      console.log(`[v0] [send-test] Adding attachment to email:`, emailData.attachments)
     }
 
     await resend.emails.send(emailData)
