@@ -32,23 +32,8 @@ export const metadata: Metadata = {
   title: "Hohenloher Gold - Regionale Lebensmittel & Sizilianische Südfrüchte",
   description: "Ursprünglich, echt, gesellig",
   icons: {
-    icon: [
-      {
-        url: process.env.NEXT_PUBLIC_LOGO_URL || "/placeholder.svg",
-        sizes: "32x32",
-        type: "image/png",
-      },
-      {
-        url: process.env.NEXT_PUBLIC_LOGO_URL || "/placeholder.svg",
-        sizes: "16x16",
-        type: "image/png",
-      },
-    ],
-    apple: {
-      url: process.env.NEXT_PUBLIC_LOGO_URL || "/placeholder.svg",
-      sizes: "180x180",
-      type: "image/png",
-    },
+    icon: "/app/icon.jpg",
+    apple: "/app/icon.jpg",
   },
   keywords: [
     "Hohenloher Gold",
