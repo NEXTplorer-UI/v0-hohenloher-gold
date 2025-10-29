@@ -4,6 +4,10 @@ import { buildEmail } from "@/lib/email/build"
 import { requireAdmin, createAdminClient } from "@/lib/supabase/server"
 import { markdownToHtml } from "@/lib/markdown"
 
+if (!process.env.RESEND_API_KEY) {
+  console.error("[v0] [send-bulk-email] RESEND_API_KEY environment variable is not set!")
+}
+
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 interface Attachment {
@@ -14,6 +18,14 @@ interface Attachment {
 }
 
 export async function POST(request: NextRequest) {
+  if (!process.env.RESEND_API_KEY) {
+    console.error("[v0] [send-bulk-email] RESEND_API_KEY is missing")
+    return NextResponse.json(
+      { error: "Email service not configured. Please set RESEND_API_KEY environment variable." },
+      { status: 500 },
+    )
+  }
+
   const authResult = await requireAdmin(request)
   if (authResult instanceof NextResponse) {
     return authResult
@@ -35,24 +47,34 @@ export async function POST(request: NextRequest) {
 
     const htmlContent = type === "newsletter" ? markdownToHtml(content) : content
 
-    const { data: newsletterSend, error: sendError } = await supabase
-      .from("newsletter_sends")
-      .insert({
-        subject,
-        content: htmlContent,
-        image_url: imageUrl || null,
-        sent_by: authResult.user.id,
-        recipient_count: recipients.length,
-      })
-      .select()
-      .single()
+    let newsletterSend
+    try {
+      const { data, error: sendError } = await supabase
+        .from("newsletter_sends")
+        .insert({
+          subject,
+          content: htmlContent,
+          image_url: imageUrl || null,
+          sent_by: authResult.user.id,
+          recipient_count: recipients.length,
+        })
+        .select()
+        .single()
 
-    if (sendError || !newsletterSend) {
-      console.error("[v0] [send-bulk-email] Failed to create newsletter_send record:", sendError)
-      throw new Error("Failed to create send record")
+      if (sendError) {
+        console.error("[v0] [send-bulk-email] Database error creating newsletter_send:", sendError)
+        throw new Error(`Database error: ${sendError.message}`)
+      }
+
+      newsletterSend = data
+      console.log(`[v0] [send-bulk-email] Created newsletter_send record: ${newsletterSend.id}`)
+    } catch (dbError) {
+      console.error("[v0] [send-bulk-email] Failed to create newsletter_send record:", dbError)
+      return NextResponse.json(
+        { error: `Failed to create send record: ${dbError instanceof Error ? dbError.message : "Unknown error"}` },
+        { status: 500 },
+      )
     }
-
-    console.log(`[v0] [send-bulk-email] Created newsletter_send record: ${newsletterSend.id}`)
 
     const results = {
       sent: 0,
@@ -73,7 +95,6 @@ export async function POST(request: NextRequest) {
       console.error("[v0] [send-bulk-email] Failed to create email_sends records:", insertError)
     }
 
-    // Split recipients into batches of 100 (Resend's batch limit)
     const batchSize = 100
     for (let i = 0; i < recipients.length; i += batchSize) {
       const batch = recipients.slice(i, i + batchSize)
@@ -83,7 +104,6 @@ export async function POST(request: NextRequest) {
       )
 
       try {
-        // Prepare all emails for this batch
         const batchEmails = batch.map((email: string) => {
           const emailResult = buildEmail("newsletter", {
             subject,
@@ -95,7 +115,7 @@ export async function POST(request: NextRequest) {
 
           const emailData: any = {
             from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
-            to: email,
+            to: [email],
             subject: emailResult.subject,
             html: emailResult.html,
           }
@@ -112,19 +132,21 @@ export async function POST(request: NextRequest) {
           return emailData
         })
 
-        const batchResult = await resend.batch.send(batchEmails)
+        let batchResult
+        try {
+          batchResult = await resend.batch.send(batchEmails)
+          console.log(`[v0] [send-bulk-email] Batch API response:`, JSON.stringify(batchResult, null, 2))
+        } catch (resendError) {
+          console.error(`[v0] [send-bulk-email] Resend API error:`, resendError)
+          throw new Error(`Resend API error: ${resendError instanceof Error ? resendError.message : "Unknown error"}`)
+        }
 
-        console.log(`[v0] [send-bulk-email] Batch result:`, JSON.stringify(batchResult))
-
-        // Check if the batch send was successful
         if (batchResult.data && Array.isArray(batchResult.data)) {
-          // Success: batchResult.data is an array of { id: string } objects
           for (let j = 0; j < batch.length; j++) {
             const email = batch[j]
             const emailResult = batchResult.data[j]
 
             if (emailResult && emailResult.id) {
-              // Email sent successfully
               results.sent++
               await supabase
                 .from("email_sends")
@@ -138,7 +160,6 @@ export async function POST(request: NextRequest) {
 
               console.log(`[v0] [send-bulk-email] Sent to ${email} (ID: ${emailResult.id})`)
             } else {
-              // Email failed (no ID returned)
               results.failed++
               const errorMessage = "No email ID returned"
               results.errors.push({ email, error: errorMessage })
@@ -156,14 +177,11 @@ export async function POST(request: NextRequest) {
             }
           }
         } else if (batchResult.error) {
-          // Batch API returned an error
           throw new Error(batchResult.error.message || "Batch send failed")
         } else {
-          // Unexpected response format
-          throw new Error("Unexpected batch response format")
+          throw new Error(`Unexpected batch response format: ${JSON.stringify(batchResult)}`)
         }
       } catch (error) {
-        // If entire batch fails, mark all emails as failed
         console.error(`[v0] [send-bulk-email] Batch failed:`, error)
         const errorMessage = error instanceof Error ? error.message : "Batch send failed"
 
@@ -182,7 +200,6 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Small delay between batches (optional, Resend handles rate limiting)
       if (i + batchSize < recipients.length) {
         await new Promise((resolve) => setTimeout(resolve, 500))
       }

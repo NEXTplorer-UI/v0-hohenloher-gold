@@ -254,15 +254,16 @@ function AdminDashboardContent() {
 
     checkAuth()
 
-    const handleActivity = () => updateActivity()
-    document.addEventListener("mousedown", handleActivity)
-    document.addEventListener("keydown", handleActivity)
-    document.addEventListener("scroll", handleActivity)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        updateActivity()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
 
     return () => {
-      document.removeEventListener("mousedown", handleActivity)
-      document.removeEventListener("keydown", handleActivity)
-      document.removeEventListener("scroll", handleActivity)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, supabase])
@@ -276,6 +277,7 @@ function AdminDashboardContent() {
       const remainingMs = timeoutMs - timeSinceActivity
 
       if (remainingMs <= 0) {
+        // Only logout if there has been no activity for the configured time
         handleLogout()
       } else {
         dispatch({ type: "SET_TIME_UNTIL_LOGOUT", payload: Math.ceil(remainingMs / (60 * 1000)) })
@@ -284,7 +286,7 @@ function AdminDashboardContent() {
 
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.autoLogoutEnabled, state.logoutTimer, state.user])
+  }, [state.autoLogoutEnabled, state.logoutTimer, state.user, state.lastActivity])
 
   const MobileTabNavigation = () => (
     <Sheet open={state.mobileSheetOpen} onOpenChange={(open) => dispatch({ type: "SET_MOBILE_SHEET", payload: open })}>

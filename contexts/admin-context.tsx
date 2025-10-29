@@ -47,7 +47,7 @@ function adminReducer(state: AdminState, action: AdminAction): AdminState {
     case "SET_LOGOUT_TIMER":
       return { ...state, logoutTimer: action.payload }
     case "UPDATE_ACTIVITY":
-      return { ...state, lastActivity: Date.now() }
+      return { ...state, lastActivity: Date.now(), timeUntilLogout: null }
     case "SET_TIME_UNTIL_LOGOUT":
       return { ...state, timeUntilLogout: action.payload }
     case "SET_MOBILE_SHEET":
@@ -109,11 +109,9 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     const supabase = createClient()
     await supabase.auth.signOut()
 
-    // Clear user state
     dispatch({ type: "SET_USER", payload: null })
 
-    // Redirect to login
-    const { useRouter } = await import("next/navigation")
+    // Redirect to login using window.location
     window.location.href = "/auth/login"
   }, [])
 

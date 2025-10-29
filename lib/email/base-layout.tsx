@@ -20,7 +20,18 @@ export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions
     unsubscribeEmail,
   } = options
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://hohenloher-gold.de"
+  let siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://hohenloher-gold.de"
+
+  // Force HTTPS if not present
+  if (!siteUrl.startsWith("http")) {
+    siteUrl = `https://${siteUrl}`
+  } else if (siteUrl.startsWith("http://")) {
+    siteUrl = siteUrl.replace("http://", "https://")
+  }
+
+  // Remove trailing slash
+  siteUrl = siteUrl.replace(/\/$/, "")
+
   const logoUrl =
     process.env.NEXT_PUBLIC_NEWS_LOGO_URL ||
     process.env.NEXT_PUBLIC_LOGO_URL ||
