@@ -38,7 +38,7 @@ export default function NewsletterConfirmationDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] h-auto max-w-none max-h-none overflow-y-auto p-6">
+      <DialogContent className="w-[80vw] h-auto max-w-none max-h-[90vh] overflow-y-auto p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <AlertTriangle className="h-6 w-6 text-amber-500" />
