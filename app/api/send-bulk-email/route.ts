@@ -36,9 +36,13 @@ export async function POST(request: NextRequest) {
   try {
     const { subject, content, imageUrl, attachment, recipients, type } = await request.json()
 
-    console.log(`[v0] [send-bulk-email] Sending ${type} to ${recipients.length} recipients`)
+    console.log(`[v0] [send-bulk-email] Starting newsletter send`)
+    console.log(`[v0] [send-bulk-email] - Type: ${type}`)
+    console.log(`[v0] [send-bulk-email] - Recipients: ${recipients.length}`)
+    console.log(`[v0] [send-bulk-email] - Subject: ${subject}`)
+    console.log(`[v0] [send-bulk-email] - Has attachment: ${!!attachment}`)
     if (attachment) {
-      console.log(`[v0] [send-bulk-email] With attachment: ${attachment.filename}`)
+      console.log(`[v0] [send-bulk-email] - Attachment: ${attachment.filename} (${attachment.type})`)
     }
 
     if (!subject || !content || !recipients || recipients.length === 0) {
@@ -47,6 +51,7 @@ export async function POST(request: NextRequest) {
 
     const htmlContent = type === "newsletter" ? markdownToHtml(content) : content
 
+    console.log(`[v0] [send-bulk-email] Creating newsletter_send record...`)
     let newsletterSend
     try {
       const { data, error: sendError } = await supabase
@@ -83,6 +88,7 @@ export async function POST(request: NextRequest) {
       newsletterSendId: newsletterSend.id,
     }
 
+    console.log(`[v0] [send-bulk-email] Creating ${recipients.length} email_sends records...`)
     const emailSendsData = recipients.map((email: string) => ({
       newsletter_send_id: newsletterSend.id,
       recipient_email: email,
@@ -93,18 +99,26 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       console.error("[v0] [send-bulk-email] Failed to create email_sends records:", insertError)
+      return NextResponse.json(
+        { error: `Failed to create email tracking records: ${insertError.message}` },
+        { status: 500 },
+      )
     }
+    console.log(`[v0] [send-bulk-email] Created email_sends records successfully`)
 
-    const batchSize = 100
+    const batchSize = 2 // Resend rate limit: 2 requests per second
+    const delayMs = 1000 // 1 second delay between batches
+
     for (let i = 0; i < recipients.length; i += batchSize) {
       const batch = recipients.slice(i, i + batchSize)
 
       console.log(
-        `[v0] [send-bulk-email] Processing batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(recipients.length / batchSize)} (${batch.length} emails)`,
+        `[v0] [send-bulk-email] Sending batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(recipients.length / batchSize)} (${batch.length} emails)`,
       )
 
-      try {
-        const batchEmails = batch.map((email: string) => {
+      // Send emails in parallel within the batch (max 2 at a time)
+      const batchPromises = batch.map(async (email: string) => {
+        try {
           const emailResult = buildEmail("newsletter", {
             subject,
             content: htmlContent,
@@ -115,7 +129,7 @@ export async function POST(request: NextRequest) {
 
           const emailData: any = {
             from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
-            to: [email],
+            to: email,
             subject: emailResult.subject,
             html: emailResult.html,
           }
@@ -129,64 +143,29 @@ export async function POST(request: NextRequest) {
             ]
           }
 
-          return emailData
-        })
+          const { data, error } = await resend.emails.send(emailData)
 
-        let batchResult
-        try {
-          batchResult = await resend.batch.send(batchEmails)
-          console.log(`[v0] [send-bulk-email] Batch API response:`, JSON.stringify(batchResult, null, 2))
-        } catch (resendError) {
-          console.error(`[v0] [send-bulk-email] Resend API error:`, resendError)
-          throw new Error(`Resend API error: ${resendError instanceof Error ? resendError.message : "Unknown error"}`)
-        }
-
-        if (batchResult.data && Array.isArray(batchResult.data)) {
-          for (let j = 0; j < batch.length; j++) {
-            const email = batch[j]
-            const emailResult = batchResult.data[j]
-
-            if (emailResult && emailResult.id) {
-              results.sent++
-              await supabase
-                .from("email_sends")
-                .update({
-                  status: "sent",
-                  sent_at: new Date().toISOString(),
-                  resend_id: emailResult.id,
-                })
-                .eq("newsletter_send_id", newsletterSend.id)
-                .eq("recipient_email", email)
-
-              console.log(`[v0] [send-bulk-email] Sent to ${email} (ID: ${emailResult.id})`)
-            } else {
-              results.failed++
-              const errorMessage = "No email ID returned"
-              results.errors.push({ email, error: errorMessage })
-
-              await supabase
-                .from("email_sends")
-                .update({
-                  status: "failed",
-                  error_message: errorMessage,
-                })
-                .eq("newsletter_send_id", newsletterSend.id)
-                .eq("recipient_email", email)
-
-              console.error(`[v0] [send-bulk-email] Failed to send to ${email}: ${errorMessage}`)
-            }
+          if (error) {
+            throw new Error(error.message)
           }
-        } else if (batchResult.error) {
-          throw new Error(batchResult.error.message || "Batch send failed")
-        } else {
-          throw new Error(`Unexpected batch response format: ${JSON.stringify(batchResult)}`)
-        }
-      } catch (error) {
-        console.error(`[v0] [send-bulk-email] Batch failed:`, error)
-        const errorMessage = error instanceof Error ? error.message : "Batch send failed"
 
-        for (const email of batch) {
+          if (data?.id) {
+            results.sent++
+            await supabase
+              .from("email_sends")
+              .update({
+                status: "sent",
+                sent_at: new Date().toISOString(),
+                resend_id: data.id,
+              })
+              .eq("newsletter_send_id", newsletterSend.id)
+              .eq("recipient_email", email)
+
+            console.log(`[v0] [send-bulk-email] Sent to ${email}`)
+          }
+        } catch (error) {
           results.failed++
+          const errorMessage = error instanceof Error ? error.message : "Failed to send"
           results.errors.push({ email, error: errorMessage })
 
           await supabase
@@ -197,11 +176,16 @@ export async function POST(request: NextRequest) {
             })
             .eq("newsletter_send_id", newsletterSend.id)
             .eq("recipient_email", email)
-        }
-      }
 
+          console.error(`[v0] [send-bulk-email] Failed to send to ${email}: ${errorMessage}`)
+        }
+      })
+
+      await Promise.all(batchPromises)
+
+      // Wait before next batch (except for the last batch)
       if (i + batchSize < recipients.length) {
-        await new Promise((resolve) => setTimeout(resolve, 500))
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
       }
     }
 
@@ -213,6 +197,13 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("[v0] [send-bulk-email] Error:", error)
+    if (error instanceof Error) {
+      console.error(`[v0] [send-bulk-email] Error details:`, {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      })
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 },
