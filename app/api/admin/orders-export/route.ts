@@ -10,6 +10,32 @@ function createAdminClient() {
   return createClient(url, key, { auth: { persistSession: false } })
 }
 
+function parseBulkOrderNames(notes: string | null): string[] {
+  if (!notes) return []
+
+  const lines = notes.split("\n")
+  const names: string[] = []
+  let inBulkSection = false
+
+  for (const line of lines) {
+    if (line.includes("Sammelbestellung für:")) {
+      inBulkSection = true
+      continue
+    }
+
+    if (inBulkSection) {
+      const match = line.match(/^\d+\.\s*(.+)$/) || line.match(/^-\s*(.+)$/)
+      if (match && match[1].trim()) {
+        names.push(match[1].trim())
+      } else if (line.trim() && !line.includes(":")) {
+        break
+      }
+    }
+  }
+
+  return names
+}
+
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
@@ -33,7 +59,7 @@ export async function GET(request: NextRequest) {
 
     console.log(`[v0] Found ${orders?.length || 0} orders for export`)
 
-    const BOM = "\uFEFF" // Byte Order Mark for proper Excel UTF-8 handling
+    const BOM = "\uFEFF"
     const timestamp = new Date().toISOString().split("T")[0]
 
     const headers = [
@@ -49,6 +75,9 @@ export async function GET(request: NextRequest) {
       "Zahlungsstatus",
       "Liefermethode",
       "Abholort",
+      "Ist Sammelbestellung",
+      "Anzahl Personen",
+      "Sammelbestellung Namen",
       "Gesamtbetrag",
       "Artikel (Name)",
       "Artikel (Menge)",
@@ -115,7 +144,10 @@ export async function GET(request: NextRequest) {
       const customer = order.customer || {}
       const items = Array.isArray(order.order_items) ? order.order_items : []
 
-      // Create one row per order item
+      const bulkOrderNames = parseBulkOrderNames(order.notes)
+      const isBulkOrder = bulkOrderNames.length > 0
+      const bulkOrderNamesStr = bulkOrderNames.join("; ")
+
       if (items.length > 0) {
         items.forEach((item: any) => {
           csvRows.push(
@@ -132,6 +164,9 @@ export async function GET(request: NextRequest) {
               escapeCSV(translatePaymentStatus(order.payment_status || "")),
               escapeCSV(translateDeliveryMethod(order.delivery_method || "")),
               escapeCSV(order.pickup_location),
+              isBulkOrder ? "Ja" : "Nein",
+              isBulkOrder ? bulkOrderNames.length.toString() : "0",
+              escapeCSV(bulkOrderNamesStr),
               order.total?.toString() || "0",
               escapeCSV(item.product_name),
               item.quantity?.toString() || "0",
@@ -142,7 +177,6 @@ export async function GET(request: NextRequest) {
           )
         })
       } else {
-        // If no items, create one row for the order
         csvRows.push(
           [
             dateStr,
@@ -157,11 +191,14 @@ export async function GET(request: NextRequest) {
             escapeCSV(translatePaymentStatus(order.payment_status || "")),
             escapeCSV(translateDeliveryMethod(order.delivery_method || "")),
             escapeCSV(order.pickup_location),
+            isBulkOrder ? "Ja" : "Nein",
+            isBulkOrder ? bulkOrderNames.length.toString() : "0",
+            escapeCSV(bulkOrderNamesStr),
             order.total?.toString() || "0",
-            "", // product_name
-            "", // quantity
-            "", // unit_price
-            "", // total_price
+            "",
+            "",
+            "",
+            "",
             escapeCSV(order.notes),
           ].join(";"),
         )

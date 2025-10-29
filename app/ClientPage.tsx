@@ -8,6 +8,7 @@ import Link from "next/link"
 import Image from "next/image"
 import dynamic from "next/dynamic"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
+import { WelcomePopup } from "@/components/welcome-popup"
 
 const LazyCard = dynamic(() => import("@/components/ui/card").then((mod) => ({ default: mod.Card })), {
   loading: () => <div className="animate-pulse bg-muted rounded-lg h-48" />,
@@ -16,6 +17,8 @@ const LazyCard = dynamic(() => import("@/components/ui/card").then((mod) => ({ d
 export default function ClientPage() {
   return (
     <div className="min-h-screen bg-background">
+      <WelcomePopup />
+
       <NextArrivalBanner />
 
       {/* Hero Section */}
@@ -31,7 +34,8 @@ export default function ClientPage() {
                   Natürliche Qualität in <span className="text-primary">Hohenlohe</span>
                 </h1>
                 <p className="text-base sm:text-lg text-muted-foreground leading-relaxed">
-                  Entdecken Sie möglichst unbehandelte Lebensmittel und frische Südfrüchte direkt vom Erzeuger. Qualität, Nachhaltigkeit und menschliche Beziehungen stehen bei uns im Mittelpunkt.
+                  Entdecken Sie möglichst unbehandelte Lebensmittel und frische Südfrüchte direkt vom Erzeuger.
+                  Qualität, Nachhaltigkeit und menschliche Beziehungen stehen bei uns im Mittelpunkt.
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-4">
@@ -104,7 +108,8 @@ export default function ClientPage() {
                 </div>
                 <h3 className="font-serif font-bold text-xl text-foreground">Zukunftsbejahend</h3>
                 <p className="text-muted-foreground">
-                  Faire Bedingungen für Bauern in Sizilien und Lebensmittel in ihrer reinsten Form zu erhalten stehen im Fokus.
+                  Faire Bedingungen für Bauern in Sizilien und Lebensmittel in ihrer reinsten Form zu erhalten stehen im
+                  Fokus.
                 </p>
               </CardContent>
             </Card>
@@ -180,9 +185,12 @@ export default function ClientPage() {
       <section className="py-16 sm:py-20 bg-primary text-primary-foreground">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="max-w-3xl mx-auto space-y-6">
-            <h2 className="font-serif font-bold text-2xl sm:text-3xl lg:text-4xl">Bringen Sie die Ribera Orangen auch in Ihre Region </h2>
+            <h2 className="font-serif font-bold text-2xl sm:text-3xl lg:text-4xl">
+              Bringen Sie die Ribera Orangen auch in Ihre Region{" "}
+            </h2>
             <p className="text-base sm:text-lg opacity-90">
-              Entdecken Sie unsere dezentrale Verteilung und werden Sie selbst Verteiler. Gemeinsam bringen wir die Sonne Siziliens in Ihre Region.
+              Entdecken Sie unsere dezentrale Verteilung und werden Sie selbst Verteiler. Gemeinsam bringen wir die
+              Sonne Siziliens in Ihre Region.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <Link href="/distributor#application-form">

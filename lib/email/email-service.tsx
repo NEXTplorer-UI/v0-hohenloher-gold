@@ -98,7 +98,14 @@ export class EmailService {
     paymentMethod: string,
     deliveryMethod?: string,
     pickupDate?: string,
-    orderItems?: Array<{ product_name: string; quantity: number; unit?: string }>,
+    orderItems?: Array<{
+      product_name: string
+      quantity: number
+      unit?: string
+      unit_price?: number
+      total_price?: number
+    }>,
+    hasCitrusFruits?: boolean,
   ): Promise<boolean> {
     const { html, subject } = buildEmail("orderConfirmation", {
       customerName,
@@ -108,6 +115,7 @@ export class EmailService {
       deliveryMethod,
       pickupDate,
       orderItems,
+      hasCitrusFruits,
     })
 
     const emailData: EmailData = {

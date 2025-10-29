@@ -103,28 +103,32 @@ export async function POST(request: NextRequest) {
       try {
         if (status === "confirmed" && previousStatus !== "confirmed") {
           await createMovementsFromOrder(
-            currentOrder.order_number,
+            currentOrder.id, // orderId (UUID)
+            currentOrder.order_number, // orderNumber (HG-2024-001)
             currentOrder.order_items.map((item: any) => ({
+              id: item.id,
+              product_id: item.product_id,
               product_name: item.product_name,
               product_category: item.product_category,
               quantity: item.quantity,
               unit_price: item.unit_price,
             })),
-            "Ausgang",
-            "Bestellung bestätigt",
+            "Bestellung bestätigt - Ausgang gebucht", // reason
           )
           console.log(`[v0] Created outgoing inventory movements for confirmed order ${currentOrder.order_number}`)
         } else if (status === "cancelled" && previousStatus === "confirmed") {
           await createMovementsFromOrder(
-            currentOrder.order_number,
+            currentOrder.id, // orderId (UUID)
+            currentOrder.order_number, // orderNumber (HG-2024-001)
             currentOrder.order_items.map((item: any) => ({
+              id: item.id,
+              product_id: item.product_id,
               product_name: item.product_name,
               product_category: item.product_category,
-              quantity: item.quantity,
+              quantity: item.quantity, // Will be negated in movement service
               unit_price: item.unit_price,
             })),
-            "Eingang",
-            "Bestellung storniert - Lager zurückgebucht",
+            "Bestellung storniert - Lager zurückgebucht", // reason
           )
           console.log(`[v0] Created reversal inventory movements for cancelled order ${currentOrder.order_number}`)
         }

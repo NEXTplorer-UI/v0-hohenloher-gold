@@ -40,7 +40,7 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
           (item) =>
             `<div class="data-row">
           <span class="data-label">${item.product_name}</span>
-          <span class="data-value">${item.quantity} ${item.unit || "Stück"}</span>
+          <span class="data-value">${item.quantity} ${item.unit || "Stück"} à €${item.unit_price?.toFixed(2) || "0.00"} = €${item.total_price?.toFixed(2) || "0.00"}</span>
         </div>`,
         )
         .join("")
@@ -77,10 +77,14 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
       : ""
 
   const shippingNotice =
-    vars.paymentMethod === "transfer" && vars.deliveryMethod === "delivery"
+    vars.deliveryMethod === "delivery"
       ? `
     <div class="info-box">
-      <p style="margin: 0;"><strong>📦 Versandhinweis:</strong> ${copy.orderConfirmation.shippingNotice}</p>
+      <p style="margin: 0;"><strong>📦 Versandhinweis:</strong> ${
+        vars.hasCitrusFruits
+          ? "Ihre Bestellung enthält Südfrüchte. Der Versand erfolgt nach Wareneingang, sobald die frischen Früchte bei uns eintreffen."
+          : copy.orderConfirmation.shippingNotice
+      }</p>
     </div>
   `
       : ""
@@ -92,9 +96,9 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
     <div class="info-box">
       <h3>${copy.orderConfirmation.detailsHeading}</h3>
       <p><strong>${copy.orderConfirmation.orderNumber}</strong> {{orderId}}</p>
-      <p><strong>${copy.orderConfirmation.totalAmount}</strong> {{orderTotal}}</p>
+      <p><strong>${copy.orderConfirmation.totalAmount}</strong> €{{orderTotal}}</p>
       <p><strong>${copy.orderConfirmation.paymentMethod}</strong> ${paymentMethodDisplay}</p>
-      {{#if pickupDate}}<p><strong>${copy.orderConfirmation.pickupDate}</strong> {{pickupDate}}</p>{{/if}}
+      {{#if pickupDate}}<p><strong>${vars.deliveryMethod === "delivery" ? "Voraussichtlicher Liefertermin:" : copy.orderConfirmation.pickupDate}</strong> {{pickupDate}}</p>{{/if}}
     </div>
     
     ${itemsList ? `<div class="data-section"><h3>${copy.orderConfirmation.itemsHeading}</h3>${itemsList}</div>` : ""}

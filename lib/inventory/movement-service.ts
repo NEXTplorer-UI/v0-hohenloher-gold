@@ -36,11 +36,12 @@ export async function createMovementsFromOrder(
   orderItems: OrderItem[],
   reason = "Kundenbestellung",
 ) {
-  console.log(`[v0] Creating Ausgang movements for order ${orderNumber}`)
+  console.log(`[v0] Creating inventory movements for order ${orderNumber}`)
+  console.log(`[v0] Order ID: ${orderId}, Items count: ${orderItems.length}, Reason: ${reason}`)
 
   const movements: InventoryMovement[] = orderItems.map((item) => ({
     product_id: item.product_id,
-    order_id: null,
+    order_id: orderId, // Use the actual order ID instead of null
     order_item_id: item.id || null,
     qty: -Math.abs(item.quantity), // Negative for outgoing
     reason,

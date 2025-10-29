@@ -162,10 +162,25 @@ export async function sendOrderConfirmationEmail(orderData: OrderData) {
       product_name: item.name,
       quantity: item.quantity,
       unit: item.unit,
+      unit_price: Number.parseFloat(item.price),
+      total_price: item.quantity * Number.parseFloat(item.price),
     }))
+
+    const hasCitrusFruits = orderData.items.some(
+      (item) => item.category.toLowerCase() === "citrus" || item.category.toLowerCase() === "südfrüchte",
+    )
 
     let formattedPickupDate: string | undefined = undefined
     if (orderData.deliveryMethod === "pickup" && orderData.deliveryDate) {
+      const date = new Date(orderData.deliveryDate)
+      formattedPickupDate = date.toLocaleDateString("de-DE", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    }
+
+    if (orderData.deliveryMethod === "delivery" && orderData.deliveryDate) {
       const date = new Date(orderData.deliveryDate)
       formattedPickupDate = date.toLocaleDateString("de-DE", {
         day: "2-digit",
@@ -183,13 +198,14 @@ export async function sendOrderConfirmationEmail(orderData: OrderData) {
         customerEmail: orderData.email,
         customerName: orderData.customerName,
         orderId: orderData.orderNumber,
-        orderTotal: `€${orderData.total}`,
+        orderTotal: orderData.total,
         paymentMethod: orderData.paymentMethod,
         deliveryMethod: orderData.deliveryMethod,
         pickupDate: formattedPickupDate,
         pickupStartTime: orderData.pickupStartTime,
         pickupEndTime: orderData.pickupEndTime,
         orderItems,
+        hasCitrusFruits,
       }),
     })
 

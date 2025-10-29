@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Download, Mail, Search, Filter, Loader2, ChevronDown, ChevronUp } from "lucide-react"
+import { Download, Mail, Search, Filter, Loader2, ChevronDown, ChevronUp, MapPin, Users } from "lucide-react"
 import { mapDBToUIStatus, getEmailTemplateForStatus } from "@/lib/order-status-mapping"
 import type { EmailTemplateId } from "@/lib/email/build"
 import { useToast } from "@/hooks/use-toast"
@@ -42,6 +42,34 @@ interface Order {
   order_items: OrderItem[]
 }
 
+function parseBulkOrderNames(notes: string | null): string[] {
+  if (!notes) return []
+
+  const lines = notes.split("\n")
+  const names: string[] = []
+  let inBulkSection = false
+
+  for (const line of lines) {
+    if (line.includes("Sammelbestellung für:")) {
+      inBulkSection = true
+      continue
+    }
+
+    if (inBulkSection) {
+      // Match lines like "1. Name" or "- Name"
+      const match = line.match(/^\d+\.\s*(.+)$/) || line.match(/^-\s*(.+)$/)
+      if (match && match[1].trim()) {
+        names.push(match[1].trim())
+      } else if (line.trim() && !line.includes(":")) {
+        // Stop if we hit a line that doesn't match the pattern
+        break
+      }
+    }
+  }
+
+  return names
+}
+
 const OrderItem = memo(
   ({
     order,
@@ -53,9 +81,13 @@ const OrderItem = memo(
     onStatusChange: (orderId: string, status?: string, paymentStatus?: string) => void
   }) => {
     const [showItems, setShowItems] = useState(false)
+    const [showBulkNames, setShowBulkNames] = useState(false)
     const customerName = `${order.customer.first_name} ${order.customer.last_name}`
     const orderDate = new Date(order.created_at).toLocaleDateString("de-DE")
     const items = order.order_items.map((item) => `${item.product_name} (${item.quantity}x)`).join(", ")
+
+    const bulkOrderNames = useMemo(() => parseBulkOrderNames(order.notes), [order.notes])
+    const isBulkOrder = bulkOrderNames.length > 0
 
     const getPaymentMethodDisplay = (method: string) => {
       switch (method) {
@@ -128,20 +160,56 @@ const OrderItem = memo(
       <Card className="p-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium">{order.order_number}</span>
               <Badge variant={getStatusVariant(uiStatus)}>{getStatusDisplay(uiStatus)}</Badge>
+              {isBulkOrder && (
+                <Badge variant="secondary" className="gap-1">
+                  <Users className="h-3 w-3" />
+                  Sammelbestellung ({bulkOrderNames.length})
+                </Badge>
+              )}
             </div>
             <div className="text-sm text-muted-foreground">
               <div>
                 {customerName} • {order.customer.email}
               </div>
-              <div>
-                {orderDate} • {order.pickup_location || "Lieferung"}
+              <div className="flex items-center gap-1">
+                <span>{orderDate}</span>
+                {order.pickup_location && (
+                  <>
+                    <span>•</span>
+                    <MapPin className="h-3 w-3" />
+                    <span className="font-medium">{order.pickup_location}</span>
+                  </>
+                )}
+                {!order.pickup_location && <span>• Lieferung</span>}
               </div>
               <div>
                 {getPaymentMethodDisplay(order.payment_method)} • {getPaymentStatusDisplay(order.payment_status)}
               </div>
+              {isBulkOrder && (
+                <div className="mt-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowBulkNames(!showBulkNames)}
+                    className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    {showBulkNames ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+                    Namen anzeigen ({bulkOrderNames.length} Personen)
+                  </Button>
+                  {showBulkNames && (
+                    <div className="mt-2 pl-4 border-l-2 border-muted space-y-1">
+                      {bulkOrderNames.map((name, index) => (
+                        <div key={index} className="text-sm">
+                          {index + 1}. {name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="mt-2">
                 <Button
                   variant="ghost"
@@ -167,7 +235,7 @@ const OrderItem = memo(
                   </div>
                 )}
               </div>
-              {order.notes && <div>Notiz: {order.notes}</div>}
+              {order.notes && !isBulkOrder && <div>Notiz: {order.notes}</div>}
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -234,7 +302,13 @@ function OrderManagement() {
 
       console.log("[v0] Fetching orders from database...")
 
-      const response = await fetch("/api/admin/orders")
+      const response = await fetch("/api/admin/orders", {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
+      })
 
       if (!response.ok) {
         const contentType = response.headers.get("content-type")
@@ -347,6 +421,9 @@ function OrderManagement() {
       try {
         console.log(`[v0] Updating order ${orderId} status:`, { status, paymentStatus })
 
+        const previousOrders = orders
+
+        // Optimistic update
         setOrders((prevOrders) =>
           prevOrders.map((order) => {
             if (order.id === orderId) {
@@ -374,15 +451,32 @@ function OrderManagement() {
 
         if (response.ok) {
           console.log(`[v0] Order status updated successfully`)
+
+          const { order: updatedOrder } = await response.json()
+
+          setOrders((prevOrders) =>
+            prevOrders.map((order) => {
+              if (order.id === orderId && updatedOrder) {
+                return {
+                  ...order,
+                  status: updatedOrder.status,
+                  payment_status: updatedOrder.payment_status,
+                }
+              }
+              return order
+            }),
+          )
+
           toast({
             title: "Status aktualisiert",
             description: "Der Bestellstatus wurde erfolgreich geändert",
           })
-          await fetchOrders()
         } else {
           const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
           console.error(`[v0] Failed to update order status:`, errorData)
-          await fetchOrders()
+
+          setOrders(previousOrders)
+
           toast({
             title: "Fehler",
             description: errorData.error || "Status konnte nicht geändert werden",
@@ -391,7 +485,9 @@ function OrderManagement() {
         }
       } catch (error) {
         console.error(`[v0] Error updating order status:`, error)
+
         await fetchOrders()
+
         toast({
           title: "Fehler",
           description: error instanceof Error ? error.message : "Unbekannter Fehler",
@@ -399,7 +495,7 @@ function OrderManagement() {
         })
       }
     },
-    [fetchOrders, toast],
+    [orders, fetchOrders, toast],
   )
 
   if (loading) {
