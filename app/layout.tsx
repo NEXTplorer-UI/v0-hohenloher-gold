@@ -31,27 +31,6 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "Hohenloher Gold - Regionale Lebensmittel & Sizilianische Südfrüchte",
   description: "Ursprünglich, echt, gesellig",
-  icons: {
-    icon: [
-      {
-        url: process.env.NEXT_PUBLIC_LOGO_URL || "/favicon-32x32.png",
-        sizes: "32x32",
-        type: "image/png",
-      },
-      {
-        url: process.env.NEXT_PUBLIC_LOGO_URL || "/favicon-16x16.png",
-        sizes: "16x16",
-        type: "image/png",
-      },
-    ],
-    apple: [
-      {
-        url: process.env.NEXT_PUBLIC_LOGO_URL || "/apple-touch-icon.png",
-        sizes: "180x180",
-        type: "image/png",
-      },
-    ],
-  },
   keywords: [
     "Hohenloher Gold",
     "regionale Lebensmittel",
