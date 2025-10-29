@@ -57,23 +57,7 @@ export default function ImpressumPage() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Handelsregister</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <h4 className="font-medium mb-1">Registergericht</h4>
-                      <p className="text-muted-foreground">Amtsgericht Stuttgart</p>
-                    </div>
-                    <div>
-                      <h4 className="font-medium mb-1">Registernummer</h4>
-                      <p className="text-muted-foreground">{""}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              
 
               <Card>
                 <CardHeader>

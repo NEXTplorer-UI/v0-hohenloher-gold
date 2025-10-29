@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Search, MapPin, Users, Phone, Mail, ArrowRight, Heart, ChevronDown, Clock } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
 import { useNearbyPickups } from "@/lib/hooks/use-nearby-pickups"
 
@@ -30,6 +30,14 @@ export default function DistributorPage() {
     maxPlzDelta: 300,
     take: 5,
   })
+
+  useEffect(() => {
+    if (allLocations.length > 0 && !selectedStation) {
+      const zentrallager = allLocations.find((loc) => loc.name.toLowerCase().includes("zentrallager"))
+      const sortedLocations = [...allLocations].sort((a, b) => a.postal_code.localeCompare(b.postal_code))
+      setSelectedStation(zentrallager || sortedLocations[0])
+    }
+  }, [allLocations, selectedStation])
 
   const handlePlzSearch = () => {
     if (searchPlz.length >= 4) {
@@ -229,7 +237,9 @@ export default function DistributorPage() {
                       {sortedLocations.map((location) => (
                         <button
                           key={location.id}
-                          onClick={() => setSelectedStation(location)}
+                          onClick={() => {
+                            setSelectedStation(selectedStation?.id === location.id ? null : location)
+                          }}
                           className={`w-full text-left p-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors ${
                             selectedStation?.id === location.id ? "bg-primary/5 border-primary/20" : ""
                           }`}
@@ -320,6 +330,60 @@ export default function DistributorPage() {
                           <p className="text-sm">
                             <strong>Ansprechpartner:</strong> {selectedStation.contact_person}
                           </p>
+
+                          {selectedStation.name.toLowerCase().includes("zentrallager") && (
+                            <div className="mt-4 pt-4 border-t border-primary/20">
+                              <h5 className="font-semibold text-sm mb-3 text-primary">
+                                Unsere Ware gibt es schon in folgenden Regionen:
+                              </h5>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                                <div className="flex items-center space-x-2">
+                                  <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
+                                  <span>Hohenlohe</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
+                                  <span>Heilbronn & Umgebung</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
+                                  <span>Gschwend / Gaildorf</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
+                                  <span>Schwäbisch Hall</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
+                                  <span>Bad Mergentheim</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
+                                  <span>Pappenheim</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
+                                  <span>Weißenburg</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
+                                  <span>Gunzenhausen</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
+                                  <span>Allgäu (Kempten, Kaufbeuren)</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
+                                  <span>Chiemgau (Prien und Umgebung)</span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <MapPin className="w-3 h-3 text-primary flex-shrink-0" />
+                                  <span>Kassel</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </Card>
                     )}
@@ -504,19 +568,18 @@ export default function DistributorPage() {
             <p className="text-lg opacity-90">
               Unser Team steht Ihnen gerne für alle Fragen rund um das Verteiler-Programm zur Verfügung.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button variant="secondary" size="lg" className="text-lg px-8">
-                <Phone className="w-5 h-5 mr-2" />
-                01573 5703864
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                className="text-lg px-8 border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary bg-transparent"
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <a
+                href="mailto:kontakt@suedfruechte-hohenlohe.de"
+                className="flex items-center gap-2 text-lg hover:underline"
               >
-                <Mail className="w-5 h-5 mr-2" />
+                <Mail className="h-5 w-5" />
                 kontakt@suedfruechte-hohenlohe.de
-              </Button>
+              </a>
+              <a href="tel:+4979407059" className="flex items-center gap-2 text-lg hover:underline">
+                <Phone className="h-5 w-5" />
+                07940 7059
+              </a>
             </div>
           </div>
         </div>

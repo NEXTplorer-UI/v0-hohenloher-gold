@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Validate email
     if (!email || !email.includes("@")) {
       console.log("[v0] Invalid email format:", email)
-      return NextResponse.json({ error: "Ungültige E-Mail-Adresse" }, { status: 400 })
+      return NextResponse.json({ error: "Ungültige E-Mail-Adresse", errorCode: "INVALID_EMAIL" }, { status: 400 })
     }
 
     const emailNormalized = normalizeEmail(email)
@@ -44,7 +44,16 @@ export async function POST(request: NextRequest) {
 
     if (checkError) {
       console.error("[v0] Error checking existing customer:", checkError)
-      return NextResponse.json({ error: "Datenbankfehler" }, { status: 500 })
+      console.error("[v0] Database check error details:", {
+        code: checkError.code,
+        message: checkError.message,
+        details: checkError.details,
+        hint: checkError.hint,
+      })
+      return NextResponse.json(
+        { error: "Datenbankfehler beim Prüfen der E-Mail", errorCode: "DB_CHECK_ERROR" },
+        { status: 500 },
+      )
     }
 
     console.log("[v0] Existing customer check result:", existing)
@@ -89,7 +98,7 @@ export async function POST(request: NextRequest) {
     if (existing && existing.newsletter_subscribed && existing.newsletter_confirmed) {
       console.log("[v0] Customer already subscribed and confirmed")
       return NextResponse.json(
-        { error: "Diese E-Mail-Adresse ist bereits für den Newsletter angemeldet." },
+        { error: "Diese E-Mail-Adresse ist bereits für den Newsletter angemeldet.", errorCode: "ALREADY_SUBSCRIBED" },
         { status: 400 },
       )
     }
@@ -110,7 +119,16 @@ export async function POST(request: NextRequest) {
 
       if (updateError) {
         console.error("[v0] Error updating customer:", updateError)
-        return NextResponse.json({ error: "Fehler beim Aktualisieren des Abonnements" }, { status: 500 })
+        console.error("[v0] Database update error details:", {
+          code: updateError.code,
+          message: updateError.message,
+          details: updateError.details,
+          hint: updateError.hint,
+        })
+        return NextResponse.json(
+          { error: "Fehler beim Aktualisieren des Abonnements", errorCode: "DB_UPDATE_ERROR" },
+          { status: 500 },
+        )
       }
       console.log("[v0] Customer updated successfully")
     } else {
@@ -127,10 +145,39 @@ export async function POST(request: NextRequest) {
 
       if (insertError) {
         console.error("[v0] Error creating customer:", insertError)
+        console.error("[v0] Database insert error details:", {
+          code: insertError.code,
+          message: insertError.message,
+          details: insertError.details,
+          hint: insertError.hint,
+        })
+
+        // Handle specific database errors
         if (insertError.code === "23505") {
-          return NextResponse.json({ error: "Diese E-Mail-Adresse ist bereits registriert." }, { status: 400 })
+          // Unique constraint violation
+          console.error("[v0] Duplicate email detected (unique constraint violation)")
+          return NextResponse.json(
+            { error: "Diese E-Mail-Adresse ist bereits registriert.", errorCode: "DUPLICATE_EMAIL" },
+            { status: 400 },
+          )
         }
-        return NextResponse.json({ error: "Fehler beim Speichern der Anmeldung" }, { status: 500 })
+
+        if (insertError.code === "23502") {
+          // Not null constraint violation
+          console.error("[v0] Missing required field (not null constraint violation)")
+          return NextResponse.json({ error: "Fehlende Pflichtfelder", errorCode: "MISSING_FIELDS" }, { status: 400 })
+        }
+
+        // Generic database error
+        return NextResponse.json(
+          {
+            error: "Fehler beim Speichern der Anmeldung. Bitte versuchen Sie es später erneut.",
+            errorCode: "DB_INSERT_ERROR",
+            // Include error code for debugging
+            dbErrorCode: insertError.code,
+          },
+          { status: 500 },
+        )
       }
       console.log("[v0] Customer created successfully")
     }
@@ -154,6 +201,11 @@ export async function POST(request: NextRequest) {
       console.log("[v0] Confirmation email sent successfully")
     } catch (emailError) {
       console.error("[v0] Error sending confirmation email:", emailError)
+      console.error("[v0] Email error details:", {
+        error: emailError,
+        message: emailError instanceof Error ? emailError.message : "Unknown error",
+      })
+      // Don't fail the request if email fails - user is still subscribed
     }
 
     console.log("[v0] Newsletter subscription completed successfully")
@@ -165,6 +217,14 @@ export async function POST(request: NextRequest) {
     )
   } catch (error) {
     console.error("[v0] Newsletter subscription error:", error)
-    return NextResponse.json({ error: "Ein unerwarteter Fehler ist aufgetreten" }, { status: 500 })
+    console.error("[v0] Unexpected error details:", {
+      error,
+      message: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+    return NextResponse.json(
+      { error: "Ein unerwarteter Fehler ist aufgetreten", errorCode: "UNEXPECTED_ERROR" },
+      { status: 500 },
+    )
   }
 }

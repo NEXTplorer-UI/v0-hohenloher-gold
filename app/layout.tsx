@@ -32,6 +32,20 @@ export const metadata: Metadata = {
   title: "Hohenloher Gold - Regionale Lebensmittel & Sizilianische Südfrüchte",
   description:
     "Hochwertige, unbehandelte Lebensmittel aus Hohenlohe und frische Südfrüchte direkt aus Sizilien. Qualität, Nachhaltigkeit und menschliche Beziehungen stehen im Mittelpunkt.",
+  icons: {
+    icon: [
+      {
+        url: process.env.NEXT_PUBLIC_LOGO_URL || "/placeholder.svg",
+        type: "image/png",
+      },
+    ],
+    apple: [
+      {
+        url: process.env.NEXT_PUBLIC_LOGO_URL || "/placeholder.svg",
+        type: "image/png",
+      },
+    ],
+  },
   keywords: [
     "Hohenloher Gold",
     "regionale Lebensmittel",

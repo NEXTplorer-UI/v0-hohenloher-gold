@@ -86,6 +86,7 @@ function ArticlesList() {
                           "/placeholder.svg" ||
                           "/placeholder.svg" ||
                           "/placeholder.svg" ||
+                          "/placeholder.svg" ||
                           "/placeholder.svg"
                         }
                         alt={article.title}
@@ -145,6 +146,7 @@ function ArticlesList() {
                           src={
                             article.image_url ||
                             "/placeholder.svg?height=200&width=400&query=Hohenloher Gold news article" ||
+                            "/placeholder.svg" ||
                             "/placeholder.svg" ||
                             "/placeholder.svg" ||
                             "/placeholder.svg" ||
@@ -257,24 +259,52 @@ export default function NewsPage() {
     try {
       const siteUrl = typeof window !== "undefined" ? window.location.origin : undefined
 
+      console.log("[v0] Submitting newsletter subscription:", { email, siteUrl })
+
       const response = await fetch("/api/newsletter/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, source: "news_page", siteUrl }),
       })
 
+      console.log("[v0] Newsletter API response status:", response.status)
+
       const data = await response.json()
+      console.log("[v0] Newsletter API response data:", data)
 
       if (response.ok) {
         setMessage({ type: "success", text: data.message })
         setEmail("")
         setConsent(false)
       } else {
-        setMessage({ type: "error", text: data.error || "Ein Fehler ist aufgetreten" })
+        let errorMessage = data.error || "Ein Fehler ist aufgetreten"
+
+        // Add helpful context based on error code
+        if (data.errorCode === "DB_INSERT_ERROR" || data.errorCode === "DB_UPDATE_ERROR") {
+          errorMessage +=
+            " Möglicherweise wird die Anfrage durch einen Adblocker blockiert. Bitte deaktivieren Sie Ihren Adblocker und versuchen Sie es erneut."
+        }
+
+        console.error("[v0] Newsletter subscription failed:", {
+          status: response.status,
+          errorCode: data.errorCode,
+          dbErrorCode: data.dbErrorCode,
+          error: data.error,
+        })
+
+        setMessage({ type: "error", text: errorMessage })
       }
     } catch (error) {
-      console.error("Newsletter subscription error:", error)
-      setMessage({ type: "error", text: "Verbindungsfehler. Bitte versuchen Sie es später erneut." })
+      console.error("[v0] Newsletter subscription error:", error)
+      console.error("[v0] Network error details:", {
+        error,
+        message: error instanceof Error ? error.message : "Unknown error",
+      })
+
+      setMessage({
+        type: "error",
+        text: "Verbindungsfehler. Bitte überprüfen Sie Ihre Internetverbindung oder deaktivieren Sie Ihren Adblocker und versuchen Sie es erneut.",
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -295,7 +325,7 @@ export default function NewsPage() {
               Aktuelles, Altes & <span className="text-primary">Neuigkeiten</span>
             </h1>
             <p className="text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
-              Hier gibt´s Laufendes, alt Bewährtes, wissenwertes &amp; brauchbares rund um Nahrung und Nährendes                         
+              Hier gibt´s Laufendes, alt Bewährtes, wissenwertes &amp; brauchbares rund um Nahrung und Nährendes
             </p>
           </div>
         </div>
@@ -310,9 +340,7 @@ export default function NewsPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="max-w-3xl mx-auto space-y-6">
             <h2 className="font-serif font-bold text-3xl lg:text-4xl">Bleiben Sie informiert</h2>
-            <p className="text-lg opacity-90">
-              Abonnieren Sie unseren Newsletter und bleiben Sie aktuell   
-            </p>
+            <p className="text-lg opacity-90">Abonnieren Sie unseren Newsletter und bleiben Sie aktuell</p>
             <form onSubmit={handleNewsletterSubmit} className="pt-4 max-w-md mx-auto space-y-4">
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <input

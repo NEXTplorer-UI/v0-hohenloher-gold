@@ -32,6 +32,7 @@ interface Order {
   payment_method: string
   payment_status: string
   notes: string | null
+  admin_notes: string | null // Added admin_notes field
   created_at: string
   customer: {
     first_name: string
@@ -75,19 +76,33 @@ const OrderItem = memo(
     order,
     onNotify,
     onStatusChange,
+    onAdminNotesChange, // Added onAdminNotesChange prop
   }: {
     order: Order
     onNotify: (orderId: string, templateId?: EmailTemplateId) => void
     onStatusChange: (orderId: string, status?: string, paymentStatus?: string) => void
+    onAdminNotesChange: (orderId: string, adminNotes: string) => void // Added prop type
   }) => {
     const [showItems, setShowItems] = useState(false)
     const [showBulkNames, setShowBulkNames] = useState(false)
+    const [showAdminNotes, setShowAdminNotes] = useState(false) // Added state for admin notes visibility
+    const [adminNotes, setAdminNotes] = useState(order.admin_notes || "") // Added state for admin notes
+    const [isSavingNotes, setIsSavingNotes] = useState(false) // Added loading state
     const customerName = `${order.customer.first_name} ${order.customer.last_name}`
     const orderDate = new Date(order.created_at).toLocaleDateString("de-DE")
     const items = order.order_items.map((item) => `${item.product_name} (${item.quantity}x)`).join(", ")
 
     const bulkOrderNames = useMemo(() => parseBulkOrderNames(order.notes), [order.notes])
     const isBulkOrder = bulkOrderNames.length > 0
+
+    const handleSaveAdminNotes = async () => {
+      setIsSavingNotes(true)
+      try {
+        await onAdminNotesChange(order.id, adminNotes)
+      } finally {
+        setIsSavingNotes(false)
+      }
+    }
 
     const getPaymentMethodDisplay = (method: string) => {
       switch (method) {
@@ -236,6 +251,35 @@ const OrderItem = memo(
                 )}
               </div>
               {order.notes && !isBulkOrder && <div>Notiz: {order.notes}</div>}
+              <div className="mt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAdminNotes(!showAdminNotes)}
+                  className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  {showAdminNotes ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+                  Admin-Notizen {order.admin_notes ? "(vorhanden)" : "(leer)"}
+                </Button>
+                {showAdminNotes && (
+                  <div className="mt-2 space-y-2">
+                    <textarea
+                      value={adminNotes}
+                      onChange={(e) => setAdminNotes(e.target.value)}
+                      placeholder="Interne Notizen zur Bestellung (nur für Admins sichtbar)..."
+                      className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleSaveAdminNotes}
+                      disabled={isSavingNotes || adminNotes === order.admin_notes}
+                    >
+                      {isSavingNotes ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                      Notizen speichern
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -498,6 +542,64 @@ function OrderManagement() {
     [orders, fetchOrders, toast],
   )
 
+  const handleAdminNotesChange = useCallback(
+    async (orderId: string, adminNotes: string) => {
+      try {
+        console.log(`[v0] Updating admin notes for order ${orderId}`)
+
+        const response = await fetch("/api/admin/update-order-notes", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            orderId,
+            adminNotes,
+          }),
+        })
+
+        if (response.ok) {
+          console.log(`[v0] Admin notes updated successfully`)
+
+          setOrders((prevOrders) =>
+            prevOrders.map((order) => {
+              if (order.id === orderId) {
+                return {
+                  ...order,
+                  admin_notes: adminNotes,
+                }
+              }
+              return order
+            }),
+          )
+
+          toast({
+            title: "Notizen gespeichert",
+            description: "Die Admin-Notizen wurden erfolgreich gespeichert",
+          })
+        } else {
+          const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+          console.error(`[v0] Failed to update admin notes:`, errorData)
+
+          toast({
+            title: "Fehler",
+            description: errorData.error || "Notizen konnten nicht gespeichert werden",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error(`[v0] Error updating admin notes:`, error)
+
+        toast({
+          title: "Fehler",
+          description: error instanceof Error ? error.message : "Unbekannter Fehler",
+          variant: "destructive",
+        })
+      }
+    },
+    [toast],
+  )
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -593,7 +695,13 @@ function OrderManagement() {
                 </div>
               ) : (
                 filteredOrders.map((order) => (
-                  <OrderItem key={order.id} order={order} onNotify={handleNotify} onStatusChange={handleStatusChange} />
+                  <OrderItem
+                    key={order.id}
+                    order={order}
+                    onNotify={handleNotify}
+                    onStatusChange={handleStatusChange}
+                    onAdminNotesChange={handleAdminNotesChange} // Added prop
+                  />
                 ))
               )}
             </div>

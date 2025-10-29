@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Dashboard stats: Fetching orders...")
     const { data: orders, error: ordersError } = await supabase
       .from("orders")
-      .select("id, total, created_at, status, pickup_date, delivery_method")
+      .select("id, total, created_at, status, pickup_date, delivery_method, payment_method")
 
     if (ordersError) {
       console.error("[v0] Dashboard stats error fetching orders:", ordersError)
@@ -42,8 +42,31 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Dashboard stats: Fetched", orders?.length || 0, "orders")
 
-    // Calculate total revenue
-    const totalRevenue = orders?.reduce((sum, order) => sum + (order.total || 0), 0) || 0
+    const activeOrders = orders?.filter((order) => order.status !== "cancelled") || []
+    const cancelledOrders = orders?.filter((order) => order.status === "cancelled") || []
+
+    // Calculate total revenue (excluding cancelled orders)
+    const totalRevenue = activeOrders.reduce((sum, order) => sum + (order.total || 0), 0)
+
+    const cancelledOrdersCount = cancelledOrders.length
+    const cancelledRevenue = cancelledOrders.reduce((sum, order) => sum + (order.total || 0), 0)
+    const cancellationRate = orders && orders.length > 0 ? (cancelledOrdersCount / orders.length) * 100 : 0
+
+    const paymentMethodStats =
+      orders?.reduce(
+        (acc, order) => {
+          const method = order.payment_method || "unknown"
+          if (!acc[method]) {
+            acc[method] = { count: 0, revenue: 0 }
+          }
+          acc[method].count++
+          if (order.status !== "cancelled") {
+            acc[method].revenue += order.total || 0
+          }
+          return acc
+        },
+        {} as Record<string, { count: number; revenue: number }>,
+      ) || {}
 
     // Calculate revenue growth (this month vs last month)
     const now_date = new Date()
@@ -52,16 +75,16 @@ export async function GET(request: NextRequest) {
     const thisMonthEnd = new Date(now_date.getFullYear(), now_date.getMonth() + 1, 0)
 
     const thisMonthRevenue =
-      orders
-        ?.filter((order) => {
+      activeOrders
+        .filter((order) => {
           const orderDate = new Date(order.created_at)
           return orderDate >= thisMonth && orderDate <= thisMonthEnd
         })
         .reduce((sum, order) => sum + (order.total || 0), 0) || 0
 
     const lastMonthRevenue =
-      orders
-        ?.filter((order) => {
+      activeOrders
+        .filter((order) => {
           const orderDate = new Date(order.created_at)
           return orderDate >= lastMonth && orderDate < thisMonth
         })
@@ -165,15 +188,23 @@ export async function GET(request: NextRequest) {
 
     const weeklyGrowth = lastWeekOrders > 0 ? ((thisWeekOrders - lastWeekOrders) / lastWeekOrders) * 100 : 0
 
-    const avgOrderValue = orders && orders.length > 0 ? totalRevenue / orders.length : 0
+    const avgOrderValue = activeOrders.length > 0 ? totalRevenue / activeOrders.length : 0
 
-    const pickupOrders = orders?.filter((order) => order.delivery_method === "pickup").length || 0
-    const pickupRate = orders && orders.length > 0 ? (pickupOrders / orders.length) * 100 : 0
+    const pickedUpOrders = activeOrders.filter((order) => order.status === "completed").length
+    const completionRate = activeOrders.length > 0 ? (pickedUpOrders / activeOrders.length) * 100 : 0
+
+    const pickupMethodOrders = activeOrders.filter((order) => order.delivery_method === "pickup").length
+    const deliveryMethodOrders = activeOrders.filter((order) => order.delivery_method === "delivery").length
 
     const stats = {
       totalRevenue: Math.round(totalRevenue * 100) / 100,
       revenueGrowth: Math.round(revenueGrowth * 100) / 100,
       totalOrders: orders?.length || 0,
+      activeOrders: activeOrders.length,
+      cancelledOrders: cancelledOrdersCount,
+      cancelledRevenue: Math.round(cancelledRevenue * 100) / 100,
+      cancellationRate: Math.round(cancellationRate * 100) / 100,
+      paymentMethods: paymentMethodStats,
       activeCustomers: activeCustomers?.length || 0,
       newCustomersThisWeek: newCustomers?.length || 0,
       pendingOrders: pendingOrders?.length || 0,
@@ -183,7 +214,10 @@ export async function GET(request: NextRequest) {
       thisWeekOrders,
       weeklyGrowth: Math.round(weeklyGrowth * 100) / 100,
       avgOrderValue: Math.round(avgOrderValue * 100) / 100,
-      pickupRate: Math.round(pickupRate * 100) / 100,
+      completionRate: Math.round(completionRate * 100) / 100,
+      pickedUpOrders,
+      pickupMethodOrders,
+      deliveryMethodOrders,
     }
 
     statsCache = {

@@ -84,6 +84,7 @@ export async function GET(request: NextRequest) {
       "Artikel (Einzelpreis)",
       "Artikel (Gesamtpreis)",
       "Notizen",
+      "Admin-Notizen", // Added admin notes column
     ]
 
     // Helper function to escape CSV values
@@ -173,6 +174,7 @@ export async function GET(request: NextRequest) {
               item.unit_price?.toString() || "0",
               item.total_price?.toString() || "0",
               escapeCSV(order.notes),
+              escapeCSV(order.admin_notes), // Added admin notes to export
             ].join(";"),
           )
         })
@@ -200,6 +202,7 @@ export async function GET(request: NextRequest) {
             "",
             "",
             escapeCSV(order.notes),
+            escapeCSV(order.admin_notes), // Added admin notes to export
           ].join(";"),
         )
       }

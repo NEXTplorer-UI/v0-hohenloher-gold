@@ -70,15 +70,20 @@ export default function RevenueAnalyticsModal({ open, onOpenChange }: RevenueAna
   const fetchRevenueData = async () => {
     setLoading(true)
     try {
+      console.log("[v0] Fetching revenue data from /api/analytics/revenue-details")
       const response = await fetch("/api/analytics/revenue-details")
+      console.log("[v0] Revenue data response status:", response.status)
+
       if (response.ok) {
         const revenueData = await response.json()
+        console.log("[v0] Revenue data fetched successfully:", revenueData)
         setData(revenueData)
       } else {
-        console.error("Failed to fetch revenue data")
+        const errorText = await response.text()
+        console.error("[v0] Failed to fetch revenue data. Status:", response.status, "Error:", errorText)
       }
     } catch (error) {
-      console.error("Error fetching revenue data:", error)
+      console.error("[v0] Error fetching revenue data:", error)
     } finally {
       setLoading(false)
     }

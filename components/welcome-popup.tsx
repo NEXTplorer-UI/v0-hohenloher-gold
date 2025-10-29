@@ -41,7 +41,7 @@ export function WelcomePopup() {
         {/* Image - full width, scaled to fit */}
         <div className="relative w-full h-64 sm:h-80 bg-muted">
           <Image
-            src="https://obxjafjbdxiipqfrmiou.supabase.co/storage/v1/object/public/branding/orangensonnenuntergang.jpg"
+            src="/images/design-mode/orangensonnenuntergang.jpg"
             alt="Orangen bei Sonnenuntergang"
             fill
             className="object-contain"
@@ -66,6 +66,13 @@ export function WelcomePopup() {
 
             <p>
               Unsere neue Website ist frisch online – wir bitten um Verständnis, falls noch nicht alles perfekt läuft.
+            </p>
+
+            <p>
+              Wir freuen uns über Rückmeldung jeglicher Art an unsere E-Mail-Adresse{" "}
+              <a href="mailto:kontakt@suedfruechte-hohenlohe.de" className="text-primary hover:underline font-medium">
+                kontakt@suedfruechte-hohenlohe.de
+              </a>
             </p>
 
             <p>Schön, dass Sie da sind!</p>

@@ -24,6 +24,7 @@ const ContentManagementSystem = lazy(() => import("@/components/admin/content-ma
 const ProductManagement = lazy(() => import("@/components/admin/product-management"))
 const DeliveryScheduleManagement = lazy(() => import("@/components/admin/delivery-schedule-management"))
 const EmailPreviewSystem = lazy(() => import("@/app/admin/emails/page"))
+const EmailTemplatesViewer = lazy(() => import("@/components/admin/email-templates-viewer"))
 
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center p-8">
@@ -75,7 +76,7 @@ function Analytics() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setRevenueModalOpen(true)}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Gesamtumsatz</CardTitle>
@@ -125,7 +126,97 @@ function Analytics() {
             </p>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Stornierte Bestellungen</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{stats ? stats.cancelledOrders : "0"}</div>
+            <p className="text-xs text-muted-foreground">
+              {stats && stats.cancellationRate > 0 ? (
+                <>
+                  {stats.cancellationRate.toFixed(1)}% Stornierungsrate
+                  <br />
+                  {formatCurrency(stats.cancelledRevenue)} entgangener Umsatz
+                </>
+              ) : (
+                "Keine Stornierungen"
+              )}
+            </p>
+          </CardContent>
+        </Card>
       </div>
+
+      {stats && stats.paymentMethods && Object.keys(stats.paymentMethods).length > 0 && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-lg">Zahlungsmethoden Übersicht</CardTitle>
+            <CardDescription>Verteilung der gewählten Zahlungsmethoden</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-3">
+              {Object.entries(stats.paymentMethods).map(([method, data]: [string, any]) => {
+                const methodNames: Record<string, string> = {
+                  invoice: "Rechnung",
+                  prepayment: "Vorkasse",
+                  sumup: "SumUp (Karte)",
+                  unknown: "Unbekannt",
+                }
+                const percentage = stats.totalOrders > 0 ? ((data.count / stats.totalOrders) * 100).toFixed(1) : "0"
+
+                return (
+                  <div key={method} className="flex flex-col space-y-2 p-4 border rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{methodNames[method] || method}</span>
+                      <Badge variant="secondary">{percentage}%</Badge>
+                    </div>
+                    <div className="text-2xl font-bold">{data.count}</div>
+                    <p className="text-xs text-muted-foreground">Umsatz: {formatCurrency(data.revenue)}</p>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {stats && (stats.pickupMethodOrders > 0 || stats.deliveryMethodOrders > 0) && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-lg">Liefermethoden Übersicht</CardTitle>
+            <CardDescription>Verteilung zwischen Abholung und Versand</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="flex flex-col space-y-2 p-4 border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Abholung</span>
+                  <Badge variant="secondary">
+                    {stats.activeOrders > 0 ? ((stats.pickupMethodOrders / stats.activeOrders) * 100).toFixed(1) : "0"}%
+                  </Badge>
+                </div>
+                <div className="text-2xl font-bold">{stats.pickupMethodOrders}</div>
+                <p className="text-xs text-muted-foreground">Kunden holen selbst ab</p>
+              </div>
+              <div className="flex flex-col space-y-2 p-4 border rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Versand</span>
+                  <Badge variant="secondary">
+                    {stats.activeOrders > 0
+                      ? ((stats.deliveryMethodOrders / stats.activeOrders) * 100).toFixed(1)
+                      : "0"}
+                    %
+                  </Badge>
+                </div>
+                <div className="text-2xl font-bold">{stats.deliveryMethodOrders}</div>
+                <p className="text-xs text-muted-foreground">Lieferung an Kunden</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <RevenueAnalyticsModal open={revenueModalOpen} onOpenChange={setRevenueModalOpen} />
     </>
@@ -208,14 +299,16 @@ function CustomerSegments() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Abholrate</CardTitle>
+          <CardTitle className="text-sm font-medium">Abgeschlossene Bestellungen</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{stats ? `${stats.pickupRate}%` : "0%"}</div>
+          <div className="text-2xl font-bold">{stats ? `${stats.completionRate}%` : "0%"}</div>
           <p className="text-xs text-muted-foreground">
-            {stats && stats.pickupRate >= 90 && "Sehr gut"}
-            {stats && stats.pickupRate >= 80 && stats.pickupRate < 90 && "Gut"}
-            {stats && stats.pickupRate < 80 && "Verbesserungsbedarf"}
+            {stats && stats.pickedUpOrders !== undefined && (
+              <>
+                {stats.pickedUpOrders} von {stats.activeOrders} abgeholt
+              </>
+            )}
             {!stats && "Keine Daten"}
           </p>
         </CardContent>
@@ -494,9 +587,10 @@ function AdminDashboardContent() {
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="newsletter" className="space-y-4">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="newsletter">Newsletter versenden</TabsTrigger>
                   <TabsTrigger value="preview">Email-Vorschau</TabsTrigger>
+                  <TabsTrigger value="templates">E-Mail Vorlagen</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="newsletter" className="space-y-4">
@@ -508,6 +602,12 @@ function AdminDashboardContent() {
                 <TabsContent value="preview" className="space-y-4">
                   <Suspense fallback={<LoadingSpinner />}>
                     <EmailPreviewSystem />
+                  </Suspense>
+                </TabsContent>
+
+                <TabsContent value="templates" className="space-y-4">
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <EmailTemplatesViewer />
                   </Suspense>
                 </TabsContent>
               </Tabs>
