@@ -119,19 +119,6 @@ export const emailCopy = {
     signature: "Ihr Team von Südfrüchte Hohenlohe",
   },
 
-  // Bestellung bestätigt
-  orderConfirmed: {
-    greeting: "Liebe/r {{customerName}},",
-    intro: "Ihre Bestellung wurde bestätigt und wird vorbereitet.",
-    detailsHeading: "Bestelldetails:",
-    orderNumber: "Bestellnummer:",
-    itemsHeading: "Bestellte Artikel:",
-    body: "Wir werden Sie benachrichtigen, sobald Ihre Bestellung zur Abholung bereit ist.",
-    outro: "Vielen Dank für Ihr Vertrauen!",
-    closing: "Mit freundlichen Grüßen",
-    signature: "Ihr Team von Südfrüchte Hohenlohe",
-  },
-
   // Bestellung abgeholt
   orderPickedUp: {
     greeting: "Liebe/r {{customerName}},",

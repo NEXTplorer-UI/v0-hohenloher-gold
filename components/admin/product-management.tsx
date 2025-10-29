@@ -49,6 +49,9 @@ interface Product {
   is_active: boolean
   created_at: string
   updated_at: string
+  attributes?: {
+    available_from?: string
+  }
 }
 
 interface Category {
@@ -81,6 +84,7 @@ export default function ProductManagement() {
     unit: "Stück",
     min_stock: "0",
     is_active: true,
+    available_from: "",
   })
 
   const fetchProducts = async () => {
@@ -150,6 +154,7 @@ export default function ProductManagement() {
       unit: "Stück",
       min_stock: "0",
       is_active: true,
+      available_from: "",
     })
     setEditingProduct(null)
     setIsCreatingNewCategory(false)
@@ -246,9 +251,15 @@ export default function ProductManagement() {
         return
       }
 
+      const attributes: any = {}
+      if (formData.available_from) {
+        attributes.available_from = formData.available_from
+      }
+
       const payload = {
         ...formData,
         category_id: categoryId,
+        attributes: Object.keys(attributes).length > 0 ? attributes : null,
       }
 
       console.log("[v0] Sending request to:", url)
@@ -307,6 +318,7 @@ export default function ProductManagement() {
       unit: product.unit || "Stück",
       min_stock: product.min_stock.toString(),
       is_active: product.is_active,
+      available_from: (product as any).attributes?.available_from || "",
     })
     setIsDialogOpen(true)
   }
@@ -571,6 +583,20 @@ export default function ProductManagement() {
                   <Label htmlFor="is_active">Produkt ist aktiv</Label>
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="available_from">Verfügbar ab (optional)</Label>
+                  <Input
+                    id="available_from"
+                    value={formData.available_from}
+                    onChange={(e) => setFormData({ ...formData, available_from: e.target.value })}
+                    placeholder="z.B. Januar, Februar 2025, 15. März"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Wird unter dem Verfügbarkeitsstatus angezeigt, z.B. "Verfügbar ab Januar"
+                  </p>
+                </div>
+                {/* </CHANGE> */}
+
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Abbrechen
@@ -681,6 +707,11 @@ export default function ProductManagement() {
                         <Badge variant={product.is_active ? "default" : "secondary"}>
                           {product.is_active ? "Aktiv" : "Inaktiv"}
                         </Badge>
+                        {product.attributes?.available_from && (
+                          <div className="text-sm text-muted-foreground">
+                            Verfügbar ab {product.attributes.available_from}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end space-x-2">

@@ -34,7 +34,19 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
 
   const supabase = createAdminClient()
   const body = await request.json()
-  const { name, category_id, price, description, image_url, weight_kg, origin, unit, min_stock, is_active } = body
+  const {
+    name,
+    category_id,
+    price,
+    description,
+    image_url,
+    weight_kg,
+    origin,
+    unit,
+    min_stock,
+    is_active,
+    attributes,
+  } = body
 
   if (!name || !category_id || !price) {
     throw new ValidationError("Name, Kategorie und Preis sind erforderlich", {
@@ -56,6 +68,7 @@ export const POST = withErrorHandling(async (request: NextRequest) => {
         unit: unit || "Stück",
         min_stock: Number.parseInt(min_stock) || 0,
         is_active: is_active !== undefined ? is_active : true,
+        attributes: attributes || null,
       },
     ])
     .select()

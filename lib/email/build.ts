@@ -13,16 +13,16 @@ import {
   newsletterConfirmationContent,
   paymentReceiptContent,
   readyForPickupContent,
-  orderConfirmedContent,
   orderPickedUpContent,
   orderCancelledContent,
   shippingNotificationContent,
   contactConfirmationContent,
   complaintConfirmationContent,
-  type EmailTemplateResult,
+  orderConfirmationWithAccountContent,
 } from "./templates"
 import type { TemplateVars } from "./engine"
 import type { emailCopy } from "./copy"
+import type { EmailTemplateResult } from "./types" // Declare EmailTemplateResult
 
 export type EmailTemplateId =
   | "orderConfirmation"
@@ -33,12 +33,12 @@ export type EmailTemplateId =
   | "newsletterConfirmation"
   | "paymentReceipt"
   | "readyForPickup"
-  | "orderConfirmed"
   | "orderPickedUp"
   | "orderCancelled"
   | "shippingNotification"
   | "contactConfirmation"
   | "complaintConfirmation"
+  | "orderConfirmationWithAccount"
 
 export function buildEmail(
   templateId: EmailTemplateId,
@@ -114,12 +114,6 @@ export function buildEmail(
       contentHtml = readyForPickupContent(vars, customCopy)
       break
 
-    case "orderConfirmed":
-      subject = `Bestellung ${vars.orderNumber} bestätigt - Südfrüchte Hohenlohe`
-      headerTitle = "Bestellung bestätigt"
-      contentHtml = orderConfirmedContent(vars, customCopy)
-      break
-
     case "orderPickedUp":
       subject = `Bestellung ${vars.orderNumber} abgeholt - Südfrüchte Hohenlohe`
       headerTitle = "Vielen Dank!"
@@ -156,6 +150,12 @@ export function buildEmail(
       headerColor = "#f59e0b"
       headerGradient = "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)"
       contentHtml = complaintConfirmationContent(vars, customCopy)
+      break
+
+    case "orderConfirmationWithAccount":
+      subject = `Bestellbestätigung ${vars.orderId} - Südfrüchte Hohenlohe`
+      headerTitle = "Bestellbestätigung"
+      contentHtml = orderConfirmationWithAccountContent(vars, customCopy)
       break
 
     default:

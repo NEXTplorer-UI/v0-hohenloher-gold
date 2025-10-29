@@ -162,6 +162,7 @@ export async function GET() {
         is_preorder: isPreorder,
         requires_delivery_schedule: requiresDeliverySchedule,
         created_at: product.created_at,
+        attributes: product.attributes,
       }
     })
 

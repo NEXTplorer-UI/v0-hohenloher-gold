@@ -19,7 +19,7 @@ export function mapDBToUIStatus(dbStatus: DBOrderStatus): UIOrderStatus {
 export function getEmailTemplateForStatus(status: UIOrderStatus): string {
   switch (status) {
     case "confirmed":
-      return "orderConfirmed"
+      return "orderConfirmation"
     case "ready":
       return "readyForPickup"
     case "picked_up":

@@ -202,6 +202,13 @@ export default function PrivacyPage() {
                       <strong>Aufbewahrung:</strong> E-Mails werden nach Zustellung nicht dauerhaft gespeichert
                     </li>
                     <li>
+                      <strong>E-Mail-Tracking:</strong> Wir nutzen Resends integriertes Tracking um zu erfassen, ob
+                      Newsletter-E-Mails geöffnet und Links geklickt wurden. Dies dient der Verbesserung unserer
+                      Kommunikation und erfolgt auf Grundlage Ihrer Newsletter-Einwilligung (Art. 6 Abs. 1 lit. a
+                      DSGVO). Erfasst werden: Öffnungszeitpunkt, geklickte Links, IP-Adresse (anonymisiert). Sie können
+                      dem Tracking widersprechen, indem Sie den Newsletter abbestellen.
+                    </li>
+                    <li>
                       <strong>Datenschutz:</strong>{" "}
                       <a
                         href="https://resend.com/legal/privacy-policy"
@@ -308,6 +315,26 @@ export default function PrivacyPage() {
                   <p className="text-muted-foreground text-sm">
                     Marketing-E-Mails senden wir nur mit Ihrer ausdrücklichen Einwilligung. Sie können sich jederzeit
                     abmelden.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-2">Newsletter-Tracking</h3>
+                  <p className="text-muted-foreground text-sm mb-2">
+                    Um die Qualität unserer Newsletter zu verbessern, erfassen wir mit Ihrer Einwilligung folgende
+                    Daten:
+                  </p>
+                  <ul className="text-muted-foreground text-sm space-y-1 ml-4 list-disc">
+                    <li>Ob und wann Sie den Newsletter geöffnet haben</li>
+                    <li>Welche Links Sie im Newsletter angeklickt haben</li>
+                    <li>Technische Daten (IP-Adresse anonymisiert, Geräteinformationen)</li>
+                  </ul>
+                  <p className="text-muted-foreground text-sm mt-2">
+                    <strong>Rechtsgrundlage:</strong> Ihre Einwilligung beim Newsletter-Abonnement (Art. 6 Abs. 1 lit. a
+                    DSGVO)
+                  </p>
+                  <p className="text-muted-foreground text-sm mt-2">
+                    <strong>Widerruf:</strong> Sie können dem Tracking jederzeit widersprechen, indem Sie den Newsletter
+                    abbestellen oder uns kontaktieren.
                   </p>
                 </div>
               </CardContent>

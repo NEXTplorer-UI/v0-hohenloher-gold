@@ -3,6 +3,7 @@ import { Resend } from "resend"
 import { buildEmail } from "@/lib/email/build"
 import { requireAdmin } from "@/lib/auth/api-auth"
 import { markdownToHtml } from "@/lib/markdown"
+import { createAdminClient } from "@/lib/supabase/server"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -28,6 +29,23 @@ export async function POST(request: NextRequest) {
 
     const htmlContent = type === "newsletter" ? markdownToHtml(content) : content
 
+    const supabase = createAdminClient()
+    const { data: newsletterSend, error: createError } = await supabase
+      .from("newsletter_sends")
+      .insert({
+        subject,
+        content: htmlContent,
+        recipient_count: recipients.length,
+        status: "sending",
+      })
+      .select()
+      .single()
+
+    if (createError || !newsletterSend) {
+      console.error("[v0] [send-bulk-email] Failed to create newsletter_send:", createError)
+      return NextResponse.json({ error: "Failed to create newsletter record" }, { status: 500 })
+    }
+
     const results = {
       sent: 0,
       failed: 0,
@@ -51,7 +69,7 @@ export async function POST(request: NextRequest) {
 
           const emailData: any = {
             from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
-            to: [email], // Must be array for Resend API
+            to: [email],
             subject: emailResult.subject,
             html: emailResult.html,
           }
@@ -72,22 +90,46 @@ export async function POST(request: NextRequest) {
           }
 
           if (data?.id) {
+            await supabase.from("email_sends").insert({
+              newsletter_send_id: newsletterSend.id,
+              recipient_email: email,
+              resend_email_id: data.id,
+              status: "sent",
+              sent_at: new Date().toISOString(),
+            })
+
             results.sent++
           }
         } catch (error) {
           results.failed++
           const errorMessage = error instanceof Error ? error.message : "Failed to send"
           results.errors.push({ email, error: errorMessage })
+
+          await supabase.from("email_sends").insert({
+            newsletter_send_id: newsletterSend.id,
+            recipient_email: email,
+            status: "failed",
+            error_message: errorMessage,
+          })
         }
       })
 
       await Promise.all(batchPromises)
 
-      // Wait before next batch (except for the last batch)
       if (i + batchSize < recipients.length) {
         await new Promise((resolve) => setTimeout(resolve, delayMs))
       }
     }
+
+    await supabase
+      .from("newsletter_sends")
+      .update({
+        status: "completed",
+        sent_count: results.sent,
+        failed_count: results.failed,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", newsletterSend.id)
 
     return NextResponse.json({
       success: true,

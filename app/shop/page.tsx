@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input" // Import Input component
 import { formatTime } from "@/lib/format-time"
+import { calculateBasePrice } from "@/lib/utils/price"
 
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center p-8">
@@ -202,7 +203,9 @@ const AddToCartButton = ({ product }: { product: any }) => {
           <Minus className="h-4 w-4" />
         </Button>
         <Input
-          type="number"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
           min="1"
           value={quantity}
           onChange={(e) => setQuantity(Math.max(1, Number.parseInt(e.target.value) || 1))}
@@ -767,6 +770,12 @@ function ProductCard({
     })
   }
 
+  const basePrice = calculateBasePrice(product.price, product.weight_kg, product.unit)
+
+  const availableFrom = product.attributes?.available_from
+    ? String(product.attributes.available_from).replace(/^["']|["']$/g, "")
+    : null
+
   return (
     <Card className="h-full flex flex-col hover:shadow-lg transition-shadow bg-accent/10 border border-accent/20">
       <CardHeader className="pb-2">
@@ -793,9 +802,13 @@ function ProductCard({
         {/* Product title */}
         <CardTitle className="text-lg mb-2 line-clamp-2">{product.name}</CardTitle>
 
-        <div className="flex items-center space-x-1 h-5">
-          <div className={`w-2 h-2 rounded-full ${availability.color}`}></div>
-          <span className="text-xs text-muted-foreground">{availability.label}</span>
+        {/* Seasonal availability display under status badge */}
+        <div className="space-y-1">
+          <div className="flex items-center space-x-1 h-5">
+            <div className={`w-2 h-2 rounded-full ${availability.color}`}></div>
+            <span className="text-xs text-muted-foreground">{availability.label}</span>
+          </div>
+          {availableFrom && <div className="text-xs text-blue-600">Verfügbar ab {availableFrom}</div>}
         </div>
       </CardHeader>
 
@@ -873,6 +886,7 @@ function ProductCard({
               )
             })()}
           </div>
+          {basePrice && <div className="text-xs text-muted-foreground">{basePrice}</div>}
         </div>
 
         {/* Button */}

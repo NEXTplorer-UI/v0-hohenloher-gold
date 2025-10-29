@@ -31,7 +31,19 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const supabase = createAdminClient()
 
     const body = await request.json()
-    const { name, category_id, price, description, image_url, weight_kg, origin, unit, min_stock, is_active } = body
+    const {
+      name,
+      category_id,
+      price,
+      description,
+      image_url,
+      weight_kg,
+      origin,
+      unit,
+      min_stock,
+      is_active,
+      attributes,
+    } = body
 
     // Validate required fields
     if (!name || !category_id || !price) {
@@ -51,6 +63,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         unit: unit || "Stück",
         min_stock: Number.parseInt(min_stock) || 0,
         is_active: is_active !== undefined ? is_active : true,
+        attributes: attributes || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", params.id)

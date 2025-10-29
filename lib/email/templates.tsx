@@ -304,7 +304,7 @@ export function newsletterConfirmationContent(vars: TemplateVars, customCopy?: E
       </a>
     </div>
     
-    <div style="background: #f6f7f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
+    <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 20px 0;">
       <p style="margin: 0 0 10px 0; font-size: 14px; color: #666;">
         ${copy.newsletterConfirmation.alternativeText}
       </p>
@@ -414,32 +414,6 @@ export function readyForPickupContent(vars: TemplateVars, customCopy?: EmailCopy
     
     <p>${copy.readyForPickup.closing}<br>
     ${copy.readyForPickup.signature}</p>
-  `
-
-  return renderTemplate(template, vars)
-}
-
-// Bestellung bestätigt
-export function orderConfirmedContent(vars: TemplateVars, customCopy?: EmailCopyType): string {
-  const copy = customCopy || emailCopy
-
-  const template = `
-    <h2>${copy.orderConfirmed.greeting}</h2>
-    <p>${copy.orderConfirmed.intro}</p>
-    
-    <div class="info-box">
-      <h3>${copy.orderConfirmed.detailsHeading}</h3>
-      <div class="data-row">
-        <span class="data-label">${copy.orderConfirmed.orderNumber}</span>
-        <span class="data-value">{{orderNumber}}</span>
-      </div>
-    </div>
-    
-    <p>${copy.orderConfirmed.body}</p>
-    <p>${copy.orderConfirmed.outro}</p>
-    
-    <p>${copy.orderConfirmed.closing}<br>
-    ${copy.orderConfirmed.signature}</p>
   `
 
   return renderTemplate(template, vars)
@@ -597,6 +571,109 @@ export function complaintConfirmationContent(vars: TemplateVars, customCopy?: Em
     
     <p>Mit freundlichen Grüßen<br>
     Ihr Team von Südfrüchte Hohenlohe</p>
+  `
+
+  return renderTemplate(template, vars)
+}
+
+export function orderConfirmationWithAccountContent(vars: TemplateVars, customCopy?: EmailCopyType): string {
+  const copy = customCopy || emailCopy
+
+  const paymentMethodDisplay = getPaymentMethodLabel(vars.paymentMethod)
+
+  const itemsList = vars.orderItems
+    ? (vars.orderItems as any[])
+        .map(
+          (item) =>
+            `<div class="data-row">
+          <span class="data-label">${item.product_name}</span>
+          <span class="data-value">${item.quantity} ${item.unit || "Stück"}</span>
+        </div>`,
+        )
+        .join("")
+    : ""
+
+  const bankDetailsSection =
+    vars.paymentMethod === "transfer"
+      ? `
+    <div class="highlight-box">
+      <h3 style="margin-top: 0;">${copy.orderConfirmation.bankDetailsHeading}</h3>
+      <div class="data-row">
+        <span class="data-label">${copy.orderConfirmation.bankRecipient}</span>
+        <span class="data-value">${copy.orderConfirmation.bankRecipientValue}</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">${copy.orderConfirmation.bankIban}</span>
+        <span class="data-value">${copy.orderConfirmation.bankIbanValue}</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">${copy.orderConfirmation.bankBic}</span>
+        <span class="data-value">${copy.orderConfirmation.bankBicValue}</span>
+      </div>
+      <div class="data-row">
+        <span class="data-label">${copy.orderConfirmation.bankReference}</span>
+        <span class="data-value">Bestellung {{orderId}}</span>
+      </div>
+      <div class="info-box" style="margin-top: 15px;">
+        <p style="margin: 0; font-size: 14px;">
+          <strong>${copy.orderConfirmation.bankImportant}</strong>
+        </p>
+      </div>
+    </div>
+  `
+      : ""
+
+  const shippingNotice =
+    vars.paymentMethod === "transfer" && vars.deliveryMethod === "delivery"
+      ? `
+    <div class="info-box">
+      <p style="margin: 0;"><strong>📦 Versandhinweis:</strong> ${copy.orderConfirmation.shippingNotice}</p>
+    </div>
+  `
+      : ""
+
+  const template = `
+    <h2>${copy.orderConfirmation.greeting}</h2>
+    
+    <div class="highlight-box" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+      <h3 style="margin: 0 0 10px 0; color: white;">✓ Ihr Kundenkonto wurde erfolgreich erstellt!</h3>
+      <p style="margin: 0; font-size: 14px; color: rgba(255,255,255,0.9);">
+        Sie haben zusätzlich eine separate E-Mail von Supabase erhalten, um Ihre E-Mail-Adresse zu bestätigen. 
+        Bitte klicken Sie auf den Link in dieser E-Mail, um Ihr Konto zu aktivieren.
+      </p>
+    </div>
+    
+    <p>${copy.orderConfirmation.intro}</p>
+    
+    <div class="info-box">
+      <h3>${copy.orderConfirmation.detailsHeading}</h3>
+      <p><strong>${copy.orderConfirmation.orderNumber}</strong> {{orderId}}</p>
+      <p><strong>${copy.orderConfirmation.totalAmount}</strong> {{orderTotal}}</p>
+      <p><strong>${copy.orderConfirmation.paymentMethod}</strong> ${paymentMethodDisplay}</p>
+      {{#if pickupDate}}<p><strong>${copy.orderConfirmation.pickupDate}</strong> {{pickupDate}}</p>{{/if}}
+    </div>
+    
+    ${itemsList ? `<div class="data-section"><h3>${copy.orderConfirmation.itemsHeading}</h3>${itemsList}</div>` : ""}
+    
+    ${bankDetailsSection}
+    ${shippingNotice}
+    
+    <div class="info-box" style="background: #fef3c7; border-left: 4px solid #f59e0b;">
+      <p style="margin: 0;"><strong>📧 Wichtig:</strong> Sie haben 2 E-Mails erhalten:</p>
+      <ol style="margin: 10px 0 0 0; padding-left: 20px;">
+        <li>Diese Bestellbestätigung</li>
+        <li>Eine E-Mail-Bestätigung von Supabase für Ihr neues Kundenkonto</li>
+      </ol>
+      <p style="margin: 10px 0 0 0; font-size: 14px;">
+        Bitte bestätigen Sie Ihre E-Mail-Adresse über den Link in der Supabase-E-Mail, 
+        um alle Funktionen Ihres Kundenkontos nutzen zu können.
+      </p>
+    </div>
+    
+    <p>${copy.orderConfirmation.outro}</p>
+    
+    <p>${copy.orderConfirmation.closing}<br>
+    ${copy.orderConfirmation.signature}</p>
   `
 
   return renderTemplate(template, vars)
