@@ -42,6 +42,9 @@ export interface OrderData {
   deliveryMethod: string
   paymentMethod: string
   pickupLocation: string
+  deliveryDate?: string | null
+  pickupStartTime?: string | null
+  pickupEndTime?: string | null
 }
 
 export async function saveCustomerToCRM(customerData: CustomerData) {
@@ -100,12 +103,21 @@ export async function createUserAccount(userData: UserAccountData) {
       }
     }
 
-    // Create auth user
+    const isLocalhost =
+      typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+
+    const redirectUrl = isLocalhost
+      ? process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL
+      : process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "")
+
+    console.log("[v0] Using redirect URL:", redirectUrl)
+
     const { data: authData, error: authError } = await supabaseBrowser.auth.signUp({
       email: userData.email,
       password: userData.password,
       options: {
-        emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || window.location.origin,
+        emailRedirectTo: redirectUrl,
         data: {
           firstName: userData.firstName,
           lastName: userData.lastName,
@@ -152,6 +164,16 @@ export async function sendOrderConfirmationEmail(orderData: OrderData) {
       unit: item.unit,
     }))
 
+    let formattedPickupDate: string | undefined = undefined
+    if (orderData.deliveryMethod === "pickup" && orderData.deliveryDate) {
+      const date = new Date(orderData.deliveryDate)
+      formattedPickupDate = date.toLocaleDateString("de-DE", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    }
+
     const response = await fetch("/api/send-order-confirmation", {
       method: "POST",
       headers: {
@@ -164,7 +186,9 @@ export async function sendOrderConfirmationEmail(orderData: OrderData) {
         orderTotal: `€${orderData.total}`,
         paymentMethod: orderData.paymentMethod,
         deliveryMethod: orderData.deliveryMethod,
-        pickupDate: orderData.deliveryMethod === "pickup" ? "15. Dezember 2024" : undefined,
+        pickupDate: formattedPickupDate,
+        pickupStartTime: orderData.pickupStartTime,
+        pickupEndTime: orderData.pickupEndTime,
         orderItems,
       }),
     })

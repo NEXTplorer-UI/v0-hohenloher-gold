@@ -36,7 +36,7 @@ interface CustomerProfile {
 interface Order {
   id: string
   order_date: string
-  total_amount: number
+  total: number // Fixed field name from total_amount to total
   status: string
   items: OrderItem[]
 }
@@ -79,7 +79,7 @@ function DashboardContent({ user }: { user: any }) {
         {
           id: "ORD-001",
           order_date: "2024-01-15",
-          total_amount: 45.9,
+          total: 45.9, // Updated field name from total_amount to total
           status: "delivered",
           items: [
             { product_name: "Hohenloher Blütenhonig 500g", quantity: 2, price: 12.9 },
@@ -90,14 +90,14 @@ function DashboardContent({ user }: { user: any }) {
         {
           id: "ORD-002",
           order_date: "2024-02-03",
-          total_amount: 28.4,
+          total: 28.4, // Updated field name from total_amount to total
           status: "shipped",
           items: [{ product_name: "Hohenloher Akazienhonig 250g", quantity: 2, price: 14.2 }],
         },
         {
           id: "ORD-003",
           order_date: "2024-02-20",
-          total_amount: 67.3,
+          total: 67.3, // Updated field name from total_amount to total
           status: "processing",
           items: [
             { product_name: "Hohenloher Geschenkset", quantity: 1, price: 35.0 },
@@ -274,7 +274,7 @@ function DashboardContent({ user }: { user: any }) {
                               </span>
                               <span className="flex items-center gap-1">
                                 <Euro className="w-4 h-4" />
-                                {order.total_amount.toFixed(2)} €
+                                {order.total.toFixed(2)} €
                               </span>
                             </div>
                           </div>

@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
             orderNumber: currentOrder.order_number,
             orderDate: new Date(currentOrder.created_at).toLocaleDateString("de-DE"),
             paymentMethod: currentOrder.payment_method,
-            total: currentOrder.total_amount.toFixed(2),
+            total: currentOrder.total.toFixed(2),
             orderItems: currentOrder.order_items.map((item: any) => ({
               product_name: item.products?.name || item.product_name,
               quantity: item.quantity,

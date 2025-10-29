@@ -240,7 +240,7 @@ function OrderConfirmationContent() {
                       <div>
                         <p className="text-sm text-muted-foreground">IBAN</p>
                         <p className="font-medium font-mono text-xs sm:text-sm break-all">
-                          DE89 3704 0044 0532 0130 00
+                          DE35 6225 1550 1000 5154 15
                         </p>
                       </div>
                     </div>
@@ -248,7 +248,7 @@ function OrderConfirmationContent() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
                         <p className="text-sm text-muted-foreground">BIC</p>
-                        <p className="font-medium text-sm sm:text-base">COBADEFFXXX</p>
+                        <p className="font-medium text-sm sm:text-base">SOLADES1KUN</p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Verwendungszweck</p>

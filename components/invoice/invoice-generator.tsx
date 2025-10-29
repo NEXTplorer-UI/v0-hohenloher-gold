@@ -168,7 +168,7 @@ export function InvoiceGenerator({ orderData, type }: InvoiceGeneratorProps) {
           {type === "invoice" && (
             <div className="text-sm mt-2">
               <p>Bankverbindung:</p>
-              <p>Sparkasse Hohenlohekreis</p>
+              <p>Sparkasse Hohenlohe</p>
               <p>IBAN: DE35 6225 1550 1000 5154 15</p>
             </div>
           )}

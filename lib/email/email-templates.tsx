@@ -74,13 +74,13 @@ export class EmailTemplates {
           </div>
           <div>
             <strong>IBAN:</strong><br>
-            DE89 3704 0044 0532 0130 00
+            DE35 6225 1550 1000 5154 15
           </div>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
           <div>
             <strong>BIC:</strong><br>
-            COBADEFFXXX
+            SOLADES1KUN
           </div>
           <div>
             <strong>Verwendungszweck:</strong><br>

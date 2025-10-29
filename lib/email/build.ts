@@ -18,7 +18,6 @@ import {
   shippingNotificationContent,
   contactConfirmationContent,
   complaintConfirmationContent,
-  orderConfirmationWithAccountContent,
 } from "./templates"
 import type { TemplateVars } from "./engine"
 import type { emailCopy } from "./copy"
@@ -38,7 +37,6 @@ export type EmailTemplateId =
   | "shippingNotification"
   | "contactConfirmation"
   | "complaintConfirmation"
-  | "orderConfirmationWithAccount"
 
 export function buildEmail(
   templateId: EmailTemplateId,
@@ -150,12 +148,6 @@ export function buildEmail(
       headerColor = "#f59e0b"
       headerGradient = "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)"
       contentHtml = complaintConfirmationContent(vars, customCopy)
-      break
-
-    case "orderConfirmationWithAccount":
-      subject = `Bestellbestätigung ${vars.orderId} - Südfrüchte Hohenlohe`
-      headerTitle = "Bestellbestätigung"
-      contentHtml = orderConfirmationWithAccountContent(vars, customCopy)
       break
 
     default:

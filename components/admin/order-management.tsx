@@ -347,6 +347,19 @@ function OrderManagement() {
       try {
         console.log(`[v0] Updating order ${orderId} status:`, { status, paymentStatus })
 
+        setOrders((prevOrders) =>
+          prevOrders.map((order) => {
+            if (order.id === orderId) {
+              return {
+                ...order,
+                ...(status && { status }),
+                ...(paymentStatus && { payment_status: paymentStatus }),
+              }
+            }
+            return order
+          }),
+        )
+
         const response = await fetch("/api/admin/update-order-status", {
           method: "POST",
           headers: {
@@ -361,19 +374,32 @@ function OrderManagement() {
 
         if (response.ok) {
           console.log(`[v0] Order status updated successfully`)
-          alert("Bestellstatus wurde erfolgreich geändert")
+          toast({
+            title: "Status aktualisiert",
+            description: "Der Bestellstatus wurde erfolgreich geändert",
+          })
           await fetchOrders()
         } else {
           const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
           console.error(`[v0] Failed to update order status:`, errorData)
-          alert(`Fehler: ${errorData.error || "Status konnte nicht geändert werden"}`)
+          await fetchOrders()
+          toast({
+            title: "Fehler",
+            description: errorData.error || "Status konnte nicht geändert werden",
+            variant: "destructive",
+          })
         }
       } catch (error) {
         console.error(`[v0] Error updating order status:`, error)
-        alert(`Fehler: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`)
+        await fetchOrders()
+        toast({
+          title: "Fehler",
+          description: error instanceof Error ? error.message : "Unbekannter Fehler",
+          variant: "destructive",
+        })
       }
     },
-    [fetchOrders],
+    [fetchOrders, toast],
   )
 
   if (loading) {

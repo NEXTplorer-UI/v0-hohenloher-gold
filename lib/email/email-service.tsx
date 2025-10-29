@@ -100,7 +100,7 @@ export class EmailService {
     pickupDate?: string,
     orderItems?: Array<{ product_name: string; quantity: number; unit?: string }>,
   ): Promise<boolean> {
-    const html = buildEmail("orderConfirmation", {
+    const { html, subject } = buildEmail("orderConfirmation", {
       customerName,
       orderId,
       orderTotal,
@@ -112,7 +112,7 @@ export class EmailService {
 
     const emailData: EmailData = {
       to: customerEmail,
-      subject: `Bestellbestätigung ${orderId} - Südfrüchte Hohenlohe`,
+      subject,
       html,
     }
 
@@ -128,7 +128,7 @@ export class EmailService {
     paymentMethod: string,
     orderItems?: Array<{ product_name: string; quantity: number; unit?: string }>,
   ): Promise<boolean> {
-    const html = buildEmail("pickupReminder", {
+    const { html, subject } = buildEmail("pickupReminder", {
       customerName,
       orderId,
       pickupDate,
@@ -139,7 +139,7 @@ export class EmailService {
 
     const emailData: EmailData = {
       to: customerEmail,
-      subject: `Erinnerung: Abholung Ihrer Bestellung ${orderId} in 3 Tagen - Südfrüchte Hohenlohe`,
+      subject,
       html,
     }
 

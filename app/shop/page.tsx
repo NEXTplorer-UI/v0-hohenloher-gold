@@ -505,7 +505,7 @@ export default function ShopPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-3 mt-6 pt-4 border-t border-accent/20">
+                  <div className="flex flex-wrap gap-4 mt-6 pt-4 border-t border-accent/20">
                     <Button variant="secondary" size="sm" onClick={downloadCalendarEvent} className="flex items-center">
                       <Download className="w-4 h-4 mr-2" />
                       Nächsten Termin speichern
@@ -519,6 +519,14 @@ export default function ShopPage() {
                       <Calendar className="w-4 h-4 mr-2" />
                       Ganze Saison exportieren
                     </Button>
+                  </div>
+
+                  {/* Pickup notice for customers */}
+                  <div className="mt-6">
+                    <h3 className="text-3xl font-bold text-primary mb-2">Hinweis zu Abholterminen</h3>
+                    <p className="text-lg text-primary">
+                      Die Termine gelten für das Zentrallager. Unterverteiler haben eigene Abholtermine.
+                    </p>
                   </div>
                 </div>
               </div>

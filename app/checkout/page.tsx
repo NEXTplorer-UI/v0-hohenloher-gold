@@ -26,6 +26,9 @@ import {
   Calendar,
   AlertCircle,
   LogOut,
+  Info,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react"
 import { saveCustomerToCRM, createUserAccount, sendOrderConfirmationEmail } from "@/lib/crm-utils"
 import { PaymentSumUp } from "@/components/payment-sumup"
@@ -36,6 +39,7 @@ import { determineOrderDeliveryDate } from "@/lib/delivery-schedule-utils"
 import { safeJson } from "@/lib/utils/safe-json"
 import { useNearbyPickups } from "@/lib/hooks/use-nearby-pickups"
 import { createClient } from "@/lib/supabase/client" // Import the singleton client
+import { Textarea } from "@/components/ui/textarea" // Import Textarea
 
 const NEXT_PICKUP_DATE = "15. Dezember 2024"
 
@@ -46,6 +50,7 @@ export default function CheckoutPage() {
   const { pricingMode, calculatePrice, setPricingMode } = usePricing()
 
   const [authSession, setAuthSession] = useState<any>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [deliveryMethod, setDeliveryMethod] = useState("pickup")
   const [pickupLocation, setPickupLocation] = useState("station")
@@ -89,7 +94,10 @@ export default function CheckoutPage() {
   const [selectedLocation, setSelectedLocation] = useState<any>(null)
   const [pickupLocations, setPickupLocations] = useState<any[]>([])
   const [isLoadingLocations, setIsLoadingLocations] = useState(false)
-  const [orderMessage, setOrderMessage] = useState("")
+  const [orderMessage, setOrderMessage] = useState("") // Renamed from 'notes'
+
+  const [bulkOrderNames, setBulkOrderNames] = useState<string[]>(["", "", ""])
+  const [isBulkOrderExpanded, setIsBulkOrderExpanded] = useState(false)
 
   const {
     locations: nearestLocations,
@@ -343,6 +351,11 @@ export default function CheckoutPage() {
   const handleOrderSubmission = useCallback(async () => {
     console.log("[v0] [Checkout] Order submission started")
 
+    if (isSubmitting) {
+      console.log("[v0] [Checkout] Already submitting, ignoring duplicate click")
+      return
+    }
+
     if (!acceptedAGB || !acceptedPrivacy) {
       alert("Bitte bestätigen Sie die AGB und die Datenschutzerklärung.")
       return
@@ -395,6 +408,15 @@ export default function CheckoutPage() {
       }
     }
 
+    const filledBulkOrderNames = bulkOrderNames.filter((name) => name.trim() !== "")
+    let finalOrderMessage = orderMessage
+
+    if (filledBulkOrderNames.length > 0) {
+      const bulkOrderText =
+        "\n\nSammelbestellung für:\n" + filledBulkOrderNames.map((name, i) => `${i + 1}. ${name}`).join("\n")
+      finalOrderMessage = orderMessage + bulkOrderText
+    }
+
     const customerData = {
       firstName,
       lastName,
@@ -405,7 +427,7 @@ export default function CheckoutPage() {
       zip,
       city,
       category: "Gemischt",
-      notes: orderMessage || `Bestellung vom ${new Date().toLocaleDateString("de-DE")}`,
+      notes: finalOrderMessage || `Bestellung vom ${new Date().toLocaleDateString("de-DE")}`,
       deliveryMethod,
       paymentMethod,
       emailReminder,
@@ -415,21 +437,10 @@ export default function CheckoutPage() {
 
     try {
       setOrderError(null)
+      setIsSubmitting(true)
 
       await executeOrderRetry(async () => {
-        // Use renamed function
         await saveCustomerToCRM(customerData)
-
-        if (createAccount && !isLoginMode) {
-          const accountResult = await createUserAccount({
-            ...customerData,
-            password,
-          })
-
-          if (accountResult.success) {
-            console.log("User account created, confirmation email sent")
-          }
-        }
 
         const totalAmount =
           state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price) * item.quantity, 0) +
@@ -484,12 +495,15 @@ export default function CheckoutPage() {
           paymentMethod,
           pickupLocation: finalPickupLocation,
           pickupLocationId: finalPickupLocationId,
-          notes: orderMessage,
+          notes: finalOrderMessage,
           emailReminder,
           emailUpdates,
           orderTime: new Date().toISOString(),
           deliveryDate: deliveryDateInfo?.deliveryDate || null,
           deliveryScheduleId: deliveryDateInfo?.scheduleId || null,
+          pickupStartTime: deliveryDateInfo?.pickupStartTime || null,
+          pickupEndTime: deliveryDateInfo?.pickupEndTime || null,
+          attributes: filledBulkOrderNames.length > 0 ? { bulk_order_names: filledBulkOrderNames } : undefined,
         }
 
         if (paymentMethod === "sumup") {
@@ -561,9 +575,27 @@ export default function CheckoutPage() {
           orderTime: orderParsed.data.order.order_time,
         }
 
+        console.log("[v0] Sending order confirmation email FIRST")
         const emailResult = await sendOrderConfirmationEmail(finalOrderData)
         if (emailResult.success) {
-          console.log("Order confirmation email sent successfully")
+          console.log("[v0] Order confirmation email sent successfully")
+        } else {
+          console.error("[v0] Failed to send order confirmation email:", emailResult.error)
+        }
+
+        if (createAccount && !isLoginMode) {
+          console.log("[v0] Creating user account AFTER order confirmation")
+          const accountResult = await createUserAccount({
+            ...customerData,
+            password,
+          })
+
+          if (accountResult.success) {
+            console.log("[v0] User account created, Supabase confirmation email sent")
+          } else {
+            console.error("[v0] Failed to create user account:", accountResult.error)
+            // Don't fail the order if account creation fails
+          }
         }
 
         dispatch({ type: "CLEAR_CART" })
@@ -581,6 +613,8 @@ export default function CheckoutPage() {
       console.error("Order submission error:", error)
       const classifiedError = classifyError(error)
       setOrderError(classifiedError)
+    } finally {
+      setIsSubmitting(false)
     }
   }, [
     state.items,
@@ -597,7 +631,7 @@ export default function CheckoutPage() {
     houseNumber,
     zip,
     city,
-    orderMessage,
+    orderMessage, // Updated dependency
     dispatch,
     executeOrderRetry, // Use renamed function
     nearestLocations,
@@ -617,6 +651,8 @@ export default function CheckoutPage() {
     setIsLoginMode, // Added setIsLoginMode to dependencies
     acceptedAGB, // Added to dependencies
     acceptedPrivacy, // Added to dependencies
+    bulkOrderNames, // Added to dependencies
+    isSubmitting,
   ])
 
   const handleSumUpFailed = async (failureData: any) => {
@@ -886,6 +922,27 @@ export default function CheckoutPage() {
           onDismiss={() => setOrderError(null)}
           className="mb-6"
         />
+
+        <Card className="mb-6 border-blue-200 bg-blue-50">
+          <CardContent className="p-4">
+            <div className="flex items-start space-x-3">
+              <Info className="w-5 h-5 text-blue-700 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-blue-900 mb-2">Wichtige Hinweise:</h3>
+                <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+                  <li>
+                    <strong>Abholstation nicht dabei?</strong> Tragen Sie bitte den Namen Ihrer Abholperson in das
+                    Nachrichtenfeld ein.
+                  </li>
+                  <li>
+                    <strong>Sammelbestellung?</strong> Tragen Sie die Namen aller Kunden in das Feld für
+                    Sammelbestellungen ein oder senden Sie uns diese per E-Mail.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {authSession && (
           <Card className="mb-6 border-green-200 bg-green-50">
@@ -1306,6 +1363,20 @@ export default function CheckoutPage() {
                       </RadioGroup>
                     </div>
 
+                    {(pickupLocation === "station" || pickupLocation === "warehouse") && (
+                      <Card className="border-blue-200 bg-blue-50">
+                        <CardContent className="p-3">
+                          <div className="flex items-start space-x-2">
+                            <Info className="w-4 h-4 text-blue-700 mt-0.5 flex-shrink-0" />
+                            <p className="text-sm text-blue-800">
+                              <strong>Ihre Abholstation nicht dabei?</strong> Tragen Sie bitte den Namen Ihrer
+                              Abholperson in das Nachrichtenfeld ein.
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
                     {pickupLocation === "station" && (
                       <div className="space-y-2">
                         <Label htmlFor="plz">PLZ für Abholort</Label>
@@ -1644,19 +1715,99 @@ export default function CheckoutPage() {
 
                 <div className="border-t pt-4 space-y-4">
                   <h3 className="font-semibold">Nachricht zur Bestellung (optional)</h3>
-                  <div>
-                    <Label htmlFor="orderMessage">Besondere Wünsche oder Anmerkungen</Label>
-                    <textarea
-                      id="orderMessage"
-                      className="w-full p-3 border rounded-lg resize-none"
-                      rows={3}
-                      placeholder="z.B. Allergien, Lieferwünsche, etc."
-                      value={orderMessage}
-                      onChange={(e) => {
-                        setOrderMessage(e.target.value)
-                      }}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="notes" className="text-base font-medium">
+                      Besondere Wünsche oder Anmerkungen
+                    </Label>
+
+                    <div className="text-xs text-muted-foreground mb-2 mt-1">
+                      <p className="flex items-start gap-1">
+                        <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                        <span>Abholstation nicht gelistet? Name der Abholperson hier angeben</span>
+                      </p>
+                    </div>
+
+                    <Textarea
+                      id="notes"
+                      value={orderMessage} // Changed from 'notes' to 'orderMessage' to match state variable
+                      onChange={(e) => setOrderMessage(e.target.value)} // Changed from 'notes' to 'orderMessage'
+                      placeholder="z.B. Allergien, Lieferwünsche, Name Ihrer Abholstation..."
+                      className="min-h-[100px] resize-none"
                     />
+
+                    <div className="text-xs text-muted-foreground space-y-1 mt-2">
+                      <p className="flex items-start gap-1">
+                        <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                        <span>Für Sammelbesteller: Bitte Namen aller Kunden hier eintragen</span>
+                      </p>
+                    </div>
                   </div>
+
+                  <Card className="border-primary/20">
+                    <CardContent className="p-4">
+                      <button
+                        type="button"
+                        onClick={() => setIsBulkOrderExpanded(!isBulkOrderExpanded)}
+                        className="w-full flex items-center justify-between text-left"
+                      >
+                        <h4 className="font-semibold text-sm">Für Groß- und Sammelbestellungen</h4>
+                        {isBulkOrderExpanded ? (
+                          <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                        )}
+                      </button>
+
+                      {isBulkOrderExpanded && (
+                        <div className="mt-4 space-y-3">
+                          <p className="text-xs text-muted-foreground">
+                            Tragen Sie hier die Namen der einzelnen Bestellungen ein, damit die Ware entsprechend
+                            gerichtet werden kann.
+                          </p>
+
+                          <div className="space-y-2">
+                            {bulkOrderNames.map((name, index) => (
+                              <div key={index}>
+                                <Label htmlFor={`bulk-name-${index}`} className="text-xs">
+                                  Name für Bestellung {index + 1}
+                                </Label>
+                                <Input
+                                  id={`bulk-name-${index}`}
+                                  value={name}
+                                  onChange={(e) => {
+                                    const newNames = [...bulkOrderNames]
+                                    newNames[index] = e.target.value
+                                    setBulkOrderNames(newNames)
+                                  }}
+                                  placeholder="z.B. Max Mustermann"
+                                  className="h-9"
+                                />
+                              </div>
+                            ))}
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setBulkOrderNames([...bulkOrderNames, ""])}
+                            className="w-full gap-2"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Weitere Person hinzufügen
+                          </Button>
+
+                          <div className="pt-3 border-t">
+                            <p className="text-xs text-muted-foreground italic">
+                              <strong>Hinweis:</strong> Haben Sie eine eigene Vereinbarung mit uns? Dann können Sie wie
+                              gewohnt bestellen.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
 
                 <div className="border-t pt-4">
@@ -1710,11 +1861,14 @@ export default function CheckoutPage() {
                     }}
                     className="w-full"
                     size="lg"
+                    disabled={isSubmitting || !acceptedAGB || !acceptedPrivacy}
                   >
-                    {`Bestellung abschließen - €${formatPrice(
-                      state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price) * item.quantity, 0) +
-                        (deliveryMethod === "delivery" ? 4.9 : 0),
-                    )}`}
+                    {isSubmitting
+                      ? "Bestellung wird verarbeitet..."
+                      : `Bestellung abschließen - €${formatPrice(
+                          state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price) * item.quantity, 0) +
+                            (deliveryMethod === "delivery" ? 4.9 : 0),
+                        )}`}
                   </Button>
                 </div>
               </CardContent>

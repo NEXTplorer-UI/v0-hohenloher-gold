@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Mail, Phone, MapPin, MessageCircle, User, CheckCircle, AlertCircle } from "lucide-react"
+import { Mail, Phone, MessageCircle, User, CheckCircle, AlertCircle } from "lucide-react"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
 import { useState } from "react"
 
@@ -133,9 +133,7 @@ export default function ContactPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center space-y-6 max-w-3xl mx-auto">
             <h1 className="font-serif font-bold text-4xl lg:text-5xl text-foreground">Kontakt</h1>
-            <p className="text-lg text-muted-foreground">
-              Haben Sie weitere Fragen? Wir sind gerne für Sie da.
-            </p>
+            <p className="text-lg text-muted-foreground">Haben Sie weitere Fragen? Wir sind gerne für Sie da.</p>
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-6">
               <p className="text-sm text-amber-800 text-center">
                 <strong>Hinweis zu frischen Naturprodukten:</strong>
@@ -185,7 +183,6 @@ export default function ContactPage() {
                     </a>
                   </div>
                 </div>
-                
               </CardContent>
             </Card>
 
@@ -201,7 +198,6 @@ export default function ContactPage() {
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                
                 <div className="flex items-center space-x-3">
                   <Phone className="w-5 h-5 text-primary" />
                   <div>
@@ -477,7 +473,7 @@ export default function ContactPage() {
                       <strong>Bankverbindung:</strong>
                     </p>
                     <p>Gerlinde Fink</p>
-                    <p>Sparkasse Hohenlohekreis</p>
+                    <p>Sparkasse Hohenlohe</p>
                     <p>IBAN: DE35 6225 1550 1000 5154 15</p>
                   </div>
                   <div className="space-y-2">

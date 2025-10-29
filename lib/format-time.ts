@@ -19,3 +19,16 @@ export function formatTime(time: string | null | undefined): string {
 
   return time
 }
+
+/**
+ * Formats a date string to German locale format
+ * @param dateString - ISO date string (e.g., "2024-11-22")
+ * @returns Formatted date string in German format (e.g., "22. November 2024")
+ */
+export function formatDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  })
+}
