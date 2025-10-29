@@ -325,7 +325,17 @@ export default function NewsletterSystem() {
         }),
       })
 
-      if (!response.ok) throw new Error("Failed to send newsletter")
+      if (!response.ok) {
+        let errorMessage = "Failed to send newsletter"
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+          console.error("[v0] API error response:", errorData)
+        } catch (e) {
+          console.error("[v0] Failed to parse error response")
+        }
+        throw new Error(errorMessage)
+      }
 
       const result = await response.json()
       console.log("[v0] Newsletter sent successfully:", result)
@@ -357,7 +367,7 @@ export default function NewsletterSystem() {
       console.error("[v0] Error sending newsletter:", error)
       toast({
         title: "Fehler beim Senden",
-        description: "Newsletter konnte nicht gesendet werden",
+        description: error instanceof Error ? error.message : "Newsletter konnte nicht gesendet werden",
         variant: "destructive",
       })
     } finally {
