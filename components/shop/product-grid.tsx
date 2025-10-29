@@ -43,7 +43,7 @@ const ProductCard = memo(({ product }: { product: any }) => {
       </CardContent>
       <CardFooter className="pt-0">
         <div className="flex items-center justify-between w-full">
-          <div className="text-lg font-bold">€{calculatePrice(product.basePrice)}</div>
+          <div className="text-lg font-bold">€{calculatePrice(product.basePrice, product.category)}</div>
           <Button onClick={() => addToCart(product)} size="sm">
             <Plus className="w-4 h-4 mr-1" />
             In den Warenkorb

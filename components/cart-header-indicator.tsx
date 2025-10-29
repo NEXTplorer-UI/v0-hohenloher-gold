@@ -21,7 +21,7 @@ export function CartHeaderIndicator() {
   }
 
   const subtotal = state.items.reduce((sum, item) => {
-    const itemPrice = calculatePrice(Number.parseFloat(item.price))
+    const itemPrice = calculatePrice(item.price, item.category)
     return sum + itemPrice * item.quantity
   }, 0)
 
@@ -77,7 +77,7 @@ export function CartHeaderIndicator() {
 
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {(state.items || []).slice(0, 3).map((item) => {
-                  const itemPrice = calculatePrice(Number.parseFloat(item.price))
+                  const itemPrice = calculatePrice(item.price, item.category)
                   return (
                     <div
                       key={item.id}

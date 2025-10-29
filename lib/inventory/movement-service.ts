@@ -41,7 +41,7 @@ export async function createMovementsFromOrder(
 
   const movements: InventoryMovement[] = orderItems.map((item) => ({
     product_id: item.product_id,
-    order_id: orderId, // Use the actual order ID instead of null
+    order_id: null, // Must be NULL when order_item_id is set (constraint: only one reference allowed)
     order_item_id: item.id || null,
     qty: -Math.abs(item.quantity), // Negative for outgoing
     reason,

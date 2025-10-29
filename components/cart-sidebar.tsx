@@ -33,7 +33,7 @@ export function CartSidebar() {
 
   const subtotal = state.items.reduce((sum, item) => {
     if (item.isFreeBonus) return sum
-    const itemPrice = calculatePrice(item.price)
+    const itemPrice = calculatePrice(item.price, item.category)
     return sum + itemPrice * item.quantity
   }, 0)
 
@@ -79,7 +79,7 @@ export function CartSidebar() {
             <>
               <div className="space-y-4 max-h-96 overflow-y-auto">
                 {(state.items || []).map((item) => {
-                  const itemPrice = calculatePrice(item.price)
+                  const itemPrice = calculatePrice(item.price, item.category)
 
                   return (
                     <div key={item.id} className="flex items-center space-x-4 p-4 border rounded-lg">

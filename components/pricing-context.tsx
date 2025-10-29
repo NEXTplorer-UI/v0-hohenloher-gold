@@ -7,7 +7,7 @@ type PricingMode = "pickup" | "shipping"
 interface PricingContextType {
   pricingMode: PricingMode
   setPricingMode: (mode: PricingMode) => void
-  calculatePrice: (basePrice: string | number) => number
+  calculatePrice: (basePrice: string | number, category?: string) => number
 }
 
 const PricingContext = createContext<PricingContextType | undefined>(undefined)
@@ -16,7 +16,7 @@ export function PricingProvider({ children }: { children: ReactNode }) {
   const [pricingMode, setPricingMode] = useState<PricingMode>("pickup")
 
   const calculatePrice = useCallback(
-    (basePrice: string | number) => {
+    (basePrice: string | number, category?: string) => {
       if (basePrice === null || basePrice === undefined) {
         return 0
       }
@@ -39,8 +39,17 @@ export function PricingProvider({ children }: { children: ReactNode }) {
       if (pricingMode === "pickup") {
         return pickupPrice
       } else {
-        // Calculate shipping price: pickup price / 0.9 to get the base price that gives 10% discount for pickup
-        return Math.round((pickupPrice / 0.9) * 100) / 100
+        // Shipping mode - only Südfrüchte get 10% surcharge
+        const isSouthernFruit = category === "Südfrüchte"
+
+        if (isSouthernFruit) {
+          // Only Südfrüchte get 10% shipping surcharge
+          const shippingPrice = Math.round((pickupPrice / 0.9) * 100) / 100
+          return shippingPrice
+        } else {
+          // Other products: same price as pickup
+          return pickupPrice
+        }
       }
     },
     [pricingMode],

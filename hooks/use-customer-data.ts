@@ -63,15 +63,22 @@ export function useCustomerData() {
   const [customers, setCustomers] = useState<ExtendedCustomer[]>([])
   const [loading, setLoading] = useState(false)
   const [lastQuery, setLastQuery] = useState<LoadOptions | null>(null)
+  const [totalCount, setTotalCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(50) // 50 customers per page
 
   const loadCustomers = useCallback(async (opts?: LoadOptions) => {
     console.log("[v0] [useCustomerData] Loading customers with options:", opts)
     setLoading(true)
     try {
       const params = new URLSearchParams()
-      if (opts?.q) params.set("q", opts.q)
-      if (opts?.limit) params.set("limit", String(opts.limit))
-      if (opts?.offset) params.set("offset", String(opts.offset))
+      if (opts?.q) {
+        params.set("q", opts.q)
+        params.set("limit", "999999") // No limit for search
+      } else {
+        if (opts?.limit) params.set("limit", String(opts.limit))
+        if (opts?.offset) params.set("offset", String(opts.offset))
+      }
 
       const res = await fetch(`/api/crm/customers?${params.toString()}`, { method: "GET" })
       const json = await res.json()
@@ -93,6 +100,7 @@ export function useCustomerData() {
 
       console.log("[v0] [useCustomerData] Successfully loaded", mapped.length, "customers")
       setCustomers(mapped)
+      setTotalCount(json?.total || mapped.length)
       setLastQuery(opts || {})
     } catch (e) {
       console.error("[v0] [useCustomerData] Load error:", e)
@@ -101,6 +109,28 @@ export function useCustomerData() {
       setLoading(false)
     }
   }, [])
+
+  const loadPage = useCallback(
+    (page: number) => {
+      setCurrentPage(page)
+      const offset = (page - 1) * pageSize
+      loadCustomers({ limit: pageSize, offset })
+    },
+    [pageSize, loadCustomers],
+  )
+
+  const nextPage = useCallback(() => {
+    const totalPages = Math.ceil(totalCount / pageSize)
+    if (currentPage < totalPages) {
+      loadPage(currentPage + 1)
+    }
+  }, [currentPage, totalCount, pageSize, loadPage])
+
+  const prevPage = useCallback(() => {
+    if (currentPage > 1) {
+      loadPage(currentPage - 1)
+    }
+  }, [currentPage, loadPage])
 
   const saveCustomer = useCallback(
     async (customer: ExtendedCustomer) => {
@@ -161,8 +191,8 @@ export function useCustomerData() {
   )
 
   useEffect(() => {
-    loadCustomers()
-  }, [loadCustomers])
+    loadPage(1)
+  }, [loadPage])
 
   return {
     customers,
@@ -170,5 +200,12 @@ export function useCustomerData() {
     loadCustomers,
     saveCustomer,
     deleteCustomer,
+    currentPage,
+    pageSize,
+    totalCount,
+    totalPages: Math.ceil(totalCount / pageSize),
+    nextPage,
+    prevPage,
+    loadPage,
   }
 }

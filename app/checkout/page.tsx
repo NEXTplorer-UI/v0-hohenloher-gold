@@ -164,8 +164,8 @@ export default function CheckoutPage() {
   })
 
   const safeCalculatePrice = useCallback(
-    (price: string | number): number => {
-      return calculatePrice(price)
+    (price: string | number, category?: string): number => {
+      return calculatePrice(price, category)
     },
     [calculatePrice],
   )
@@ -443,10 +443,10 @@ export default function CheckoutPage() {
         await saveCustomerToCRM(customerData)
 
         const totalAmount =
-          state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price) * item.quantity, 0) +
+          state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price, item.category) * item.quantity, 0) +
           (deliveryMethod === "delivery" ? 4.9 : 0)
         const totalAmountCents = Math.round(
-          (state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price) * item.quantity, 0) +
+          (state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price, item.category) * item.quantity, 0) +
             (deliveryMethod === "delivery" ? 4.9 : 0)) *
             100,
         )
@@ -488,7 +488,7 @@ export default function CheckoutPage() {
           phone,
           items: state.items.map((item) => ({
             ...item,
-            price: safeCalculatePrice(item.price),
+            price: safeCalculatePrice(item.price, item.category),
           })),
           total: totalAmount,
           deliveryMethod,
@@ -1317,8 +1317,7 @@ export default function CheckoutPage() {
                       </span>
                     </div>
                     <p className="text-sm text-amber-600 mt-1">
-                      Für Bestellungen über 10kg ist nur Abholung möglich. Die Preise wurden automatisch auf Abholpreise
-                      angepasst.
+                      Bitte reduzieren Sie die Menge oder wählen Sie Abholung.
                     </p>
                   </div>
                 )}
@@ -1410,65 +1409,49 @@ export default function CheckoutPage() {
                                 : `${nearestLocations.length} Abholorte in Ihrer Nähe:`}
                             </p>
 
-                            {nearestLocations.length === 1 ? (
-                              <div className="p-3 bg-card border rounded-lg">
-                                <p className="text-sm">
-                                  <strong>{nearestLocations[0].name}</strong>
-                                  <br />
-                                  {nearestLocations[0].address}
-                                  <br />
-                                  <span className="text-muted-foreground">
-                                    {nearestLocations[0].distanceKm
-                                      ? `ca. ${nearestLocations[0].distanceKm.toFixed(1)} km entfernt`
-                                      : `PLZ: ${nearestLocations[0].postal_code}`}
-                                  </span>
-                                  <br />
-                                  <span className="text-muted-foreground">
-                                    Kontakt: {nearestLocations[0].contact_phone}
-                                  </span>
-                                </p>
-                              </div>
-                            ) : (
-                              <div className="space-y-2">
-                                {nearestLocations.map((location) => (
-                                  <div
-                                    key={location.id}
-                                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                                      selectedLocation?.id === location.id
-                                        ? "border-primary bg-primary/5"
-                                        : "border-border hover:border-primary/50"
-                                    }`}
-                                    onClick={() => setSelectedLocation(location)}
-                                  >
-                                    <div className="flex items-start justify-between">
-                                      <div className="flex-1">
-                                        <p className="font-medium text-sm">{location.name}</p>
-                                        <p className="text-xs text-muted-foreground">{location.address}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                          {location.distanceKm
-                                            ? `ca. ${location.distanceKm.toFixed(1)} km entfernt`
-                                            : `PLZ: ${location.postal_code}`}{" "}
-                                          • Kontakt: {location.contact_phone}
-                                        </p>
-                                      </div>
-                                      <div
-                                        className={`w-4 h-4 rounded-full border-2 ${
-                                          selectedLocation?.id === location.id
-                                            ? "border-primary bg-primary"
-                                            : "border-muted-foreground"
-                                        }`}
-                                      />
+                            <div className="space-y-2">
+                              {nearestLocations.map((location) => (
+                                <div
+                                  key={location.id}
+                                  className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                                    selectedLocation?.id === location.id
+                                      ? "border-green-600 bg-green-50 ring-2 ring-green-600"
+                                      : "border-border hover:border-primary/50 hover:bg-accent/5"
+                                  }`}
+                                  onClick={() => setSelectedLocation(location)}
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <p className="font-medium text-sm">{location.name}</p>
+                                      <p className="text-xs text-muted-foreground mt-1">{location.address}</p>
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        {location.distanceKm
+                                          ? `ca. ${location.distanceKm.toFixed(1)} km entfernt`
+                                          : `PLZ: ${location.postal_code}`}{" "}
+                                        • Kontakt: {location.contact_phone}
+                                      </p>
+                                    </div>
+                                    <div
+                                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                                        selectedLocation?.id === location.id
+                                          ? "border-green-600 bg-green-600"
+                                          : "border-muted-foreground"
+                                      }`}
+                                    >
+                                      {selectedLocation?.id === location.id && (
+                                        <div className="w-2 h-2 bg-white rounded-full" />
+                                      )}
                                     </div>
                                   </div>
-                                ))}
+                                </div>
+                              ))}
 
-                                {!selectedLocation && (
-                                  <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
-                                    Bitte wählen Sie einen Abholort aus der Liste aus.
-                                  </p>
-                                )}
-                              </div>
-                            )}
+                              {nearestLocations.length > 1 && !selectedLocation && (
+                                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                                  Bitte wählen Sie einen Abholort aus der Liste aus.
+                                </p>
+                              )}
+                            </div>
                           </div>
                         )}
 
@@ -1608,7 +1591,7 @@ export default function CheckoutPage() {
                         )}
                       </div>
                       <p className="font-medium text-sm">
-                        €{formatPrice(safeCalculatePrice(item.price) * item.quantity)}
+                        €{formatPrice(safeCalculatePrice(item.price, item.category) * item.quantity)}
                       </p>
                     </div>
                   ))}
@@ -1634,7 +1617,10 @@ export default function CheckoutPage() {
                     <span>
                       €
                       {formatPrice(
-                        state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price) * item.quantity, 0),
+                        state.items.reduce(
+                          (sum, item) => sum + safeCalculatePrice(item.price, item.category) * item.quantity,
+                          0,
+                        ),
                       )}
                     </span>
                   </div>
@@ -1649,8 +1635,10 @@ export default function CheckoutPage() {
                     <span className="text-primary">
                       €
                       {formatPrice(
-                        state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price) * item.quantity, 0) +
-                          (deliveryMethod === "delivery" ? 4.9 : 0),
+                        state.items.reduce(
+                          (sum, item) => sum + safeCalculatePrice(item.price, item.category) * item.quantity,
+                          0,
+                        ) + (deliveryMethod === "delivery" ? 4.9 : 0),
                       )}
                     </span>
                   </div>
@@ -1866,8 +1854,10 @@ export default function CheckoutPage() {
                     {isSubmitting
                       ? "Bestellung wird verarbeitet..."
                       : `Bestellung abschließen - €${formatPrice(
-                          state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price) * item.quantity, 0) +
-                            (deliveryMethod === "delivery" ? 4.9 : 0),
+                          state.items.reduce(
+                            (sum, item) => sum + safeCalculatePrice(item.price, item.category) * item.quantity,
+                            0,
+                          ) + (deliveryMethod === "delivery" ? 4.9 : 0),
                         )}`}
                   </Button>
                 </div>

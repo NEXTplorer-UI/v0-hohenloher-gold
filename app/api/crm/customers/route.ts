@@ -15,6 +15,31 @@ export async function GET(request: Request) {
     const supabase = createAdminClient()
     console.log("[v0] [/api/crm/customers] Admin client created")
 
+    let totalCount = 0
+
+    if (q) {
+      // For search, count matching customers
+      const { count, error: countError } = await supabase
+        .from("customers")
+        .select("*", { count: "exact", head: true })
+        .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%,city.ilike.%${q}%`)
+
+      if (countError) {
+        console.error("[v0] [/api/crm/customers] Count error:", countError)
+      } else {
+        totalCount = count || 0
+      }
+    } else {
+      // For non-search, count all customers
+      const { count, error: countError } = await supabase.from("customers").select("*", { count: "exact", head: true })
+
+      if (countError) {
+        console.error("[v0] [/api/crm/customers] Count error:", countError)
+      } else {
+        totalCount = count || 0
+      }
+    }
+
     // Use the search function for better performance
     const { data, error } = await supabase.rpc("crm_customers_search", {
       q,
@@ -27,8 +52,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Database error", details: error.message }, { status: 500 })
     }
 
-    console.log("[v0] [/api/crm/customers] Successfully fetched", data?.length || 0, "customers")
-    return NextResponse.json({ customers: data ?? [] })
+    console.log("[v0] [/api/crm/customers] Successfully fetched", data?.length || 0, "customers, total:", totalCount)
+    return NextResponse.json({ customers: data ?? [], total: totalCount })
   } catch (e) {
     console.error("[v0] [/api/crm/customers] Unexpected error:", e)
     return NextResponse.json(

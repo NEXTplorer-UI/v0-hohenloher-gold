@@ -1,21 +1,34 @@
 "use client"
 import { useState, useEffect, useMemo, memo, useCallback } from "react"
+import { DialogFooter } from "@/components/ui/dialog"
+
+import { DialogDescription } from "@/components/ui/dialog"
+
+import { DialogTitle } from "@/components/ui/dialog"
+
+import { DialogHeader } from "@/components/ui/dialog"
+
+import { DialogContent } from "@/components/ui/dialog"
+
+import { Dialog } from "@/components/ui/dialog"
+
+import { SelectItem } from "@/components/ui/select"
+
+import { SelectContent } from "@/components/ui/select"
+
+import { SelectValue } from "@/components/ui/select"
+
+import { SelectTrigger } from "@/components/ui/select"
+
+import { Select } from "@/components/ui/select"
+
+import { Label } from "@/components/ui/label"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Edit, RefreshCw, ArrowUpDown } from "lucide-react"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-
+import { Trash2, Edit, RefreshCw, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react"
 import CustomerEditModal from "./customer-edit-modal"
 import CustomerImport from "./customer-import"
 import CustomerDetailModal from "./customer-detail-modal"
@@ -32,7 +45,6 @@ interface ExtendedCustomer {
   city?: string
   phone?: string
   tags: string[]
-  // New fields
   account_status?: "has_account" | "no_account"
   customer_status?: "active" | "inactive" | "blocked"
   registration_date?: string
@@ -216,7 +228,19 @@ const CustomerRow = memo(
 CustomerRow.displayName = "CustomerRow"
 
 const CustomerTable = memo(() => {
-  const { customers, loading, loadCustomers, saveCustomer, deleteCustomer } = useCustomerData()
+  const {
+    customers,
+    loading,
+    loadCustomers,
+    saveCustomer,
+    deleteCustomer,
+    currentPage,
+    pageSize,
+    totalCount,
+    totalPages,
+    nextPage,
+    prevPage,
+  } = useCustomerData()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
@@ -320,20 +344,18 @@ const CustomerTable = memo(() => {
     return () => clearTimeout(timer)
   }, [searchTerm])
 
+  useEffect(() => {
+    if (debouncedSearchTerm) {
+      loadCustomers({ q: debouncedSearchTerm })
+    } else {
+      loadCustomers({ limit: pageSize, offset: (currentPage - 1) * pageSize })
+    }
+  }, [debouncedSearchTerm, loadCustomers, currentPage, pageSize])
+
   const sortedAndFilteredCustomers = useMemo(() => {
     if (!Array.isArray(customers)) return []
 
-    let filtered = customers
-    if (debouncedSearchTerm) {
-      const searchLower = debouncedSearchTerm.toLowerCase()
-      filtered = customers.filter(
-        (customer) =>
-          customer.first_name?.toLowerCase().includes(searchLower) ||
-          customer.last_name?.toLowerCase().includes(searchLower) ||
-          customer.email?.toLowerCase().includes(searchLower) ||
-          customer.city?.toLowerCase().includes(searchLower),
-      )
-    }
+    const filtered = customers
 
     return filtered.sort((a, b) => {
       let aValue = ""
@@ -363,7 +385,7 @@ const CustomerTable = memo(() => {
       const comparison = aValue.localeCompare(bValue, "de", { numeric: true })
       return sortOrder === "asc" ? comparison : -comparison
     })
-  }, [customers, debouncedSearchTerm, sortBy, sortOrder])
+  }, [customers, sortBy, sortOrder])
 
   const customerCount = useMemo(() => sortedAndFilteredCustomers.length, [sortedAndFilteredCustomers])
 
@@ -371,10 +393,10 @@ const CustomerTable = memo(() => {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span>Kundenverwaltung ({customerCount})</span>
+          <span>Kundenverwaltung ({debouncedSearchTerm ? customerCount : totalCount})</span>
           <div className="flex gap-2">
             <CustomerImport onImportComplete={loadCustomers} customersCount={customers.length} />
-            <Button onClick={loadCustomers} disabled={loading} size="sm">
+            <Button onClick={() => loadCustomers()} disabled={loading} size="sm">
               <RefreshCw className="w-4 h-4 mr-2" />
               Aktualisieren
             </Button>
@@ -434,40 +456,65 @@ const CustomerTable = memo(() => {
         {loading ? (
           <div className="text-center py-8">Lade Kundendaten...</div>
         ) : (
-          <div className="h-96 overflow-auto border border-gray-200 rounded-lg">
-            <table className="w-full border-collapse">
-              <thead className="sticky top-0 bg-gray-50 z-10">
-                <tr>
-                  {visibleColumns.map((columnKey) => {
-                    const column = AVAILABLE_COLUMNS.find((col) => col.key === columnKey)
-                    return (
-                      <th key={columnKey} className="border border-gray-300 px-4 py-2 text-left">
-                        {column?.label}
-                      </th>
-                    )
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {sortedAndFilteredCustomers.map((customer) => (
-                  <CustomerRow
-                    key={customer.id}
-                    customer={customer}
-                    onEdit={handleEditCustomer}
-                    onDelete={handleDeleteClick}
-                    onViewDetails={handleViewDetails}
-                    visibleColumns={visibleColumns}
-                  />
-                ))}
-              </tbody>
-            </table>
+          <>
+            <div className="h-96 overflow-auto border border-gray-200 rounded-lg">
+              <table className="w-full border-collapse">
+                <thead className="sticky top-0 bg-gray-50 z-10">
+                  <tr>
+                    {visibleColumns.map((columnKey) => {
+                      const column = AVAILABLE_COLUMNS.find((col) => col.key === columnKey)
+                      return (
+                        <th key={columnKey} className="border border-gray-300 px-4 py-2 text-left">
+                          {column?.label}
+                        </th>
+                      )
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedAndFilteredCustomers.map((customer) => (
+                    <CustomerRow
+                      key={customer.id}
+                      customer={customer}
+                      onEdit={handleEditCustomer}
+                      onDelete={handleDeleteClick}
+                      onViewDetails={handleViewDetails}
+                      visibleColumns={visibleColumns}
+                    />
+                  ))}
+                </tbody>
+              </table>
 
-            {sortedAndFilteredCustomers.length === 0 && !loading && (
-              <div className="text-center py-8 text-gray-500">
-                {customers.length === 0 ? "Keine Kunden vorhanden" : "Keine Kunden gefunden"}
+              {sortedAndFilteredCustomers.length === 0 && !loading && (
+                <div className="text-center py-8 text-gray-500">
+                  {customers.length === 0 ? "Keine Kunden vorhanden" : "Keine Kunden gefunden"}
+                </div>
+              )}
+            </div>
+
+            {!debouncedSearchTerm && totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 px-2">
+                <div className="text-sm text-gray-600">
+                  Seite {currentPage} von {totalPages} ({totalCount} Kunden gesamt)
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={prevPage} disabled={currentPage === 1 || loading}>
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Zurück
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={nextPage}
+                    disabled={currentPage === totalPages || loading}
+                  >
+                    Weiter
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
               </div>
             )}
-          </div>
+          </>
         )}
 
         <CustomerEditModal

@@ -285,7 +285,7 @@ export default function ShopPage() {
       console.log("[v0] Cart changed, refreshing product stock data")
       mutate()
     }
-  }, [cart?.items, mutate])
+  }, [cart?.items?.length]) // Only depend on the length, not the mutate function
 
   const {
     data: deliverySchedules,
@@ -705,7 +705,9 @@ export default function ShopPage() {
                   <div className="grid grid-cols-2 gap-4 pt-4 border-t">
                     <div>
                       <span className="text-sm text-muted-foreground">Preis:</span>
-                      <p className="text-2xl font-bold text-primary">€{calculatePrice(selectedProduct.price)}</p>
+                      <p className="text-2xl font-bold text-primary">
+                        €{calculatePrice(selectedProduct.price, selectedProduct.category).toFixed(2).replace(".", ",")}
+                      </p>
                       <p className="text-xs text-muted-foreground">pro {selectedProduct.unit}</p>
                     </div>
                     <div>
@@ -749,7 +751,7 @@ function ProductCard({
   selectedVariantIndex?: number
   onVariantChange?: (index: number) => void
   onSelect: (product: any) => void
-  calculatePrice: (price: string) => string
+  calculatePrice: (price: string | number, category?: string) => number
 }) {
   const { addToCart, cart } = useCart()
 
@@ -876,7 +878,9 @@ function ProductCard({
       <CardFooter className="pt-2 flex items-center justify-between gap-2">
         {/* Price */}
         <div>
-          <div className="text-xl font-bold text-primary">€{calculatePrice(product.price)}</div>
+          <div className="text-xl font-bold text-primary">
+            €{calculatePrice(product.price, product.category).toFixed(2).replace(".", ",")}
+          </div>
           <div className="text-xs text-muted-foreground">
             {(() => {
               const unitText = `pro ${product.unit}`

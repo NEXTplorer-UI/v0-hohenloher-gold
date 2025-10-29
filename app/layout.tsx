@@ -35,13 +35,20 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: process.env.NEXT_PUBLIC_LOGO_URL || "/placeholder.svg",
+        url: "/favicon-16x16.jpg",
+        sizes: "16x16",
+        type: "image/png",
+      },
+      {
+        url: "/favicon-32x32.jpg",
+        sizes: "32x32",
         type: "image/png",
       },
     ],
     apple: [
       {
-        url: process.env.NEXT_PUBLIC_LOGO_URL || "/placeholder.svg",
+        url: "/apple-touch-icon.jpg",
+        sizes: "180x180",
         type: "image/png",
       },
     ],

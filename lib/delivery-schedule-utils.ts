@@ -19,14 +19,91 @@ export interface DeliverySchedule {
  */
 export async function getNextDeliverySchedule(): Promise<DeliverySchedule | null> {
   try {
-    const response = await fetch("/api/delivery-schedules/next-available")
+    const response = await fetch("/api/delivery-schedules")
     if (!response.ok) {
-      console.error("[v0] Failed to fetch next delivery schedule")
+      console.error("[v0] Failed to fetch delivery schedules:", response.status)
       return null
     }
 
-    const result = await response.json()
-    return result.data
+    const schedules = await response.json()
+
+    if (!Array.isArray(schedules) || schedules.length === 0) {
+      console.log("[v0] No delivery schedules available")
+      return null
+    }
+
+    console.log(
+      "[v0] All schedules:",
+      schedules.map((s) => ({
+        id: s.id,
+        status: s.status,
+        delivery_date: s.delivery_date,
+        order_deadline: s.order_deadline,
+      })),
+    )
+
+    // Filter for active schedules and sort by delivery date
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const activeSchedules = schedules
+      .filter((schedule: any) => {
+        const isActive = schedule.status === "confirmed" || schedule.status === "planned"
+
+        // Check if delivery date is in the future
+        const deliveryDate = new Date(schedule.delivery_date)
+        const isFuture = deliveryDate >= today
+
+        if (!isActive) {
+          console.log(
+            `[v0] Schedule ${schedule.id} filtered out: status is "${schedule.status}" (expected "confirmed" or "planned")`,
+          )
+        }
+        if (!isFuture) {
+          console.log(
+            `[v0] Schedule ${schedule.id} filtered out: delivery date ${schedule.delivery_date} is in the past`,
+          )
+        }
+
+        return isActive && isFuture
+      })
+      .sort((a: any, b: any) => {
+        const dateA = new Date(a.delivery_date)
+        const dateB = new Date(b.delivery_date)
+        return dateA.getTime() - dateB.getTime()
+      })
+
+    if (activeSchedules.length === 0) {
+      console.log("[v0] No active delivery schedules found")
+      return null
+    }
+
+    // Return the next available schedule
+    const nextSchedule = activeSchedules[0]
+
+    // Format dates for display
+    const deliveryDate = new Date(nextSchedule.delivery_date)
+    const orderDeadline = new Date(nextSchedule.order_deadline)
+
+    return {
+      id: nextSchedule.id,
+      delivery_date: nextSchedule.delivery_date,
+      status: nextSchedule.status,
+      order_deadline: nextSchedule.order_deadline,
+      notes: nextSchedule.notes,
+      pickup_start_time: nextSchedule.pickup_start_time || nextSchedule.pickupStartTime,
+      pickup_end_time: nextSchedule.pickup_end_time || nextSchedule.pickupEndTime,
+      formattedDeliveryDate: deliveryDate.toLocaleDateString("de-DE", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      }),
+      formattedOrderDeadline: orderDeadline.toLocaleDateString("de-DE", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      }),
+    }
   } catch (error) {
     console.error("[v0] Error fetching next delivery schedule:", error)
     return null
