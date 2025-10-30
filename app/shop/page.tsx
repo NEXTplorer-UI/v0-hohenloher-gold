@@ -8,6 +8,7 @@ import { Plus, Calendar, Download, Clock, Minus, CheckCircle, ArrowUpDown } from
 import { useCart } from "@/contexts/cart-context"
 import { useState, useMemo, useEffect } from "react"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
+import { CustomArrangementNotice } from "@/components/custom-arrangement-notice"
 import { usePricing } from "@/components/pricing-context"
 import useSWR from "swr"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -426,6 +427,11 @@ export default function ShopPage() {
   return (
     <div className="min-h-screen bg-background">
       <NextArrivalBanner />
+
+      {/* Custom arrangement notice banner */}
+      <div className="container mx-auto px-4 py-4">
+        <CustomArrangementNotice />
+      </div>
 
       <section id="seasonal-overview" className="py-12 border-b text-primary bg-sidebar-accent-foreground">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">

@@ -13,14 +13,12 @@ export interface CartItem {
   origin: string
   category: string
   weight_kg?: number
-  isFreeBonus?: boolean
 }
 
 interface CartState {
   items: CartItem[]
   total: number
   itemCount: number
-  freeBoxes: number
   deliveryMethod: "pickup" | "delivery"
 }
 
@@ -75,39 +73,18 @@ const parsePrice = (priceValue: any): number => {
 const calculateTotalsWithDiscount = (state: CartState): CartState => {
   const items = state.items || []
 
-  const paidItems = items.filter((item) => !item.isFreeBonus)
-
-  const boxItems = paidItems.filter((item) => item.unit?.includes("Kiste"))
-  const totalBoxes = boxItems.reduce((sum, item) => sum + item.quantity, 0)
-
-  const freeBoxes = Math.floor(totalBoxes / 10)
-
-  const itemsWithBonus = [...paidItems]
-  if (freeBoxes > 0 && boxItems && boxItems.length > 0) {
-    const mostPopularBox = boxItems.reduce((prev, current) => (prev.quantity > current.quantity ? prev : current))
-
-    itemsWithBonus.push({
-      ...mostPopularBox,
-      id: mostPopularBox.id + 10000,
-      quantity: freeBoxes,
-      isFreeBonus: true,
-      name: `${mostPopularBox.name} (als Dankeschön)`,
-    })
-  }
-
-  const total = paidItems.reduce((sum, item) => {
+  const total = items.reduce((sum, item) => {
     const price = parsePrice(item.price)
     return sum + price * item.quantity
   }, 0)
 
-  const itemCount = itemsWithBonus.reduce((sum, item) => sum + item.quantity, 0)
+  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
 
   return {
     ...state,
-    items: itemsWithBonus,
+    items,
     total: Math.round(total * 100) / 100,
     itemCount,
-    freeBoxes,
   }
 }
 
@@ -145,7 +122,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     }
 
     case "CLEAR_CART": {
-      return { items: [], total: 0, itemCount: 0, freeBoxes: 0, deliveryMethod: "pickup" }
+      return { items: [], total: 0, itemCount: 0, deliveryMethod: "pickup" }
     }
 
     case "LOAD_CART": {
@@ -166,7 +143,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     items: [],
     total: 0,
     itemCount: 0,
-    freeBoxes: 0,
     deliveryMethod: "pickup",
   })
 

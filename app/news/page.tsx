@@ -87,6 +87,7 @@ function ArticlesList() {
                           "/placeholder.svg" ||
                           "/placeholder.svg" ||
                           "/placeholder.svg" ||
+                          "/placeholder.svg" ||
                           "/placeholder.svg"
                         }
                         alt={article.title}
@@ -146,6 +147,7 @@ function ArticlesList() {
                           src={
                             article.image_url ||
                             "/placeholder.svg?height=200&width=400&query=Hohenloher Gold news article" ||
+                            "/placeholder.svg" ||
                             "/placeholder.svg" ||
                             "/placeholder.svg" ||
                             "/placeholder.svg" ||
@@ -256,57 +258,79 @@ export default function NewsPage() {
     setIsSubmitting(true)
     setMessage(null)
 
+    const siteUrl = typeof window !== "undefined" ? window.location.origin : undefined
+    const requestBody = JSON.stringify({ email, source: "news_page", siteUrl })
+
+    console.log("[v0] Submitting newsletter subscription:", { email, siteUrl })
+
+    // Try the ad-blocker friendly endpoint first
     try {
-      const siteUrl = typeof window !== "undefined" ? window.location.origin : undefined
-
-      console.log("[v0] Submitting newsletter subscription:", { email, siteUrl })
-
-      const response = await fetch("/api/newsletter/subscribe", {
+      console.log("[v0] Attempting primary endpoint: /api/preferences/update")
+      const response = await fetch("/api/preferences/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, source: "news_page", siteUrl }),
+        body: requestBody,
       })
 
-      console.log("[v0] Newsletter API response status:", response.status)
+      console.log("[v0] Primary endpoint response status:", response.status)
 
       const data = await response.json()
-      console.log("[v0] Newsletter API response data:", data)
+      console.log("[v0] Primary endpoint response data:", data)
 
       if (response.ok) {
         setMessage({ type: "success", text: data.message })
         setEmail("")
         setConsent(false)
-      } else {
-        let errorMessage = data.error || "Ein Fehler ist aufgetreten"
+        setIsSubmitting(false)
+        return
+      }
 
-        // Add helpful context based on error code
-        if (data.errorCode === "DB_INSERT_ERROR" || data.errorCode === "DB_UPDATE_ERROR") {
-          errorMessage +=
-            " Möglicherweise wird die Anfrage durch einen Adblocker blockiert. Bitte deaktivieren Sie Ihren Adblocker und versuchen Sie es erneut."
-        }
+      // If we got a response but it's an error, show it
+      if (data.errorCode !== "NETWORK_ERROR") {
+        setMessage({ type: "error", text: data.error || "Ein Fehler ist aufgetreten" })
+        setIsSubmitting(false)
+        return
+      }
+    } catch (primaryError) {
+      console.warn("[v0] Primary endpoint failed (likely blocked by ad blocker):", primaryError)
+      console.log("[v0] Attempting fallback endpoint: /api/newsletter/subscribe")
 
-        console.error("[v0] Newsletter subscription failed:", {
-          status: response.status,
-          errorCode: data.errorCode,
-          dbErrorCode: data.dbErrorCode,
-          error: data.error,
+      // Try fallback endpoint
+      try {
+        const fallbackResponse = await fetch("/api/newsletter/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: requestBody,
         })
 
-        setMessage({ type: "error", text: errorMessage })
-      }
-    } catch (error) {
-      console.error("[v0] Newsletter subscription error:", error)
-      console.error("[v0] Network error details:", {
-        error,
-        message: error instanceof Error ? error.message : "Unknown error",
-      })
+        console.log("[v0] Fallback endpoint response status:", fallbackResponse.status)
 
-      setMessage({
-        type: "error",
-        text: "Verbindungsfehler. Bitte überprüfen Sie Ihre Internetverbindung oder deaktivieren Sie Ihren Adblocker und versuchen Sie es erneut.",
-      })
-    } finally {
-      setIsSubmitting(false)
+        const fallbackData = await fallbackResponse.json()
+        console.log("[v0] Fallback endpoint response data:", fallbackData)
+
+        if (fallbackResponse.ok) {
+          setMessage({ type: "success", text: fallbackData.message })
+          setEmail("")
+          setConsent(false)
+          setIsSubmitting(false)
+          return
+        }
+
+        // Show error from fallback
+        setMessage({ type: "error", text: fallbackData.error || "Ein Fehler ist aufgetreten" })
+        setIsSubmitting(false)
+        return
+      } catch (fallbackError) {
+        console.error("[v0] Both endpoints failed:", { primaryError, fallbackError })
+
+        // Both endpoints failed - likely ad blocker
+        setMessage({
+          type: "error",
+          text: "Die Anmeldung wurde blockiert. Bitte deaktivieren Sie Ihren Ad-Blocker (z.B. uBlock Origin, AdBlock Plus) für diese Seite und versuchen Sie es erneut. Alternativ können Sie uns direkt kontaktieren.",
+        })
+        setIsSubmitting(false)
+        return
+      }
     }
   }
 

@@ -34,6 +34,7 @@ import { saveCustomerToCRM, createUserAccount, sendOrderConfirmationEmail } from
 import { PaymentSumUp } from "@/components/payment-sumup"
 import Link from "next/link"
 import { EnhancedErrorHandler, classifyError, type ErrorInfo } from "@/components/enhanced-error-handler"
+import { CustomArrangementNotice } from "@/components/custom-arrangement-notice"
 import { useRetryLogic } from "@/hooks/use-retry-logic"
 import { determineOrderDeliveryDate } from "@/lib/delivery-schedule-utils"
 import { safeJson } from "@/lib/utils/safe-json"
@@ -916,6 +917,10 @@ export default function CheckoutPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-yellow-50 py-8">
       <div className="container mx-auto px-4 max-w-6xl">
+        <div className="mb-6">
+          <CustomArrangementNotice />
+        </div>
+
         <EnhancedErrorHandler
           error={orderError}
           onRetry={orderError?.retryable ? handleOrderSubmission : undefined}
