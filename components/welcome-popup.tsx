@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Dialog, DialogContent, DialogDescription } from "@/components/ui/dialog"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { X } from "lucide-react"
 import Image from "next/image"
@@ -28,7 +28,7 @@ export function WelcomePopup() {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
         {/* Close button */}
         <button
           onClick={handleClose}
@@ -39,7 +39,7 @@ export function WelcomePopup() {
         </button>
 
         {/* Image - full width, scaled to fit */}
-        <div className="relative w-full h-64 sm:h-80 bg-muted">
+        <div className="relative w-full h-48 sm:h-64 bg-muted flex-shrink-0">
           <Image
             src="/images/design-mode/orangensonnenuntergang.jpg"
             alt="Orangen bei Sonnenuntergang"
@@ -49,13 +49,13 @@ export function WelcomePopup() {
           />
         </div>
 
-        {/* Content */}
-        <div className="p-6 sm:p-8 space-y-4">
+        {/* Content - scrollable */}
+        <div className="p-6 sm:p-8 space-y-4 overflow-y-auto">
           <h2 className="text-2xl sm:text-3xl font-bold text-primary text-center">
             Willkommen bei Südfrüchte Hohenlohe
           </h2>
 
-          <DialogDescription className="space-y-3 text-base leading-relaxed text-foreground">
+          <div className="space-y-3 text-base leading-relaxed text-foreground">
             <p>
               Allem Anfang wohnt ein Zauber inne...
               <br />
@@ -78,7 +78,7 @@ export function WelcomePopup() {
             <p>Schön, dass Sie da sind!</p>
 
             <p>Genießen Sie den Besuch und lassen Sie sich von der Sonne des Südens verzaubern ☀️</p>
-          </DialogDescription>
+          </div>
 
           {/* Button with gold color */}
           <div className="flex justify-center pt-4">
