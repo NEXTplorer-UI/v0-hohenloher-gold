@@ -43,15 +43,15 @@ export default function EmailTemplatesViewer() {
                 <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background-color: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <!-- Header -->
                     <tr>
-                        <td style="padding: 30px; text-align: center; background: linear-gradient(135deg, #2d5016 0%, #4a7c2c 100%);">
-                            <img src="${process.env.NEXT_PUBLIC_LOGO_URL || "https://obxjafjbdxiipqfrmiou.supabase.co/storage/v1/object/public/branding/logo.png"}" alt="Südfrüchte Hohenlohe" style="max-width: 200px; height: auto;">
+                        <td style="padding: 30px; text-align: center; background: linear-gradient(135deg, #b8941f 0%, #d4af37 100%);">
+                            <img src="${process.env.NEXT_PUBLIC_NEWS_LOGO_URL || process.env.NEXT_PUBLIC_LOGO_URL || "https://obxjafjbdxiipqfrmiou.supabase.co/storage/v1/object/public/branding/logo.png"}" alt="Südfrüchte Hohenlohe" style="max-width: 200px; height: auto;">
                         </td>
                     </tr>
                     
                     <!-- Content -->
                     <tr>
                         <td style="padding: 40px 30px;">
-                            <h2 style="color: #2d5016; margin: 0 0 20px 0; font-size: 24px;">Guten Tag [KUNDENNAME],</h2>
+                            <h2 style="color: #d4af37; margin: 0 0 20px 0; font-size: 24px;">Guten Tag [KUNDENNAME],</h2>
                             
                             <p style="color: #333333; line-height: 1.6; margin: 0 0 15px 0;">
                                 [IHR TEXT HIER]
@@ -70,24 +70,17 @@ export default function EmailTemplatesViewer() {
                     
                     <!-- Footer -->
                     <tr>
-                        <td style="padding: 30px; background-color: #f8f8f8; border-top: 3px solid #d4a574;">
-                            <table role="presentation" style="width: 100%; border-collapse: collapse;">
-                                <tr>
-                                    <td style="text-align: center; padding-bottom: 15px;">
-                                        <p style="margin: 0; color: #666666; font-size: 14px; font-weight: bold;">
-                                            Südfrüchte Hohenlohe
-                                        </p>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="text-align: center;">
-                                        <p style="margin: 0; color: #666666; font-size: 12px; line-height: 1.5;">
-                                            E-Mail: kontakt@suedfruechte-hohenlohe.de<br>
-                                            Web: www.suedfruechte-hohenlohe.de
-                                        </p>
-                                    </td>
-                                </tr>
-                            </table>
+                        <td style="padding: 25px 20px; background-color: #2d3748; color: #e2e8f0; text-align: center;">
+                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; color: #e2e8f0;">
+                                Südfrüchte Hohenlohe
+                            </p>
+                            <p style="margin: 5px 0; font-size: 13px; line-height: 1.8; color: #e2e8f0;">
+                                Weststraße 28 | 74629 Pfedelbach
+                            </p>
+                            <p style="margin: 5px 0; font-size: 13px; line-height: 1.8; color: #e2e8f0;">
+                                <a href="mailto:kontakt@suedfruechte-hohenlohe.de" style="color: #d4af37; text-decoration: none;">kontakt@suedfruechte-hohenlohe.de</a> | 
+                                Tel: <a href="tel:+4915735703864" style="color: #d4af37; text-decoration: none;">0157 357 038 64</a>
+                            </p>
                         </td>
                     </tr>
                 </table>
@@ -111,15 +104,15 @@ export default function EmailTemplatesViewer() {
                 <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background-color: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <!-- Header -->
                     <tr>
-                        <td style="padding: 30px; text-align: center; background: linear-gradient(135deg, #2d5016 0%, #4a7c2c 100%);">
-                            <img src="${process.env.NEXT_PUBLIC_LOGO_URL || "https://obxjafjbdxiipqfrmiou.supabase.co/storage/v1/object/public/branding/logo.png"}" alt="Südfrüchte Hohenlohe" style="max-width: 200px; height: auto;">
+                        <td style="padding: 30px; text-align: center; background: linear-gradient(135deg, #b8941f 0%, #d4af37 100%);">
+                            <img src="${process.env.NEXT_PUBLIC_NEWS_LOGO_URL || process.env.NEXT_PUBLIC_LOGO_URL || "https://obxjafjbdxiipqfrmiou.supabase.co/storage/v1/object/public/branding/logo.png"}" alt="Südfrüchte Hohenlohe" style="max-width: 200px; height: auto;">
                         </td>
                     </tr>
                     
                     <!-- Content -->
                     <tr>
                         <td style="padding: 40px 30px;">
-                            <h2 style="color: #2d5016; margin: 0 0 20px 0; font-size: 24px;">Sehr geehrte/r [KUNDENNAME],</h2>
+                            <h2 style="color: #d4af37; margin: 0 0 20px 0; font-size: 24px;">Sehr geehrte/r [KUNDENNAME],</h2>
                             
                             <p style="color: #333333; line-height: 1.6; margin: 0 0 15px 0;">
                                 vielen Dank für Ihre Nachricht bezüglich [REKLAMATIONSGRUND].
@@ -129,7 +122,7 @@ export default function EmailTemplatesViewer() {
                                 Es tut uns sehr leid, dass Sie mit [PRODUKT/DIENSTLEISTUNG] nicht zufrieden waren.
                             </p>
                             
-                            <div style="background-color: #fff8e1; border-left: 4px solid #d4a574; padding: 15px; margin: 20px 0;">
+                            <div style="background-color: #fef9e7; border-left: 4px solid #d4af37; padding: 15px; margin: 20px 0;">
                                 <p style="color: #333333; line-height: 1.6; margin: 0;">
                                     <strong>Unsere Lösung:</strong><br>
                                     [IHRE LÖSUNG/ANTWORT HIER]
@@ -149,24 +142,17 @@ export default function EmailTemplatesViewer() {
                     
                     <!-- Footer -->
                     <tr>
-                        <td style="padding: 30px; background-color: #f8f8f8; border-top: 3px solid #d4a574;">
-                            <table role="presentation" style="width: 100%; border-collapse: collapse;">
-                                <tr>
-                                    <td style="text-align: center; padding-bottom: 15px;">
-                                        <p style="margin: 0; color: #666666; font-size: 14px; font-weight: bold;">
-                                            Südfrüchte Hohenlohe
-                                        </p>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td style="text-align: center;">
-                                        <p style="margin: 0; color: #666666; font-size: 12px; line-height: 1.5;">
-                                            E-Mail: kontakt@suedfruechte-hohenlohe.de<br>
-                                            Web: www.suedfruechte-hohenlohe.de
-                                        </p>
-                                    </td>
-                                </tr>
-                            </table>
+                        <td style="padding: 25px 20px; background-color: #2d3748; color: #e2e8f0; text-align: center;">
+                            <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: bold; color: #e2e8f0;">
+                                Südfrüchte Hohenlohe
+                            </p>
+                            <p style="margin: 5px 0; font-size: 13px; line-height: 1.8; color: #e2e8f0;">
+                                Weststraße 28 | 74629 Pfedelbach
+                            </p>
+                            <p style="margin: 5px 0; font-size: 13px; line-height: 1.8; color: #e2e8f0;">
+                                <a href="mailto:kontakt@suedfruechte-hohenlohe.de" style="color: #d4af37; text-decoration: none;">kontakt@suedfruechte-hohenlohe.de</a> | 
+                                Tel: <a href="tel:+4915735703864" style="color: #d4af37; text-decoration: none;">0157 357 038 64</a>
+                            </p>
                         </td>
                     </tr>
                 </table>

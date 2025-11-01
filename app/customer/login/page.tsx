@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Mail, Lock } from "lucide-react"
+import { ArrowLeft, Mail, Lock, RefreshCw } from "lucide-react"
 
 export default function CustomerLoginPage() {
   const [email, setEmail] = useState("")
@@ -19,6 +19,10 @@ export default function CustomerLoginPage() {
   const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [showResendOption, setShowResendOption] = useState(false)
+  const [resendLoading, setResendLoading] = useState(false)
+  const [resendSuccess, setResendSuccess] = useState("")
+  const [resendError, setResendError] = useState("")
   const router = useRouter()
   const supabase = createClient()
 
@@ -36,6 +40,9 @@ export default function CustomerLoginPage() {
     e.preventDefault()
     setLoading(true)
     setError("")
+    setShowResendOption(false)
+    setResendSuccess("")
+    setResendError("")
 
     try {
       console.log("[v0] Customer login attempt:", email)
@@ -51,11 +58,16 @@ export default function CustomerLoginPage() {
 
       if (authError) {
         console.log("[v0] Login error:", authError.message)
-        setError("Ungültige E-Mail-Adresse oder Passwort")
+
+        if (authError.message.includes("Email not confirmed") || authError.message.includes("not confirmed")) {
+          setError("Ihre E-Mail-Adresse wurde noch nicht bestätigt. Bitte überprüfen Sie Ihr Postfach.")
+          setShowResendOption(true)
+        } else {
+          setError("Ungültige E-Mail-Adresse oder Passwort")
+        }
       } else {
         console.log("[v0] Login successful")
 
-        // Handle remember me
         if (rememberMe) {
           localStorage.setItem("hohenloher_customer_email", email)
           localStorage.setItem("hohenloher_customer_remember", "true")
@@ -64,7 +76,6 @@ export default function CustomerLoginPage() {
           localStorage.removeItem("hohenloher_customer_remember")
         }
 
-        // Redirect to dashboard
         router.push("/customer/dashboard")
       }
     } catch (err) {
@@ -72,6 +83,39 @@ export default function CustomerLoginPage() {
       setError("Ein unerwarteter Fehler ist aufgetreten")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleResendConfirmation = async () => {
+    if (!email) {
+      setResendError("Bitte geben Sie Ihre E-Mail-Adresse ein")
+      return
+    }
+
+    setResendLoading(true)
+    setResendError("")
+    setResendSuccess("")
+
+    try {
+      const response = await fetch("/api/auth/resend-confirmation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        setResendError(result.error || "Fehler beim Versenden der E-Mail")
+      } else {
+        setResendSuccess(result.message)
+        setShowResendOption(false)
+      }
+    } catch (error) {
+      console.error("[v0] Error resending confirmation:", error)
+      setResendError("Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.")
+    } finally {
+      setResendLoading(false)
     }
   }
 
@@ -144,6 +188,40 @@ export default function CustomerLoginPage() {
               {error && (
                 <Alert variant="destructive">
                   <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              {showResendOption && (
+                <Alert className="border-blue-200 bg-blue-50">
+                  <AlertDescription className="space-y-2">
+                    <p className="text-blue-800 text-sm">
+                      Der Bestätigungslink ist möglicherweise abgelaufen. Möchten Sie eine neue Bestätigungs-E-Mail
+                      erhalten?
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleResendConfirmation}
+                      disabled={resendLoading}
+                      className="w-full gap-2 bg-transparent"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${resendLoading ? "animate-spin" : ""}`} />
+                      {resendLoading ? "Wird gesendet..." : "Bestätigungs-E-Mail erneut senden"}
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {resendSuccess && (
+                <Alert className="border-green-200 bg-green-50">
+                  <AlertDescription className="text-green-800">{resendSuccess}</AlertDescription>
+                </Alert>
+              )}
+
+              {resendError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{resendError}</AlertDescription>
                 </Alert>
               )}
 

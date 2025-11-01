@@ -358,31 +358,31 @@ export default function PickupLocationManagement() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="address">Adresse *</Label>
+              <Label htmlFor="address">Adresse</Label>
               <Input
                 id="address"
                 value={formData.address}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                placeholder="z.B. Marktplatz 1"
+                placeholder="z.B. Marktplatz 1 (optional)"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="postal_code">PLZ *</Label>
+                <Label htmlFor="postal_code">PLZ</Label>
                 <Input
                   id="postal_code"
                   value={formData.postal_code}
                   onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
-                  placeholder="z.B. 74613"
+                  placeholder="z.B. 74613 (optional)"
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="city">Stadt *</Label>
+                <Label htmlFor="city">Stadt</Label>
                 <Input
                   id="city"
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  placeholder="z.B. Öhringen"
+                  placeholder="z.B. Öhringen (optional)"
                 />
               </div>
             </div>
@@ -470,7 +470,7 @@ export default function PickupLocationManagement() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="edit-address">Adresse *</Label>
+              <Label htmlFor="edit-address">Adresse</Label>
               <Input
                 id="edit-address"
                 value={formData.address}
@@ -479,7 +479,7 @@ export default function PickupLocationManagement() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-postal_code">PLZ *</Label>
+                <Label htmlFor="edit-postal_code">PLZ</Label>
                 <Input
                   id="edit-postal_code"
                   value={formData.postal_code}
@@ -487,7 +487,7 @@ export default function PickupLocationManagement() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-city">Stadt *</Label>
+                <Label htmlFor="edit-city">Stadt</Label>
                 <Input
                   id="edit-city"
                   value={formData.city}

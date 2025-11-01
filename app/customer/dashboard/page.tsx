@@ -5,12 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Avatar, AvatarFallback, AvatarInitials } from "@/components/ui/avatar"
 import { useRouter } from "next/navigation"
+import useSWR from "swr"
 import {
   User,
   ShoppingBag,
-  CreditCard,
   Settings,
   LogOut,
   Package,
@@ -19,8 +18,12 @@ import {
   Download,
   Trash2,
   Shield,
+  RefreshCw,
+  Users,
 } from "lucide-react"
 import { LoadingSpinner } from "@/components/loading-spinner"
+import { ProfileEditModal } from "@/components/customer/profile-edit-modal"
+import DistributorTab from "@/components/customer/distributor-tab"
 
 interface CustomerProfile {
   id: string
@@ -35,25 +38,53 @@ interface CustomerProfile {
 
 interface Order {
   id: string
-  order_date: string
-  total: number // Fixed field name from total_amount to total
+  order_number: string
+  order_time: string
+  total: number
+  subtotal: number
+  shipping_cost: number
   status: string
+  payment_status: string
+  payment_method: string
+  delivery_method: string
+  pickup_location?: string
+  pickup_date?: string
+  notes?: string
   items: OrderItem[]
 }
 
 interface OrderItem {
+  id: string
   product_name: string
+  product_category: string
+  product_size?: string
   quantity: number
-  price: number
+  unit_price: number
+  expected_delivery_date?: string
 }
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 function DashboardContent({ user }: { user: any }) {
   const [profile, setProfile] = useState<CustomerProfile | null>(null)
-  const [orders, setOrders] = useState<Order[]>([])
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isProfileEditOpen, setIsProfileEditOpen] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+
+  const {
+    data: ordersData,
+    error: ordersError,
+    isLoading: ordersLoading,
+    mutate: refreshOrders,
+  } = useSWR("/api/customer/orders", fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    refreshInterval: 0,
+  })
+
+  const orders: Order[] = ordersData?.data || []
 
   useEffect(() => {
     loadCustomerData(user.id)
@@ -61,11 +92,10 @@ function DashboardContent({ user }: { user: any }) {
 
   const loadCustomerData = async (userId: string) => {
     try {
-      // Load customer profile
       const { data: profileData, error: profileError } = await supabase
         .from("customers")
         .select("*")
-        .eq("id", userId)
+        .eq("user_id", userId)
         .single()
 
       if (profileError) {
@@ -73,40 +103,6 @@ function DashboardContent({ user }: { user: any }) {
       } else {
         setProfile(profileData)
       }
-
-      // Load customer orders (mock data for now)
-      const mockOrders: Order[] = [
-        {
-          id: "ORD-001",
-          order_date: "2024-01-15",
-          total: 45.9, // Updated field name from total_amount to total
-          status: "delivered",
-          items: [
-            { product_name: "Hohenloher Blütenhonig 500g", quantity: 2, price: 12.9 },
-            { product_name: "Hohenloher Waldhonig 250g", quantity: 1, price: 8.5 },
-            { product_name: "Hohenloher Rapshonig 500g", quantity: 1, price: 11.6 },
-          ],
-        },
-        {
-          id: "ORD-002",
-          order_date: "2024-02-03",
-          total: 28.4, // Updated field name from total_amount to total
-          status: "shipped",
-          items: [{ product_name: "Hohenloher Akazienhonig 250g", quantity: 2, price: 14.2 }],
-        },
-        {
-          id: "ORD-003",
-          order_date: "2024-02-20",
-          total: 67.3, // Updated field name from total_amount to total
-          status: "processing",
-          items: [
-            { product_name: "Hohenloher Geschenkset", quantity: 1, price: 35.0 },
-            { product_name: "Hohenloher Blütenhonig 1kg", quantity: 1, price: 22.9 },
-            { product_name: "Hohenloher Propolis Tropfen", quantity: 1, price: 9.4 },
-          ],
-        },
-      ]
-      setOrders(mockOrders)
     } catch (error) {
       console.error("[v0] Error loading customer data:", error)
     }
@@ -172,8 +168,21 @@ function DashboardContent({ user }: { user: any }) {
     }
   }
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await refreshOrders()
+      await loadCustomerData(user.id)
+    } catch (error) {
+      console.error("[v0] Refresh error:", error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     const statusConfig = {
+      confirmed: { label: "Bestätigt", variant: "default" as const },
       delivered: { label: "Zugestellt", variant: "default" as const },
       shipped: { label: "Versandt", variant: "secondary" as const },
       processing: { label: "In Bearbeitung", variant: "outline" as const },
@@ -184,46 +193,54 @@ function DashboardContent({ user }: { user: any }) {
     return <Badge variant={config.variant}>{config.label}</Badge>
   }
 
-  const userInitials = profile
-    ? `${profile.first_name?.[0] || ""}${profile.last_name?.[0] || ""}`
-    : user?.email?.[0]?.toUpperCase() || "U"
+  const getPaymentStatusBadge = (status: string) => {
+    const statusConfig = {
+      paid: { label: "Bezahlt", variant: "default" as const },
+      pending: { label: "Ausstehend", variant: "outline" as const },
+      failed: { label: "Fehlgeschlagen", variant: "destructive" as const },
+    }
+
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending
+    return <Badge variant={config.variant}>{config.label}</Badge>
+  }
+
+  const handleProfileUpdateSuccess = () => {
+    loadCustomerData(user.id)
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-primary">Hohenloher Gold</h1>
-            </div>
-            <div className="flex items-center gap-4">
-              <Avatar>
-                <AvatarFallback className="bg-primary text-primary-foreground">
-                  <AvatarInitials>{userInitials}</AvatarInitials>
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden sm:block">
-                <p className="text-sm font-medium">
-                  {profile?.first_name} {profile?.last_name}
-                </p>
-                <p className="text-xs text-muted-foreground">{user?.email}</p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={handleLogout}>
-                <LogOut className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-end items-center mb-6">
+          <div className="flex items-center gap-4 bg-white px-4 py-2 rounded-lg shadow-sm border">
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 text-gold" />
+              <span className="text-sm font-medium text-gray-700">{user?.email}</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="text-gray-600 hover:text-gold"
+            >
+              <RefreshCw className={`w-4 h-4 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
+              Aktualisieren
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-gray-600 hover:text-gold">
+              <LogOut className="w-4 h-4 mr-1" />
+              Abmelden
+            </Button>
+          </div>
+        </div>
+
+        {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-foreground mb-2">
             Willkommen zurück, {profile?.first_name || "Kunde"}!
           </h2>
-          <p className="text-muted-foreground">Verwalten Sie Ihre Bestellungen, Profil und Zahlungsinformationen</p>
+          <p className="text-muted-foreground">Verwalten Sie Ihre Bestellungen, Profil und Verteiler-Informationen</p>
         </div>
 
         <Tabs defaultValue="orders" className="space-y-6">
@@ -236,9 +253,9 @@ function DashboardContent({ user }: { user: any }) {
               <User className="w-4 h-4" />
               Profil
             </TabsTrigger>
-            <TabsTrigger value="payments" className="flex items-center gap-2">
-              <CreditCard className="w-4 h-4" />
-              Zahlungen
+            <TabsTrigger value="distributor" className="flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              Verteiler
             </TabsTrigger>
             <TabsTrigger value="privacy" className="flex items-center gap-2">
               <Shield className="w-4 h-4" />
@@ -257,48 +274,96 @@ function DashboardContent({ user }: { user: any }) {
                 <CardDescription>Übersicht über alle Ihre Bestellungen bei Hohenloher Gold</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {orders.map((order) => (
-                    <Card key={order.id} className="border-l-4 border-l-primary">
-                      <CardContent className="pt-6">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold">Bestellung #{order.id}</span>
-                              {getStatusBadge(order.status)}
-                            </div>
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
-                                {new Date(order.order_date).toLocaleDateString("de-DE")}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Euro className="w-4 h-4" />
-                                {order.total.toFixed(2)} €
-                              </span>
-                            </div>
-                          </div>
-                          <Button variant="outline" size="sm">
-                            Details anzeigen
-                          </Button>
-                        </div>
-                        <div className="mt-4">
-                          <p className="text-sm font-medium mb-2">Artikel:</p>
-                          <div className="space-y-1">
-                            {order.items.map((item, index) => (
-                              <div key={index} className="text-sm text-muted-foreground flex justify-between">
-                                <span>
-                                  {item.quantity}x {item.product_name}
-                                </span>
-                                <span>{(item.quantity * item.price).toFixed(2)} €</span>
+                {ordersLoading && (
+                  <div className="text-center py-8">
+                    <LoadingSpinner text="Bestellungen werden geladen..." />
+                  </div>
+                )}
+
+                {ordersError && (
+                  <div className="text-center py-8">
+                    <p className="text-destructive">Fehler beim Laden der Bestellungen</p>
+                  </div>
+                )}
+
+                {!ordersLoading && !ordersError && orders.length === 0 && (
+                  <div className="text-center py-8">
+                    <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Noch keine Bestellungen</h3>
+                    <p className="text-muted-foreground mb-4">Sie haben noch keine Bestellungen aufgegeben</p>
+                    <Button onClick={() => router.push("/shop")} className="bg-primary hover:bg-primary/90">
+                      Zum Shop
+                    </Button>
+                  </div>
+                )}
+
+                {!ordersLoading && !ordersError && orders.length > 0 && (
+                  <div className="space-y-4">
+                    {orders.map((order) => (
+                      <Card key={order.id} className="border-l-4 border-l-primary">
+                        <CardContent className="pt-6">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold">Bestellung #{order.order_number}</span>
+                                {getStatusBadge(order.status)}
+                                {getPaymentStatusBadge(order.payment_status)}
                               </div>
-                            ))}
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+                                <span className="flex items-center gap-1">
+                                  <Calendar className="w-4 h-4" />
+                                  {new Date(order.order_time).toLocaleDateString("de-DE")}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Euro className="w-4 h-4" />
+                                  {order.total.toFixed(2)} €
+                                </span>
+                                {order.delivery_method === "pickup" && order.pickup_location && (
+                                  <span className="text-xs">Abholung: {order.pickup_location}</span>
+                                )}
+                                {order.delivery_method === "delivery" && <span className="text-xs">Lieferung</span>}
+                              </div>
+                              {order.pickup_date && (
+                                <div className="text-sm text-muted-foreground">
+                                  <span className="font-medium">Liefertermin:</span>{" "}
+                                  {new Date(order.pickup_date).toLocaleDateString("de-DE", {
+                                    day: "2-digit",
+                                    month: "long",
+                                    year: "numeric",
+                                  })}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                          <div className="mt-4">
+                            <p className="text-sm font-medium mb-2">Artikel ({order.items.length}):</p>
+                            <div className="space-y-1">
+                              {order.items.map((item) => (
+                                <div key={item.id} className="text-sm text-muted-foreground flex justify-between">
+                                  <span>
+                                    {item.quantity}x {item.product_name}
+                                    {item.product_size && ` (${item.product_size})`}
+                                  </span>
+                                  <span>{(item.quantity * item.unit_price).toFixed(2)} €</span>
+                                </div>
+                              ))}
+                            </div>
+                            {order.shipping_cost > 0 && (
+                              <div className="text-sm text-muted-foreground flex justify-between mt-2 pt-2 border-t">
+                                <span>Versandkosten</span>
+                                <span>{order.shipping_cost.toFixed(2)} €</span>
+                              </div>
+                            )}
+                            <div className="text-sm font-semibold flex justify-between mt-2 pt-2 border-t">
+                              <span>Gesamt</span>
+                              <span>{order.total.toFixed(2)} €</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -347,33 +412,17 @@ function DashboardContent({ user }: { user: any }) {
                       )}
                     </p>
                   </div>
-                  <Button className="bg-primary hover:bg-primary/90">Profil bearbeiten</Button>
+                  <Button onClick={() => setIsProfileEditOpen(true)} className="bg-primary hover:bg-primary/90">
+                    Profil bearbeiten
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Payments Tab */}
-          <TabsContent value="payments" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="w-5 h-5" />
-                  Zahlungsmethoden
-                </CardTitle>
-                <CardDescription>Verwalten Sie Ihre Zahlungsinformationen</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8">
-                  <CreditCard className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Keine Zahlungsmethoden hinterlegt</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Fügen Sie eine Zahlungsmethode hinzu, um Ihre Bestellungen zu vereinfachen
-                  </p>
-                  <Button className="bg-primary hover:bg-primary/90">Zahlungsmethode hinzufügen</Button>
-                </div>
-              </CardContent>
-            </Card>
+          {/* Distributor Tab */}
+          <TabsContent value="distributor" className="space-y-6">
+            <DistributorTab />
           </TabsContent>
 
           {/* Privacy Tab */}
@@ -482,6 +531,16 @@ function DashboardContent({ user }: { user: any }) {
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Profile Edit Modal */}
+      {profile && (
+        <ProfileEditModal
+          open={isProfileEditOpen}
+          onOpenChange={setIsProfileEditOpen}
+          customer={profile}
+          onSuccess={handleProfileUpdateSuccess}
+        />
+      )}
     </div>
   )
 }

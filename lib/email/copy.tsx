@@ -23,6 +23,8 @@ export const emailCopy = {
     bankBicValue: "SOLADES1KUN",
     bankReference: "Verwendungszweck:",
     bankImportant: "Wichtig: Bitte geben Sie unbedingt die Bestellnummer als Verwendungszweck an.",
+    bankPaymentDeadline: "Zahlungsziel:",
+    bankPaymentDeadlineText: "Bitte überweisen Sie den Betrag bis spätestens",
     shippingNotice: "Ihre Ware wird innerhalb von 1-3 Tagen nach Zahlungseingang versandt.",
     outro: "Wir werden Ihre Bestellung sorgfältig vorbereiten und Sie informieren, sobald sie zur Abholung bereit ist.",
     closing: "Mit freundlichen Grüßen",

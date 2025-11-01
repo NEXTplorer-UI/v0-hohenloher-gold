@@ -18,7 +18,6 @@ export async function GET(request: Request) {
     let totalCount = 0
 
     if (q) {
-      // For search, count matching customers
       const { count, error: countError } = await supabase
         .from("customers")
         .select("*", { count: "exact", head: true })
@@ -30,7 +29,6 @@ export async function GET(request: Request) {
         totalCount = count || 0
       }
     } else {
-      // For non-search, count all customers
       const { count, error: countError } = await supabase.from("customers").select("*", { count: "exact", head: true })
 
       if (countError) {
@@ -40,7 +38,6 @@ export async function GET(request: Request) {
       }
     }
 
-    // Use the search function for better performance
     const { data, error } = await supabase.rpc("crm_customers_search", {
       q,
       limit_count: limit,
@@ -52,8 +49,43 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Database error", details: error.message }, { status: 500 })
     }
 
-    console.log("[v0] [/api/crm/customers] Successfully fetched", data?.length || 0, "customers, total:", totalCount)
-    return NextResponse.json({ customers: data ?? [], total: totalCount })
+    const authUsersMap = new Map<string, { email_confirmed_at: string | null }>()
+    try {
+      const { data: authData, error: authError } = await supabase.auth.admin.listUsers()
+
+      if (authError) {
+        console.error("[v0] [/api/crm/customers] Auth error:", authError)
+      } else if (authData?.users) {
+        // Create a map of email -> user data for fast lookup
+        authData.users.forEach((user) => {
+          if (user.email) {
+            authUsersMap.set(user.email, {
+              email_confirmed_at: user.email_confirmed_at || null,
+            })
+          }
+        })
+      }
+    } catch (e) {
+      console.error("[v0] [/api/crm/customers] Error fetching auth users:", e)
+    }
+
+    const customersWithAuthStatus = (data ?? []).map((customer) => {
+      const authUser = authUsersMap.get(customer.email)
+
+      return {
+        ...customer,
+        email_confirmed: !!authUser?.email_confirmed_at,
+        email_confirmed_at: authUser?.email_confirmed_at || null,
+      }
+    })
+
+    console.log(
+      "[v0] [/api/crm/customers] Successfully fetched",
+      customersWithAuthStatus?.length || 0,
+      "customers with auth status, total:",
+      totalCount,
+    )
+    return NextResponse.json({ customers: customersWithAuthStatus ?? [], total: totalCount })
   } catch (e) {
     console.error("[v0] [/api/crm/customers] Unexpected error:", e)
     return NextResponse.json(

@@ -10,6 +10,7 @@ import { Download, Mail, Search, Filter, Loader2, ChevronDown, ChevronUp, MapPin
 import { mapDBToUIStatus, getEmailTemplateForStatus } from "@/lib/order-status-mapping"
 import type { EmailTemplateId } from "@/lib/email/build"
 import { useToast } from "@/hooks/use-toast"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface OrderItem {
   id: string
@@ -76,18 +77,22 @@ const OrderItem = memo(
     order,
     onNotify,
     onStatusChange,
-    onAdminNotesChange, // Added onAdminNotesChange prop
+    onAdminNotesChange,
+    isSelected,
+    onSelectionChange,
   }: {
     order: Order
     onNotify: (orderId: string, templateId?: EmailTemplateId) => void
     onStatusChange: (orderId: string, status?: string, paymentStatus?: string) => void
-    onAdminNotesChange: (orderId: string, adminNotes: string) => void // Added prop type
+    onAdminNotesChange: (orderId: string, adminNotes: string) => void
+    isSelected: boolean
+    onSelectionChange: (orderId: string, selected: boolean) => void
   }) => {
     const [showItems, setShowItems] = useState(false)
     const [showBulkNames, setShowBulkNames] = useState(false)
-    const [showAdminNotes, setShowAdminNotes] = useState(false) // Added state for admin notes visibility
-    const [adminNotes, setAdminNotes] = useState(order.admin_notes || "") // Added state for admin notes
-    const [isSavingNotes, setIsSavingNotes] = useState(false) // Added loading state
+    const [showAdminNotes, setShowAdminNotes] = useState(false)
+    const [adminNotes, setAdminNotes] = useState(order.admin_notes || "")
+    const [isSavingNotes, setIsSavingNotes] = useState(false)
     const customerName = `${order.customer.first_name} ${order.customer.last_name}`
     const orderDate = new Date(order.created_at).toLocaleDateString("de-DE")
     const items = order.order_items.map((item) => `${item.product_name} (${item.quantity}x)`).join(", ")
@@ -172,156 +177,167 @@ const OrderItem = memo(
     const uiStatus = mapDBToUIStatus(order.status as any)
 
     return (
-      <Card className="p-4">
+      <Card className={`p-4 ${isSelected ? "bg-gold/5 border-gold" : ""}`}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium">{order.order_number}</span>
-              <Badge variant={getStatusVariant(uiStatus)}>{getStatusDisplay(uiStatus)}</Badge>
-              {isBulkOrder && (
-                <Badge variant="secondary" className="gap-1">
-                  <Users className="h-3 w-3" />
-                  Sammelbestellung ({bulkOrderNames.length})
-                </Badge>
-              )}
-            </div>
-            <div className="text-sm text-muted-foreground">
-              <div>
-                {customerName} • {order.customer.email}
-              </div>
-              <div className="flex items-center gap-1">
-                <span>{orderDate}</span>
-                {order.pickup_location && (
-                  <>
-                    <span>•</span>
-                    <MapPin className="h-3 w-3" />
-                    <span className="font-medium">{order.pickup_location}</span>
-                  </>
+          <div className="flex items-start gap-3 flex-1">
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={(checked) => onSelectionChange(order.id, checked as boolean)}
+              className="mt-1"
+            />
+            <div className="space-y-2 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium">{order.order_number}</span>
+                <Badge variant={getStatusVariant(uiStatus)}>{getStatusDisplay(uiStatus)}</Badge>
+                {isBulkOrder && (
+                  <Badge variant="secondary" className="gap-1">
+                    <Users className="h-3 w-3" />
+                    Sammelbestellung ({bulkOrderNames.length})
+                  </Badge>
                 )}
-                {!order.pickup_location && <span>• Lieferung</span>}
               </div>
-              <div>
-                {getPaymentMethodDisplay(order.payment_method)} • {getPaymentStatusDisplay(order.payment_status)}
-              </div>
-              {isBulkOrder && (
+              <div className="text-sm text-muted-foreground">
+                <div>
+                  {customerName} • {order.customer.email}
+                </div>
+                <div className="flex items-center gap-1">
+                  <span>{orderDate}</span>
+                  {order.pickup_location && (
+                    <>
+                      <span>•</span>
+                      <MapPin className="h-3 w-3" />
+                      <span className="font-medium">{order.pickup_location}</span>
+                    </>
+                  )}
+                  {!order.pickup_location && <span>• Lieferung</span>}
+                </div>
+                <div>
+                  {getPaymentMethodDisplay(order.payment_method)} • {getPaymentStatusDisplay(order.payment_status)}
+                </div>
+                {isBulkOrder && (
+                  <div className="mt-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowBulkNames(!showBulkNames)}
+                      className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
+                    >
+                      {showBulkNames ? (
+                        <ChevronUp className="h-4 w-4 mr-1" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 mr-1" />
+                      )}
+                      Namen anzeigen ({bulkOrderNames.length} Personen)
+                    </Button>
+                    {showBulkNames && (
+                      <div className="mt-2 pl-4 border-l-2 border-muted space-y-1">
+                        {bulkOrderNames.map((name, index) => (
+                          <div key={index} className="text-sm">
+                            {index + 1}. {name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="mt-2">
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowBulkNames(!showBulkNames)}
+                    onClick={() => setShowItems(!showItems)}
                     className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
                   >
-                    {showBulkNames ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-                    Namen anzeigen ({bulkOrderNames.length} Personen)
+                    {showItems ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+                    {order.order_items.length} Artikel anzeigen ({totalWeight.toFixed(2)} kg)
                   </Button>
-                  {showBulkNames && (
+                  {showItems && (
                     <div className="mt-2 pl-4 border-l-2 border-muted space-y-1">
-                      {bulkOrderNames.map((name, index) => (
-                        <div key={index} className="text-sm">
-                          {index + 1}. {name}
+                      {order.order_items.map((item, index) => (
+                        <div key={index} className="flex justify-between text-sm">
+                          <span>
+                            {item.product_id ? `#${item.product_id} - ` : ""}
+                            {item.product_name} ({item.quantity}x)
+                            {item.weight ? ` • ${(item.weight * item.quantity).toFixed(2)} kg` : ""}
+                          </span>
+                          <span>€{item.total_price.toFixed(2)}</span>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-              )}
-              <div className="mt-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowItems(!showItems)}
-                  className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
-                >
-                  {showItems ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-                  {order.order_items.length} Artikel anzeigen ({totalWeight.toFixed(2)} kg)
-                </Button>
-                {showItems && (
-                  <div className="mt-2 pl-4 border-l-2 border-muted space-y-1">
-                    {order.order_items.map((item, index) => (
-                      <div key={index} className="flex justify-between text-sm">
-                        <span>
-                          {item.product_id ? `#${item.product_id} - ` : ""}
-                          {item.product_name} ({item.quantity}x)
-                          {item.weight ? ` • ${(item.weight * item.quantity).toFixed(2)} kg` : ""}
-                        </span>
-                        <span>€{item.total_price.toFixed(2)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {order.notes && !isBulkOrder && <div>Notiz: {order.notes}</div>}
-              <div className="mt-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowAdminNotes(!showAdminNotes)}
-                  className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
-                >
-                  {showAdminNotes ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-                  Admin-Notizen {order.admin_notes ? "(vorhanden)" : "(leer)"}
-                </Button>
-                {showAdminNotes && (
-                  <div className="mt-2 space-y-2">
-                    <textarea
-                      value={adminNotes}
-                      onChange={(e) => setAdminNotes(e.target.value)}
-                      placeholder="Interne Notizen zur Bestellung (nur für Admins sichtbar)..."
-                      className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y"
-                    />
-                    <Button
-                      size="sm"
-                      onClick={handleSaveAdminNotes}
-                      disabled={isSavingNotes || adminNotes === order.admin_notes}
-                    >
-                      {isSavingNotes ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                      Notizen speichern
-                    </Button>
-                  </div>
-                )}
+                {order.notes && !isBulkOrder && <div>Notiz: {order.notes}</div>}
+                <div className="mt-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAdminNotes(!showAdminNotes)}
+                    className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    {showAdminNotes ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+                    Admin-Notizen {order.admin_notes ? "(vorhanden)" : "(leer)"}
+                  </Button>
+                  {showAdminNotes && (
+                    <div className="mt-2 space-y-2">
+                      <textarea
+                        value={adminNotes}
+                        onChange={(e) => setAdminNotes(e.target.value)}
+                        placeholder="Interne Notizen zur Bestellung (nur für Admins sichtbar)..."
+                        className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleSaveAdminNotes}
+                        disabled={isSavingNotes || adminNotes === order.admin_notes}
+                      >
+                        {isSavingNotes ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                        Notizen speichern
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            <span className="font-bold">€{order.total.toFixed(2)}</span>
-            <div className="flex gap-2">
-              <Select value={uiStatus} onValueChange={(value) => onStatusChange(order.id, value, undefined)}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Ausstehend</SelectItem>
-                  <SelectItem value="confirmed">Bestätigt</SelectItem>
-                  <SelectItem value="ready">Bereit</SelectItem>
-                  <SelectItem value="picked_up">Abgeholt</SelectItem>
-                  <SelectItem value="cancelled">Storniert</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={order.payment_status}
-                onValueChange={(value) => onStatusChange(order.id, undefined, value)}
+            <div className="flex flex-col items-end gap-2">
+              <span className="font-bold">€{order.total.toFixed(2)}</span>
+              <div className="flex gap-2">
+                <Select value={uiStatus} onValueChange={(value) => onStatusChange(order.id, value, undefined)}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Ausstehend</SelectItem>
+                    <SelectItem value="confirmed">Bestätigt</SelectItem>
+                    <SelectItem value="ready">Bereit</SelectItem>
+                    <SelectItem value="picked_up">Abgeholt</SelectItem>
+                    <SelectItem value="cancelled">Storniert</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={order.payment_status}
+                  onValueChange={(value) => onStatusChange(order.id, undefined, value)}
+                >
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Ausstehend</SelectItem>
+                    <SelectItem value="paid">Bezahlt</SelectItem>
+                    <SelectItem value="failed">Fehlgeschlagen</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const templateId = getEmailTemplateForStatus(uiStatus)
+                  onNotify(order.id, templateId as EmailTemplateId)
+                }}
               >
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Ausstehend</SelectItem>
-                  <SelectItem value="paid">Bezahlt</SelectItem>
-                  <SelectItem value="failed">Fehlgeschlagen</SelectItem>
-                </SelectContent>
-              </Select>
+                <Mail className="h-4 w-4 mr-2" />
+                Benachrichtigen
+              </Button>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                const templateId = getEmailTemplateForStatus(uiStatus)
-                onNotify(order.id, templateId as EmailTemplateId)
-              }}
-            >
-              <Mail className="h-4 w-4 mr-2" />
-              Benachrichtigen
-            </Button>
           </div>
         </div>
       </Card>
@@ -337,6 +353,7 @@ function OrderManagement() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
   const { toast } = useToast()
 
   const fetchOrders = useCallback(async () => {
@@ -401,29 +418,50 @@ function OrderManagement() {
     })
   }, [orders, searchTerm, statusFilter])
 
-  const exportOrders = useCallback(async () => {
-    try {
-      console.log("[v0] Starting orders export...")
+  const exportOrders = useCallback(
+    async (orderIds?: string[]) => {
+      try {
+        console.log("[v0] Starting orders export...", orderIds ? `${orderIds.length} selected` : "all orders")
 
-      const response = await fetch("/api/admin/orders-export")
+        const url =
+          orderIds && orderIds.length > 0
+            ? `/api/admin/orders-export?ids=${orderIds.join(",")}`
+            : "/api/admin/orders-export"
 
-      if (!response.ok) {
-        throw new Error("Failed to export orders")
+        const response = await fetch(url)
+
+        if (!response.ok) {
+          throw new Error("Failed to export orders")
+        }
+
+        const blob = await response.blob()
+        const downloadUrl = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = downloadUrl
+        a.download = `bestellungen-${new Date().toISOString().split("T")[0]}.csv`
+        a.click()
+        URL.revokeObjectURL(downloadUrl)
+
+        console.log("[v0] Orders export completed")
+
+        if (orderIds && orderIds.length > 0) {
+          setSelectedOrderIds(new Set())
+          toast({
+            title: "Export erfolgreich",
+            description: `${orderIds.length} Bestellung(en) wurden exportiert`,
+          })
+        }
+      } catch (error) {
+        console.error("[v0] Error exporting orders:", error)
+        toast({
+          title: "Export fehlgeschlagen",
+          description: "Die Bestellungen konnten nicht exportiert werden",
+          variant: "destructive",
+        })
       }
-
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `bestellungen-${new Date().toISOString().split("T")[0]}.csv`
-      a.click()
-      URL.revokeObjectURL(url)
-
-      console.log("[v0] Orders export completed")
-    } catch (error) {
-      console.error("[v0] Error exporting orders:", error)
-    }
-  }, [])
+    },
+    [toast],
+  )
 
   const handleNotify = useCallback(
     async (orderId: string, templateId?: EmailTemplateId) => {
@@ -467,7 +505,6 @@ function OrderManagement() {
 
         const previousOrders = orders
 
-        // Optimistic update
         setOrders((prevOrders) =>
           prevOrders.map((order) => {
             if (order.id === orderId) {
@@ -600,6 +637,37 @@ function OrderManagement() {
     [toast],
   )
 
+  const handleOrderSelection = useCallback((orderId: string, selected: boolean) => {
+    setSelectedOrderIds((prev) => {
+      const newSet = new Set(prev)
+      if (selected) {
+        newSet.add(orderId)
+      } else {
+        newSet.delete(orderId)
+      }
+      return newSet
+    })
+  }, [])
+
+  const handleSelectAll = useCallback(
+    (checked: boolean) => {
+      if (checked) {
+        setSelectedOrderIds(new Set(filteredOrders.map((order) => order.id)))
+      } else {
+        setSelectedOrderIds(new Set())
+      }
+    },
+    [filteredOrders],
+  )
+
+  const allFilteredSelected = useMemo(() => {
+    return filteredOrders.length > 0 && filteredOrders.every((order) => selectedOrderIds.has(order.id))
+  }, [filteredOrders, selectedOrderIds])
+
+  const someFilteredSelected = useMemo(() => {
+    return filteredOrders.some((order) => selectedOrderIds.has(order.id)) && !allFilteredSelected
+  }, [filteredOrders, selectedOrderIds, allFilteredSelected])
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -672,17 +740,40 @@ function OrderManagement() {
                 <SelectItem value="cancelled">Storniert</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={exportOrders} variant="outline">
-              <Download className="h-4 w-4 mr-2" />
-              Excel Export
-            </Button>
+            {selectedOrderIds.size > 0 ? (
+              <>
+                <Button onClick={() => exportOrders(Array.from(selectedOrderIds))} variant="default">
+                  <Download className="h-4 w-4 mr-2" />
+                  Ausgewählte exportieren ({selectedOrderIds.size})
+                </Button>
+                <Button onClick={() => setSelectedOrderIds(new Set())} variant="outline">
+                  Auswahl aufheben
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => exportOrders()} variant="outline">
+                <Download className="h-4 w-4 mr-2" />
+                Alle exportieren
+              </Button>
+            )}
             <Button onClick={fetchOrders} variant="outline">
               Aktualisieren
             </Button>
           </div>
 
-          <div className="text-sm text-muted-foreground mb-4">
-            {filteredOrders.length} von {orders.length} Bestellungen
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Checkbox
+                checked={allFilteredSelected}
+                onCheckedChange={handleSelectAll}
+                className={someFilteredSelected ? "data-[state=checked]:bg-gold/50" : ""}
+              />
+              <span className="text-sm text-muted-foreground">
+                {selectedOrderIds.size > 0
+                  ? `${selectedOrderIds.size} von ${filteredOrders.length} ausgewählt`
+                  : `${filteredOrders.length} von ${orders.length} Bestellungen`}
+              </span>
+            </div>
           </div>
 
           <div className="h-96 overflow-auto border rounded-lg">
@@ -700,7 +791,9 @@ function OrderManagement() {
                     order={order}
                     onNotify={handleNotify}
                     onStatusChange={handleStatusChange}
-                    onAdminNotesChange={handleAdminNotesChange} // Added prop
+                    onAdminNotesChange={handleAdminNotesChange}
+                    isSelected={selectedOrderIds.has(order.id)}
+                    onSelectionChange={handleOrderSelection}
                   />
                 ))
               )}

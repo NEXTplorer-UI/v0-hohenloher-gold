@@ -199,6 +199,50 @@ export async function POST(request: NextRequest) {
 
     const supabase = getServiceClient()
 
+    // Check for duplicate orders within the last 10 seconds with same email and total
+    const tenSecondsAgo = new Date(Date.now() - 10000).toISOString()
+    const { data: recentOrders, error: duplicateCheckError } = await supabase
+      .from("orders")
+      .select("id, order_number, total, created_at")
+      .eq(
+        "customer_id",
+        (
+          await supabase
+            .from("customers")
+            .select("id")
+            .eq("email_normalized", orderData.email.toLowerCase().trim())
+            .limit(1)
+            .single()
+        ).data?.id || "",
+      )
+      .gte("created_at", tenSecondsAgo)
+      .order("created_at", { ascending: false })
+      .limit(1)
+
+    if (!duplicateCheckError && recentOrders && recentOrders.length > 0) {
+      const recentOrder = recentOrders[0]
+      const orderTotal =
+        orderData.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0) +
+        (orderData.deliveryMethod === "delivery" ? 4.9 : 0)
+
+      // If there's an order with same total within last 10 seconds, it's likely a duplicate
+      if (Math.abs(recentOrder.total - orderTotal) < 0.01) {
+        console.warn("[/api/orders] Duplicate order detected, returning existing order:", recentOrder.order_number)
+        return NextResponse.json(
+          {
+            success: true,
+            data: {
+              order: recentOrder,
+              items: [],
+              message: "Bestellung bereits vorhanden",
+              isDuplicate: true,
+            },
+          },
+          { status: 200, headers: { "content-type": "application/json" } },
+        )
+      }
+    }
+
     const { data: customers, error: customerError } = await supabase
       .from("customers")
       .select("id, user_id")
@@ -251,6 +295,7 @@ export async function POST(request: NextRequest) {
       pickup_reminders: orderData.emailReminder || false,
       email_notifications: orderData.emailUpdates || false,
       pickup_date: deliveryDate,
+      is_test: orderData.isTest || false, // Add test flag
       created_at: orderTime.toISOString(),
     }
 

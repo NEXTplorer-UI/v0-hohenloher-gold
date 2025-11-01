@@ -5,6 +5,7 @@
 
 import { renderTemplate, type TemplateVars } from "./engine"
 import { emailCopy } from "./copy"
+import { calculatePaymentDeadline } from "../format-time"
 
 export interface EmailTemplateResult {
   subject: string
@@ -72,6 +73,18 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
           <strong>${copy.orderConfirmation.bankImportant}</strong>
         </p>
       </div>
+      ${
+        vars.orderDate
+          ? `
+      <div class="info-box" style="margin-top: 15px; background: #fef3c7; border-left: 4px solid #d4af37;">
+        <p style="margin: 0; font-size: 14px;">
+          <strong>${copy.orderConfirmation.bankPaymentDeadline}</strong> ${copy.orderConfirmation.bankPaymentDeadlineText} <strong>${calculatePaymentDeadline(vars.orderDate)}</strong>
+        </p>
+      </div>
+      `
+          : ""
+        // </CHANGE>
+      }
     </div>
   `
       : ""

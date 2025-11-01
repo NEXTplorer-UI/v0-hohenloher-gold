@@ -458,15 +458,18 @@ export default function ShopPage() {
                           ?.filter((d: any) => d.status === "confirmed")
                           .map((delivery: any, index) => (
                             <div key={index} className="p-3 bg-primary/10 rounded border">
-                              <div className="flex justify-between items-start mb-1">
-                                <span className="font-medium">{delivery.date}</span>
-                                {delivery.notes && (
-                                  <span className="text-primary text-sm mx-60 px-0">{delivery.notes}</span>
-                                )}
+                              <div className="mb-2 flex items-baseline justify-between">
+                                <span className="font-semibold text-lg">{delivery.date}</span>
+                                <div className="text-right">
+                                  <div className="text-xs text-gold/70">Bestellschluss:</div>
+                                  <div className="text-lg font-semibold text-gold">{delivery.orderDeadline}</div>
+                                </div>
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                <span className="font-medium">Bestellschluss:</span> {delivery.orderDeadline}
-                              </div>
+                              {delivery.notes && (
+                                <div className="mb-2 p-2 bg-primary/5 rounded">
+                                  <span className="text-primary text-sm">{delivery.notes}</span>
+                                </div>
+                              )}
                               {delivery.pickupStartTime && delivery.pickupEndTime && (
                                 <div className="text-xs text-muted-foreground mt-1">
                                   <span className="font-medium">Abholung:</span> {formatTime(delivery.pickupStartTime)}{" "}
@@ -490,13 +493,18 @@ export default function ShopPage() {
                           ?.filter((d: any) => d.status === "planned")
                           .map((delivery: any, index) => (
                             <div key={index} className="p-3 bg-gold/10 rounded border">
-                              <div className="flex justify-between items-start mb-1">
-                                <span className="font-medium">{delivery.date}</span>
-                                {delivery.notes && <span className="text-gold text-sm">{delivery.notes}</span>}
+                              <div className="mb-2 flex items-baseline justify-between">
+                                <span className="font-semibold text-lg">{delivery.date}</span>
+                                <div className="text-right">
+                                  <div className="text-xs text-gold/70">Bestellschluss:</div>
+                                  <div className="text-lg font-semibold text-gold">{delivery.orderDeadline}</div>
+                                </div>
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                <span className="font-medium">Bestellschluss:</span> {delivery.orderDeadline}
-                              </div>
+                              {delivery.notes && (
+                                <div className="mb-2 p-2 bg-gold/5 rounded">
+                                  <span className="text-gold text-sm">{delivery.notes}</span>
+                                </div>
+                              )}
                               {delivery.pickupStartTime && delivery.pickupEndTime && (
                                 <div className="text-xs text-muted-foreground mt-1">
                                   <span className="font-medium">Abholung:</span> {formatTime(delivery.pickupStartTime)}{" "}
@@ -549,23 +557,27 @@ export default function ShopPage() {
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setPricingMode("pickup")}
-              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
+              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 flex flex-col items-center ${
                 pricingMode === "pickup"
                   ? "bg-primary text-primary-foreground shadow-md"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
               }`}
             >
-              🚗 Abholung
+              <span>🚗 Abholung</span>
+              <span className="text-[10px] italic mt-0.5 text-background">bei Verteiler</span>
+              
             </button>
             <button
               onClick={() => setPricingMode("shipping")}
-              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 ${
+              className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-200 flex flex-col items-center ${
                 pricingMode === "shipping"
                   ? "bg-primary text-primary-foreground shadow-md"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
               }`}
             >
-              📦 Versand
+              <span>📦 Versand</span>
+              <span className="text-[10px] italic mt-0.5 text-primary-foreground">nach Hause</span>
+              
             </button>
           </div>
         </div>

@@ -30,7 +30,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react"
-import { saveCustomerToCRM, createUserAccount, sendOrderConfirmationEmail } from "@/lib/crm-utils"
+import { saveCustomerToCRM, sendOrderConfirmationEmail } from "@/lib/crm-utils"
 import { PaymentSumUp } from "@/components/payment-sumup"
 import Link from "next/link"
 import { EnhancedErrorHandler, classifyError, type ErrorInfo } from "@/components/enhanced-error-handler"
@@ -52,6 +52,8 @@ export default function CheckoutPage() {
 
   const [authSession, setAuthSession] = useState<any>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const [isReloadingCustomerData, setIsReloadingCustomerData] = useState(false)
 
   const [deliveryMethod, setDeliveryMethod] = useState("pickup")
   const [pickupLocation, setPickupLocation] = useState("station")
@@ -145,6 +147,50 @@ export default function CheckoutPage() {
       subscription?.subscription?.unsubscribe()
     }
   }, [supabase])
+
+  const handleReloadCustomerData = async () => {
+    if (!authSession) return
+
+    setIsReloadingCustomerData(true)
+    try {
+      const token = authSession.access_token
+      if (!token) {
+        alert("Keine Sitzung gefunden")
+        return
+      }
+
+      const res = await fetch("/api/crm/get-customer", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!res.ok) {
+        alert("Fehler beim Laden der Kundendaten")
+        return
+      }
+
+      const { customer } = await res.json()
+
+      if (customer) {
+        console.log("[v0] Reloaded customer data from CRM:", customer)
+        setFirstName(customer.first_name ?? "")
+        setLastName(customer.last_name ?? "")
+        setEmail(customer.email ?? authSession.user?.email ?? "")
+        setPhone(customer.phone ?? "")
+        setStreet(customer.street ?? "")
+        setHouseNumber(customer.house_number ?? "")
+        setZip(customer.postal_code ?? "")
+        setCity(customer.city ?? "")
+        alert("Kundendaten erfolgreich geladen!")
+      } else {
+        alert("Keine Kundendaten gefunden")
+      }
+    } catch (error) {
+      console.error("Error reloading customer data:", error)
+      alert("Ein Fehler ist aufgetreten")
+    } finally {
+      setIsReloadingCustomerData(false)
+    }
+  }
 
   const hasFreshFruits = state.items.some(
     (item) => item.category === "Frische Südfrüchte" || item.category === "Südfrüchte",
@@ -357,162 +403,132 @@ export default function CheckoutPage() {
       return
     }
 
-    if (!acceptedAGB || !acceptedPrivacy) {
-      alert("Bitte bestätigen Sie die AGB und die Datenschutzerklärung.")
-      return
-    }
+    // Set submitting flag immediately to prevent race conditions
+    setIsSubmitting(true)
 
-    if (!firstName || !lastName || !email) {
-      console.log("[v0] [Checkout] Missing required fields")
-      alert("Bitte füllen Sie alle Pflichtfelder aus.")
-      return
-    }
-
-    if (!street || !houseNumber || !zip || !city) {
-      console.log("[v0] [Checkout] Missing address fields")
-      alert("Bitte geben Sie eine vollständige Rechnungsadresse an.")
-      return
-    }
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-    const needsEmailCheck = !session && createAccount && !isLoginMode
-
-    if (needsEmailCheck && email && email.includes("@")) {
-      console.log("[v0] Checking email before order submission:", email)
-      const emailCheck = await checkEmailExists(email)
-
-      if (emailCheck.existsInAuth && createAccount) {
-        alert(
-          "Diese E-Mail-Adresse ist bereits registriert. Bitte melden Sie sich an oder verwenden Sie eine andere E-Mail-Adresse.",
-        )
-        setIsLoginMode(true)
-        setLoginEmail(email)
+    try {
+      if (!acceptedAGB || !acceptedPrivacy) {
+        alert("Bitte bestätigen Sie die AGB und die Datenschutzerklärung.")
         return
       }
 
-      if (emailCheck.existsInAuth && !createAccount) {
-        const shouldLogin = confirm("Ein Konto mit dieser E-Mail existiert bereits. Möchten Sie sich anmelden?")
-        if (shouldLogin) {
+      if (!firstName || !lastName || !email) {
+        console.log("[v0] [Checkout] Missing required fields")
+        alert("Bitte füllen Sie alle Pflichtfelder aus.")
+        return
+      }
+
+      if (!street || !houseNumber || !zip || !city) {
+        console.log("[v0] [Checkout] Missing address fields")
+        alert("Bitte geben Sie eine vollständige Rechnungsadresse an.")
+        return
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const needsEmailCheck = !session && createAccount && !isLoginMode
+
+      if (needsEmailCheck && email && email.includes("@")) {
+        console.log("[v0] Checking email before order submission:", email)
+        const emailCheck = await checkEmailExists(email)
+
+        if (emailCheck.existsInAuth && createAccount) {
+          alert(
+            "Diese E-Mail-Adresse ist bereits registriert. Bitte melden Sie sich an oder verwenden Sie eine andere E-Mail-Adresse.",
+          )
           setIsLoginMode(true)
           setLoginEmail(email)
           return
         }
-      }
-    }
 
-    if (createAccount && !isLoginMode) {
-      if (!password || password !== confirmPassword || passwordError) {
-        alert("Bitte überprüfen Sie Ihre Passwort-Eingaben.")
-        return
-      }
-    }
-
-    const filledBulkOrderNames = bulkOrderNames.filter((name) => name.trim() !== "")
-    let finalOrderMessage = orderMessage
-
-    if (filledBulkOrderNames.length > 0) {
-      const bulkOrderText =
-        "\n\nSammelbestellung für:\n" + filledBulkOrderNames.map((name, i) => `${i + 1}. ${name}`).join("\n")
-      finalOrderMessage = orderMessage + bulkOrderText
-    }
-
-    const customerData = {
-      firstName,
-      lastName,
-      email,
-      phone,
-      street,
-      houseNumber,
-      zip,
-      city,
-      category: "Gemischt",
-      notes: finalOrderMessage || `Bestellung vom ${new Date().toLocaleDateString("de-DE")}`,
-      deliveryMethod,
-      paymentMethod,
-      emailReminder,
-      emailUpdates,
-      createAccount,
-    }
-
-    try {
-      setOrderError(null)
-      setIsSubmitting(true)
-
-      await executeOrderRetry(async () => {
-        await saveCustomerToCRM(customerData)
-
-        const totalAmount =
-          state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price, item.category) * item.quantity, 0) +
-          (deliveryMethod === "delivery" ? 4.9 : 0)
-        const totalAmountCents = Math.round(
-          (state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price, item.category) * item.quantity, 0) +
-            (deliveryMethod === "delivery" ? 4.9 : 0)) *
-            100,
-        )
-
-        let finalPickupLocation = "Zentrallager Pfedelbach"
-        let finalPickupLocationId = null
-
-        if (deliveryMethod === "delivery") {
-          finalPickupLocation = null
-          finalPickupLocationId = null
-        } else if (deliveryMethod === "pickup") {
-          if (pickupLocation === "warehouse") {
-            const warehouseLocation = allPickupLocations.find(
-              (loc) => loc.name.includes("Zentrallager") || loc.name.includes("Pfedelbach"),
-            )
-            if (warehouseLocation) {
-              finalPickupLocation = warehouseLocation.name
-              finalPickupLocationId = warehouseLocation.id
-            } else if (allPickupLocations[0]) {
-              finalPickupLocation = allPickupLocations[0].name
-              finalPickupLocationId = allPickupLocations[0].id
-            }
-          } else if (pickupLocation === "station") {
-            if (selectedLocation) {
-              finalPickupLocation = selectedLocation.name
-              finalPickupLocationId = selectedLocation.id
-            } else if (nearestLocations[0]) {
-              finalPickupLocation = nearestLocations[0].name
-              finalPickupLocationId = nearestLocations[0].id
-            }
+        if (emailCheck.existsInAuth && !createAccount) {
+          const shouldLogin = confirm("Ein Konto mit dieser E-Mail existiert bereits. Möchten Sie sich anmelden?")
+          if (shouldLogin) {
+            setIsLoginMode(true)
+            setLoginEmail(email)
+            return
           }
         }
+      }
 
-        console.log("[v0] Final pickup location:", finalPickupLocation, "ID:", finalPickupLocationId)
-
-        const orderData = {
-          customerName: `${firstName} ${lastName}`,
-          email,
-          phone,
-          items: state.items.map((item) => ({
-            ...item,
-            price: safeCalculatePrice(item.price, item.category),
-          })),
-          total: totalAmount,
-          deliveryMethod,
-          paymentMethod,
-          pickupLocation: finalPickupLocation,
-          pickupLocationId: finalPickupLocationId,
-          notes: finalOrderMessage,
-          emailReminder,
-          emailUpdates,
-          orderTime: new Date().toISOString(),
-          deliveryDate: deliveryDateInfo?.deliveryDate || null,
-          deliveryScheduleId: deliveryDateInfo?.scheduleId || null,
-          pickupStartTime: deliveryDateInfo?.pickupStartTime || null,
-          pickupEndTime: deliveryDateInfo?.pickupEndTime || null,
-          attributes: filledBulkOrderNames.length > 0 ? { bulk_order_names: filledBulkOrderNames } : undefined,
+      if (createAccount && !isLoginMode) {
+        if (!password || password !== confirmPassword || passwordError) {
+          alert("Bitte überprüfen Sie Ihre Passwort-Eingaben.")
+          return
         }
+      }
 
-        if (paymentMethod === "sumup") {
-          console.log("[v0] [Checkout] SumUp payment selected")
+      const filledBulkOrderNames = bulkOrderNames.filter((name) => name.trim() !== "")
+      let finalOrderMessage = orderMessage
+
+      if (filledBulkOrderNames.length > 0) {
+        const bulkOrderText =
+          "\n\nSammelbestellung für:\n" + filledBulkOrderNames.map((name, i) => `${i + 1}. ${name}`).join("\n")
+        finalOrderMessage = orderMessage + bulkOrderText
+      }
+
+      const isTestMode = typeof window !== "undefined" && localStorage.getItem("admin_test_mode") === "true"
+
+      const customerData = {
+        firstName,
+        lastName,
+        email,
+        phone,
+        street,
+        houseNumber,
+        zip,
+        city,
+        category: "Gemischt",
+        notes: finalOrderMessage || `Bestellung vom ${new Date().toLocaleDateString("de-DE")}`,
+        deliveryMethod,
+        paymentMethod,
+        emailReminder,
+        emailUpdates,
+        createAccount,
+        isTest: isTestMode, // Add test flag to customer data
+      }
+
+      // Removed the duplicate try/catch block and integrated it here
+      if (paymentMethod === "sumup") {
+        await executeOrderRetry(async () => {
+          await saveCustomerToCRM(customerData)
+
+          const totalAmount =
+            state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price, item.category) * item.quantity, 0) +
+            (deliveryMethod === "delivery" ? 4.9 : 0)
+
+          let finalPickupLocation = "Zentrallager Pfedelbach"
+          let finalPickupLocationId = null
+
+          if (deliveryMethod === "delivery") {
+            finalPickupLocation = null
+            finalPickupLocationId = null
+          } else if (deliveryMethod === "pickup") {
+            if (pickupLocation === "warehouse") {
+              const warehouseLocation = allPickupLocations.find(
+                (loc) => loc.name.includes("Zentrallager") || loc.name.includes("Pfedelbach"),
+              )
+              if (warehouseLocation) {
+                finalPickupLocation = warehouseLocation.name
+                finalPickupLocationId = warehouseLocation.id
+              } else if (allPickupLocations[0]) {
+                finalPickupLocation = allPickupLocations[0].name
+                finalPickupLocationId = allPickupLocations[0].id
+              }
+            } else if (pickupLocation === "station") {
+              if (selectedLocation) {
+                finalPickupLocation = selectedLocation.name
+                finalPickupLocationId = selectedLocation.id
+              } else if (nearestLocations[0]) {
+                finalPickupLocation = nearestLocations[0].name
+                finalPickupLocationId = nearestLocations[0].id
+              }
+            }
+          }
+
           const tempOrderNumber = `HG-TEMP-${Date.now()}`
-          console.log("[v0] [Checkout] Generated temp order number:", tempOrderNumber)
 
-          console.log("[v0] [Checkout] Calling SumUp create-checkout API")
           const response = await fetch("/api/payments/sumup/create-checkout", {
             method: "POST",
             headers: {
@@ -526,90 +542,136 @@ export default function CheckoutPage() {
             }),
           })
 
-          console.log("[v0] [Checkout] SumUp API response status:", response.status)
           const parsed = await safeJson(response)
-          console.log("[v0] [Checkout] SumUp API response data:", parsed)
 
           if (!response.ok) {
-            console.error("[v0] [Checkout] SumUp checkout creation failed:", parsed.error)
             throw new Error(parsed.error || `Request failed (${response.status})`)
           }
 
           const { checkoutId } = parsed
-          console.log("[v0] [Checkout] SumUp checkout created with ID:", checkoutId)
 
           setSumupCheckoutId(checkoutId)
-          setSumupOrderData({ ...orderData, orderNumber: tempOrderNumber })
-          setShowSumUpPayment(true)
-          console.log("[v0] [Checkout] Showing SumUp payment widget")
-          return
-        }
-
-        console.log("[v0] Saving order to database:", orderData)
-        const orderResponse = await fetch("/api/orders", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(orderData),
-        })
-
-        console.log(
-          "[v0] [/api/orders] status",
-          orderResponse.status,
-          "content-type",
-          orderResponse.headers.get("content-type"),
-        )
-
-        const orderParsed = await safeJson(orderResponse)
-        console.log("[v0] [/api/orders] parsed response:", orderParsed)
-
-        if (!orderResponse.ok) {
-          throw new Error(orderParsed.error || `Failed to save order (${orderResponse.status})`)
-        }
-
-        console.log("[v0] Order saved successfully:", orderParsed)
-
-        const finalOrderData = {
-          ...orderData,
-          orderNumber: orderParsed.data.order.order_number,
-          orderTime: orderParsed.data.order.order_time,
-        }
-
-        console.log("[v0] Sending order confirmation email FIRST")
-        const emailResult = await sendOrderConfirmationEmail(finalOrderData)
-        if (emailResult.success) {
-          console.log("[v0] Order confirmation email sent successfully")
-        } else {
-          console.error("[v0] Failed to send order confirmation email:", emailResult.error)
-        }
-
-        if (createAccount && !isLoginMode) {
-          console.log("[v0] Creating user account AFTER order confirmation")
-          const accountResult = await createUserAccount({
-            ...customerData,
-            password,
+          setSumupOrderData({
+            customerName: `${firstName} ${lastName}`,
+            email,
+            phone,
+            items: state.items.map((item) => ({
+              ...item,
+              price: safeCalculatePrice(item.price, item.category),
+            })),
+            total: totalAmount,
+            deliveryMethod,
+            paymentMethod,
+            pickupLocation: finalPickupLocation,
+            pickupLocationId: finalPickupLocationId,
+            notes: finalOrderMessage,
+            emailReminder,
+            emailUpdates,
+            orderTime: new Date().toISOString(),
+            deliveryDate: deliveryDateInfo?.deliveryDate || null,
+            deliveryScheduleId: deliveryDateInfo?.scheduleId || null,
+            pickupStartTime: deliveryDateInfo?.pickupStartTime || null,
+            pickupEndTime: deliveryDateInfo?.pickupEndTime || null,
+            attributes: filledBulkOrderNames.length > 0 ? { bulk_order_names: filledBulkOrderNames } : undefined,
+            orderNumber: tempOrderNumber,
+            isTest: isTestMode, // Add test flag to order data
           })
+          setShowSumUpPayment(true)
+          return
+        })
+        return
+      }
 
-          if (accountResult.success) {
-            console.log("[v0] User account created, Supabase confirmation email sent")
-          } else {
-            console.error("[v0] Failed to create user account:", accountResult.error)
-            // Don't fail the order if account creation fails
+      const totalAmount =
+        state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price, item.category) * item.quantity, 0) +
+        (deliveryMethod === "delivery" ? 4.9 : 0)
+
+      let finalPickupLocation = "Zentrallager Pfedelbach"
+      let finalPickupLocationId = null
+
+      if (deliveryMethod === "delivery") {
+        finalPickupLocation = null
+        finalPickupLocationId = null
+      } else if (deliveryMethod === "pickup") {
+        if (pickupLocation === "warehouse") {
+          const warehouseLocation = allPickupLocations.find(
+            (loc) => loc.name.includes("Zentrallager") || loc.name.includes("Pfedelbach"),
+          )
+          if (warehouseLocation) {
+            finalPickupLocation = warehouseLocation.name
+            finalPickupLocationId = warehouseLocation.id
+          } else if (allPickupLocations[0]) {
+            finalPickupLocation = allPickupLocations[0].name
+            finalPickupLocationId = allPickupLocations[0].id
+          }
+        } else if (pickupLocation === "station") {
+          if (selectedLocation) {
+            finalPickupLocation = selectedLocation.name
+            finalPickupLocationId = selectedLocation.id
+          } else if (nearestLocations[0]) {
+            finalPickupLocation = nearestLocations[0].name
+            finalPickupLocationId = nearestLocations[0].id
           }
         }
+      }
 
-        dispatch({ type: "CLEAR_CART" })
-        const params = new URLSearchParams({
-          orderNumber: orderParsed.data.order.order_number,
-          deliveryMethod,
-          paymentMethod,
-          total: totalAmount.toString(),
+      const orderData = {
+        customerName: `${firstName} ${lastName}`,
+        email,
+        phone,
+        items: state.items.map((item) => ({
+          ...item,
+          price: safeCalculatePrice(item.price, item.category),
+        })),
+        total: totalAmount,
+        deliveryMethod,
+        paymentMethod,
+        pickupLocation: finalPickupLocation,
+        pickupLocationId: finalPickupLocationId,
+        notes: finalOrderMessage,
+        emailReminder,
+        emailUpdates,
+        orderTime: new Date().toISOString(),
+        deliveryDate: deliveryDateInfo?.deliveryDate || null,
+        deliveryScheduleId: deliveryDateInfo?.scheduleId || null,
+        pickupStartTime: deliveryDateInfo?.pickupStartTime || null,
+        pickupEndTime: deliveryDateInfo?.pickupEndTime || null,
+        attributes: filledBulkOrderNames.length > 0 ? { bulk_order_names: filledBulkOrderNames } : undefined,
+        isTest: isTestMode, // Add test flag to order data
+      }
+
+      // Store order data in sessionStorage for processing page
+      const pendingOrder = {
+        customerData,
+        orderData,
+        emailData: {
+          customerEmail: email,
           customerName: `${firstName} ${lastName}`,
-        })
+          orderTotal: totalAmount.toString(),
+          paymentMethod,
+          deliveryMethod,
+          orderItems: state.items.map((item) => ({
+            product_name: item.name,
+            quantity: item.quantity,
+            unit: item.unit,
+            unit_price: safeCalculatePrice(item.price, item.category),
+            total_price: item.quantity * safeCalculatePrice(item.price, item.category),
+          })),
+        },
+        createAccount,
+        accountData: createAccount
+          ? {
+              ...customerData,
+              password,
+            }
+          : null,
+      }
 
-        window.location.href = `/order-confirmation?${params.toString()}`
-      })
+      sessionStorage.setItem("pendingOrder", JSON.stringify(pendingOrder))
+
+      // Clear cart and redirect to processing page
+      dispatch({ type: "CLEAR_CART" })
+      window.location.href = "/order-processing"
     } catch (error) {
       console.error("Order submission error:", error)
       const classifiedError = classifyError(error)
@@ -949,85 +1011,52 @@ export default function CheckoutPage() {
           </CardContent>
         </Card>
 
-        {authSession && (
-          <Card className="mb-6 border-green-200 bg-green-50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-green-600 rounded-full" />
-                  <div>
-                    <p className="text-sm font-medium text-green-900">
-                      Angemeldet als <strong>{authSession.user.email}</strong>
-                    </p>
-                    <p className="text-xs text-green-700">Ihre Kundendaten wurden automatisch geladen</p>
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleLogout}
-                  className="gap-2 border-green-300 hover:bg-green-100 bg-transparent"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Abmelden
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {hasFreshFruits && deliveryDateInfo && (
-          <Card className="mb-6 border-yellow-200 bg-yellow-50">
-            <CardContent className="p-4">
-              <div className="flex items-start space-x-3">
-                <Calendar className="w-5 h-5 text-yellow-700 mt-0.5" />
-                <div className="flex-1">
-                  <h3 className="font-semibold text-yellow-900 mb-1">Liefertermin für Südfrüchte</h3>
-                  <p className="text-sm text-yellow-800">{deliveryDateInfo.message}</p>
-                  {deliveryDateInfo.deliveryDate && (
-                    <p className="text-xs text-yellow-700 mt-1">
-                      Lieferdatum:{" "}
-                      {new Date(deliveryDateInfo.deliveryDate).toLocaleDateString("de-DE", {
-                        day: "2-digit",
-                        month: "long",
-                        year: "numeric",
-                      })}
-                    </p>
-                  )}
-                  {!deliveryDateInfo.deliveryDate && (
-                    <p className="text-xs text-red-700 mt-1 font-medium">
-                      Bitte beachten Sie: Ihre Bestellung kann erst bearbeitet werden, wenn ein neuer Liefertermin
-                      verfügbar ist.
-                    </p>
-                  )}
-                  {deliveryDateInfo.pickupStartTime && deliveryDateInfo.pickupEndTime && (
-                    <div className="mt-2 pt-2 border-t border-yellow-300">
-                      <p className="text-sm font-medium text-yellow-900">
-                        Abholzeit: {deliveryDateInfo.pickupStartTime} - {deliveryDateInfo.pickupEndTime} Uhr
-                      </p>
-                      <p className="text-xs text-yellow-700 italic">oder nach Terminvereinbarung</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         <div className="grid lg:grid-cols-2 gap-8">
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle>Ihre Daten</CardTitle>
-                  <Button
-                    variant="link"
-                    size="sm"
-                    onClick={() => setIsLoginMode(!isLoginMode)}
-                    className="text-primary p-0 h-auto"
-                  >
-                    {isLoginMode ? "Neues Konto erstellen" : "Bereits ein Konto? Anmelden"}
-                  </Button>
+                  <div className="flex-1">
+                    <CardTitle>Ihre Daten</CardTitle>
+                    {authSession && (
+                      <div className="mt-2 flex items-center gap-2 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <div className="w-2 h-2 bg-green-600 rounded-full" />
+                          <span className="text-xs">
+                            Angemeldet als <strong className="text-foreground">{authSession.user.email}</strong>
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleLogout}
+                          className="h-6 px-2 text-xs hover:bg-destructive/10 hover:text-destructive"
+                        >
+                          <LogOut className="w-3 h-3 mr-1" />
+                          Abmelden
+                        </Button>
+                      </div>
+                    )}
+                    {authSession && (
+                      <button
+                        onClick={handleReloadCustomerData}
+                        disabled={isReloadingCustomerData}
+                        className="mt-1 text-xs text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isReloadingCustomerData ? "Lädt..." : "Kundendaten erneut laden"}
+                      </button>
+                    )}
+                  </div>
+                  {!authSession && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() => setIsLoginMode(!isLoginMode)}
+                      className="text-primary p-0 h-auto"
+                    >
+                      {isLoginMode ? "Neues Konto erstellen" : "Bereits ein Konto? Anmelden"}
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1278,7 +1307,8 @@ export default function CheckoutPage() {
                       <div className="flex items-center space-x-3">
                         <MapPin className="w-5 h-5 text-primary" />
                         <div>
-                          <div className="font-medium">Abholung</div>
+                          <div className="font-medium">Abholung / Lieferung an Abholort</div>
+                          <div className="text-xs text-muted-foreground italic">bei Verteiler</div>
                           <div className="text-sm text-muted-foreground">Kostenlos</div>
                         </div>
                       </div>
@@ -1302,6 +1332,7 @@ export default function CheckoutPage() {
                           <Truck className="w-5 h-5 text-primary" />
                           <div>
                             <div className="font-medium">Lieferung nach Hause</div>
+                            <div className="text-xs text-muted-foreground italic">nach Hause</div>
                             <div className="text-sm text-muted-foreground">
                               €4,90 (bis 10kg Gesamtgewicht)
                               {isOverWeightLimit && " - Nicht verfügbar"}
@@ -1359,7 +1390,7 @@ export default function CheckoutPage() {
                               <Warehouse className="w-4 h-4 text-primary" />
                               <div>
                                 <div className="font-medium text-sm">Zentrallager</div>
-                                <div className="text-xs text-muted-foreground">Direkt bei uns in Pfedelbach</div>
+                                <div className="text-xs text-muted-foreground">Direkt bei uns in Baumerlenbach</div>
                               </div>
                             </div>
                           </Label>
@@ -1373,7 +1404,7 @@ export default function CheckoutPage() {
                           <div className="flex items-start space-x-2">
                             <Info className="w-4 h-4 text-blue-700 mt-0.5 flex-shrink-0" />
                             <p className="text-sm text-blue-800">
-                              <strong>Ihre Abholstation nicht dabei?</strong> Tragen Sie bitte den Namen Ihrer
+                              <strong>Ihre gewohnte Abholstation nicht dabei?</strong> Tragen Sie bitte den Namen Ihrer
                               Abholperson in das Nachrichtenfeld ein.
                             </p>
                           </div>
@@ -1723,9 +1754,9 @@ export default function CheckoutPage() {
 
                     <Textarea
                       id="notes"
-                      value={orderMessage} // Changed from 'notes' to 'orderMessage' to match state variable
-                      onChange={(e) => setOrderMessage(e.target.value)} // Changed from 'notes' to 'orderMessage'
-                      placeholder="z.B. Allergien, Lieferwünsche, Name Ihrer Abholstation..."
+                      value={orderMessage}
+                      onChange={(e) => setOrderMessage(e.target.value)}
+                      placeholder="z.B. Lieferwünsche, Name Ihrer Abholstation..."
                       className="min-h-[100px] resize-none"
                     />
 
@@ -1870,9 +1901,7 @@ export default function CheckoutPage() {
             </Card>
           </div>
 
-          <div className="mt-8 text-center">
-            <p className="text-sm text-muted-foreground">Bei Fragen erreichen Sie uns unter: 0157 357 038 64</p>
-          </div>
+          <div className="mt-8 text-center"></div>
         </div>
       </div>
     </div>

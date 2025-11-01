@@ -45,6 +45,10 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient()
 
+    const { searchParams } = new URL(request.url)
+    const idsParam = searchParams.get("ids")
+    const selectedIds = idsParam ? idsParam.split(",").filter(Boolean) : null
+
     const { data: orders, error } = await supabase.rpc("get_admin_orders", {
       q: "",
       status_filter: null,
@@ -57,7 +61,11 @@ export async function GET(request: NextRequest) {
       throw error
     }
 
-    console.log(`[v0] Found ${orders?.length || 0} orders for export`)
+    const ordersToExport = selectedIds ? orders?.filter((order: any) => selectedIds.includes(order.id)) : orders
+
+    console.log(
+      `[v0] Found ${ordersToExport?.length || 0} orders for export${selectedIds ? " (filtered by selection)" : ""}`,
+    )
 
     const BOM = "\uFEFF"
     const timestamp = new Date().toISOString().split("T")[0]
@@ -137,7 +145,7 @@ export async function GET(request: NextRequest) {
 
     const csvRows: string[] = []
 
-    orders?.forEach((order: any) => {
+    ordersToExport?.forEach((order: any) => {
       const date = new Date(order.created_at)
       const dateStr = date.toLocaleDateString("de-DE")
       const timeStr = date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
@@ -208,15 +216,15 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Calculate summary statistics
-    const totalOrders = orders?.length || 0
-    const totalRevenue = orders?.reduce((sum: number, order: any) => sum + (Number(order.total) || 0), 0) || 0
-    const confirmedOrders = orders?.filter((o: any) => o.status === "confirmed").length || 0
-    const readyOrders = orders?.filter((o: any) => o.status === "ready").length || 0
-    const pickedUpOrders = orders?.filter((o: any) => o.status === "picked_up" || o.status === "completed").length || 0
-    const cancelledOrders = orders?.filter((o: any) => o.status === "cancelled").length || 0
-    const paidOrders = orders?.filter((o: any) => o.payment_status === "paid").length || 0
-    const pendingPayments = orders?.filter((o: any) => o.payment_status === "pending").length || 0
+    const totalOrders = ordersToExport?.length || 0
+    const totalRevenue = ordersToExport?.reduce((sum: number, order: any) => sum + (Number(order.total) || 0), 0) || 0
+    const confirmedOrders = ordersToExport?.filter((o: any) => o.status === "confirmed").length || 0
+    const readyOrders = ordersToExport?.filter((o: any) => o.status === "ready").length || 0
+    const pickedUpOrders =
+      ordersToExport?.filter((o: any) => o.status === "picked_up" || o.status === "completed").length || 0
+    const cancelledOrders = ordersToExport?.filter((o: any) => o.status === "cancelled").length || 0
+    const paidOrders = ordersToExport?.filter((o: any) => o.payment_status === "paid").length || 0
+    const pendingPayments = ordersToExport?.filter((o: any) => o.payment_status === "pending").length || 0
 
     const summaryRows = [
       "",

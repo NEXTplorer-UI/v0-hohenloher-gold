@@ -18,6 +18,7 @@ export interface CustomerData {
   emailReminder: boolean
   emailUpdates: boolean
   createAccount: boolean
+  isTest?: boolean // Added optional test flag
 }
 
 export interface UserAccountData extends CustomerData {
@@ -45,6 +46,7 @@ export interface OrderData {
   deliveryDate?: string | null
   pickupStartTime?: string | null
   pickupEndTime?: string | null
+  isTest?: boolean // Added optional test flag
 }
 
 export async function saveCustomerToCRM(customerData: CustomerData) {
@@ -90,16 +92,19 @@ export async function createUserAccount(userData: UserAccountData) {
   try {
     console.log("[v0] Creating user account:", { email: userData.email })
 
-    const { data: existingUsers, error: listError } = await supabaseBrowser.auth.admin.listUsers()
+    const checkResponse = await fetch("/api/crm/check-customer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: userData.email }),
+    })
 
-    if (!listError) {
-      const userExists = existingUsers.users.some((user) => user.email === userData.email)
-      if (userExists) {
-        console.log("[v0] User already exists in auth:", userData.email)
-        return {
-          success: false,
-          error: { message: "User already registered. Please sign in instead." },
-        }
+    const checkResult = await checkResponse.json()
+
+    if (checkResult.existsInCRM && checkResult.hasUserId) {
+      console.log("[v0] Customer already has an account:", userData.email)
+      return {
+        success: false,
+        error: { message: "Diese E-Mail-Adresse ist bereits registriert. Bitte melden Sie sich an." },
       }
     }
 
@@ -117,7 +122,7 @@ export async function createUserAccount(userData: UserAccountData) {
       email: userData.email,
       password: userData.password,
       options: {
-        emailRedirectTo: redirectUrl,
+        emailRedirectTo: `${redirectUrl}/customer/account-confirmed`,
         data: {
           firstName: userData.firstName,
           lastName: userData.lastName,
@@ -141,6 +146,39 @@ export async function createUserAccount(userData: UserAccountData) {
       }
 
       throw authError
+    }
+
+    if (checkResult.existsInCRM && !checkResult.hasUserId && authData.user) {
+      console.log("[v0] Linking existing CRM customer to new auth account")
+
+      const linkResponse = await fetch("/api/crm/link-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: userData.email,
+          userId: authData.user.id,
+        }),
+      })
+
+      if (!linkResponse.ok) {
+        console.error("[v0] Failed to link user to CRM customer")
+      } else {
+        console.log("[v0] Successfully linked auth account to existing CRM customer")
+      }
+    }
+
+    try {
+      await fetch("/api/admin/notify-new-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: userData.email,
+          name: `${userData.firstName} ${userData.lastName}`,
+          userId: authData.user?.id,
+        }),
+      })
+    } catch (notifyError) {
+      console.error("[v0] Failed to send admin notification:", notifyError)
     }
 
     console.log("[v0] Account created successfully, confirmation email sent")

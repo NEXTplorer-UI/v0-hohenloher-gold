@@ -1,11 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/server"
 import { verifySumUpCheckout } from "@/lib/sumup/verify"
-import { buildEmail } from "@/lib/email/build"
-import { emailCopy } from "@/lib/email/copy"
-import { Resend } from "resend"
-
-const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,7 +14,6 @@ export async function GET(req: NextRequest) {
     }
 
     const result = await verifySumUpCheckout(checkoutId)
-
     console.log("[v0] [SumUp Return] Payment status:", result.status)
 
     const supabase = createAdminClient()
@@ -36,52 +30,22 @@ export async function GET(req: NextRequest) {
     }
 
     if (result.status === "PAID") {
-      const { error: updateError } = await supabase
+      await supabase
         .from("checkouts")
         .update({
           payment_status: "paid",
-          status: "completed",
+          status: "processing",
         })
         .eq("id", checkout.id)
 
-      if (updateError) {
-        console.error("[v0] [SumUp Return] Failed to update checkout:", updateError)
-      }
-
-      if (checkout.customer_email) {
-        try {
-          const vars = {
-            customerName: `${checkout.customer_first_name} ${checkout.customer_last_name}`,
-            orderNumber: checkout.temp_order_number,
-            orderDate: new Date(checkout.created_at).toLocaleDateString("de-DE"),
-            paymentMethod: "card",
-            total: checkout.total_amount.toFixed(2),
-            orderItems: checkout.items || [],
-          }
-
-          const { subject, html } = buildEmail("paymentReceipt", vars, emailCopy)
-
-          await resend.emails.send({
-            from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
-            to: checkout.customer_email,
-            subject,
-            html,
-          })
-
-          console.log("[v0] [SumUp Return] Receipt email sent")
-        } catch (emailError) {
-          console.error("[v0] [SumUp Return] Failed to send receipt email:", emailError)
-        }
-      }
-
-      return NextResponse.redirect(
-        new URL(`/order-confirmation?tempOrderNumber=${checkout.temp_order_number}`, req.url),
-      )
+      // Redirect to order processing page to show progress
+      return NextResponse.redirect(new URL(`/order-processing?checkoutId=${checkout.id}&source=sumup`, req.url))
     } else {
       const { error: updateError } = await supabase
         .from("checkouts")
         .update({
           payment_status: result.status === "FAILED" ? "failed" : "cancelled",
+          status: result.status === "FAILED" ? "failed" : "cancelled",
         })
         .eq("id", checkout.id)
 

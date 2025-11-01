@@ -1,29 +1,21 @@
 "use client"
 import { useState, useEffect, useMemo, memo, useCallback } from "react"
-import { DialogFooter } from "@/components/ui/dialog"
-
-import { DialogDescription } from "@/components/ui/dialog"
-
-import { DialogTitle } from "@/components/ui/dialog"
-
-import { DialogHeader } from "@/components/ui/dialog"
-
-import { DialogContent } from "@/components/ui/dialog"
-
-import { Dialog } from "@/components/ui/dialog"
-
-import { SelectItem } from "@/components/ui/select"
-
-import { SelectContent } from "@/components/ui/select"
-
-import { SelectValue } from "@/components/ui/select"
-
-import { SelectTrigger } from "@/components/ui/select"
-
-import { Select } from "@/components/ui/select"
-
+import {
+  Dialog,
+  DialogContent as DialogContentUI,
+  DialogHeader as DialogHeaderUI,
+  DialogFooter as DialogFooterUI,
+  DialogTitle as DialogTitleUI,
+  DialogDescription as DialogDescriptionUI,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectTrigger as SelectTriggerUI,
+  SelectValue as SelectValueUI,
+  SelectContent as SelectContentUI,
+  SelectItem as SelectItemUI,
+} from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -64,6 +56,7 @@ interface ExtendedCustomer {
   total_orders?: number
   total_spent?: number
   last_order_date?: string
+  email_confirmed?: boolean
 }
 
 const AVAILABLE_COLUMNS = [
@@ -74,6 +67,7 @@ const AVAILABLE_COLUMNS = [
   { key: "postal_code", label: "PLZ", required: false },
   { key: "customer_status", label: "Status", required: false },
   { key: "account_status", label: "Konto", required: false },
+  { key: "email_confirmed", label: "E-Mail bestätigt", required: false },
   { key: "order_count", label: "Bestellungen", required: false },
   { key: "total_spent", label: "Umsatz", required: false },
   { key: "last_activity", label: "Letzte Aktivität", required: false },
@@ -172,6 +166,16 @@ const CustomerRow = memo(
           return getStatusBadge(customer.customer_status)
         case "account_status":
           return getStatusBadge(customer.account_status, "account")
+        case "email_confirmed":
+          return customer.email_confirmed ? (
+            <Badge variant="default" className="bg-green-100 text-green-800 text-xs">
+              Bestätigt
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="bg-amber-100 text-amber-800 text-xs">
+              Ausstehend
+            </Badge>
+          )
         case "order_count":
           return customer.order_count || 0
         case "total_spent":
@@ -436,15 +440,15 @@ const CustomerTable = memo(() => {
               Sortieren:
             </Label>
             <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name">Name</SelectItem>
-                <SelectItem value="email">E-Mail</SelectItem>
-                <SelectItem value="city">Stadt</SelectItem>
-                <SelectItem value="postal_code">PLZ</SelectItem>
-              </SelectContent>
+              <SelectTriggerUI className="w-32">
+                <SelectValueUI />
+              </SelectTriggerUI>
+              <SelectContentUI>
+                <SelectItemUI value="name">Name</SelectItemUI>
+                <SelectItemUI value="email">E-Mail</SelectItemUI>
+                <SelectItemUI value="city">Stadt</SelectItemUI>
+                <SelectItemUI value="postal_code">PLZ</SelectItemUI>
+              </SelectContentUI>
             </Select>
             <Button variant="outline" size="sm" onClick={toggleSortOrder}>
               <ArrowUpDown className="w-4 h-4" />
@@ -530,23 +534,23 @@ const CustomerTable = memo(() => {
         />
 
         <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Kunde löschen</DialogTitle>
-              <DialogDescription>
+          <DialogContentUI>
+            <DialogHeaderUI>
+              <DialogTitleUI>Kunde löschen</DialogTitleUI>
+              <DialogDescriptionUI>
                 Sind Sie sicher, dass Sie diesen Kunden löschen möchten? Diese Aktion kann nicht rückgängig gemacht
                 werden.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
+              </DialogDescriptionUI>
+            </DialogHeaderUI>
+            <DialogFooterUI>
               <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>
                 Abbrechen
               </Button>
               <Button variant="destructive" onClick={handleDeleteCustomer}>
                 Löschen
               </Button>
-            </DialogFooter>
-          </DialogContent>
+            </DialogFooterUI>
+          </DialogContentUI>
         </Dialog>
 
         <CustomerDetailModal

@@ -2,10 +2,13 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, Download, MapPin, Truck, Clock, Mail } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { CheckCircle, Download, MapPin, Truck, Clock, Mail, MessageSquare, Send } from "lucide-react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Suspense, useEffect, useState } from "react"
+import { calculatePaymentDeadline } from "@/lib/format-time"
 
 function downloadCalendarEvent(pickupDate: string, orderNumber: string) {
   if (!pickupDate || typeof pickupDate !== "string" || pickupDate.trim() === "") {
@@ -113,6 +116,10 @@ function OrderConfirmationContent() {
 
   const [orderDetails, setOrderDetails] = useState<any>(null)
   const [orderTime, setOrderTime] = useState<string>("")
+  const [paymentDeadline, setPaymentDeadline] = useState<string>("")
+  const [feedback, setFeedback] = useState("")
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false)
+  const [feedbackLoading, setFeedbackLoading] = useState(false)
 
   const NEXT_PICKUP_DATE = "15. Dezember 2024"
 
@@ -136,6 +143,10 @@ function OrderConfirmationContent() {
               timeZone: "Europe/Berlin",
             })
             setOrderTime(formattedTime)
+
+            if (paymentMethod === "transfer") {
+              setPaymentDeadline(calculatePaymentDeadline(orderDate))
+            }
           }
         }
       } catch (error) {
@@ -146,7 +157,34 @@ function OrderConfirmationContent() {
     if (orderNumber && orderNumber !== "HG-2024-001") {
       fetchOrderDetails()
     }
-  }, [orderNumber])
+  }, [orderNumber, paymentMethod])
+
+  const handleFeedbackSubmit = async () => {
+    if (!feedback.trim()) return
+
+    setFeedbackLoading(true)
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderNumber,
+          customerName,
+          feedback: feedback.trim(),
+          source: "order_confirmation",
+        }),
+      })
+
+      if (response.ok) {
+        setFeedbackSubmitted(true)
+        setFeedback("")
+      }
+    } catch (error) {
+      console.error("Error submitting feedback:", error)
+    } finally {
+      setFeedbackLoading(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -210,10 +248,23 @@ function OrderConfirmationContent() {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
                     <div>
                       <p className="font-medium text-sm sm:text-base">Nächster Abholtermin</p>
-                      <p className="text-sm text-muted-foreground flex items-center space-x-1">
+                      <p className="text-lg font-bold text-foreground mt-2 mb-3">{NEXT_PICKUP_DATE}</p>
+                      {orderDetails?.delivery_comment && (
+                        <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <p className="text-sm text-yellow-800">{orderDetails.delivery_comment}</p>
+                        </div>
+                      )}
+                      <p className="text-sm text-muted-foreground mt-3 flex items-center space-x-1">
                         <Clock className="w-4 h-4" />
-                        <span>{NEXT_PICKUP_DATE}</span>
+                        <span>Bestellschluss: {orderDetails?.order_deadline || "Wird bekannt gegeben"}</span>
                       </p>
+                      {orderDetails?.pickup_start_time && orderDetails?.pickup_end_time && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Abholung: {orderDetails.pickup_start_time} - {orderDetails.pickup_end_time} Uhr
+                          <br />
+                          <span className="text-xs italic">oder nach Terminvereinbarung</span>
+                        </p>
+                      )}
                     </div>
                     <Button
                       variant="outline"
@@ -260,6 +311,14 @@ function OrderConfirmationContent() {
                         <strong>Wichtig:</strong> Bitte geben Sie unbedingt die Bestellnummer als Verwendungszweck an.
                       </p>
                     </div>
+                    {paymentDeadline && (
+                      <div className="pt-2 border-t bg-amber-50 dark:bg-amber-950/20 p-3 rounded-md">
+                        <p className="text-xs sm:text-sm font-medium">
+                          <strong>Zahlungsziel:</strong> Bitte überweisen Sie den Betrag bis spätestens{" "}
+                          <strong>{paymentDeadline}</strong>
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -330,11 +389,61 @@ function OrderConfirmationContent() {
             </CardContent>
           </Card>
 
+          <Card className="mb-4 sm:mb-6">
+            <CardHeader className="pb-3 sm:pb-6">
+              <CardTitle className="flex items-center space-x-2 text-lg sm:text-xl">
+                <MessageSquare className="w-5 h-5" />
+                <span>Ihr Feedback ist uns wichtig</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {feedbackSubmitted ? (
+                <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg p-4 text-center">
+                  <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                    Vielen Dank für Ihr Feedback!
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                    Wir freuen uns über Ihre Rückmeldung und werden sie zur Verbesserung nutzen.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Wie war Ihre Erfahrung mit unserem Bestellprozess? Wir freuen uns über Ihr Feedback und
+                    Verbesserungsvorschläge!
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="feedback" className="text-sm">
+                      Ihre Nachricht
+                    </Label>
+                    <Textarea
+                      id="feedback"
+                      placeholder="Teilen Sie uns Ihre Meinung mit..."
+                      value={feedback}
+                      onChange={(e) => setFeedback(e.target.value)}
+                      rows={4}
+                      className="resize-none"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleFeedbackSubmit}
+                    disabled={!feedback.trim() || feedbackLoading}
+                    className="w-full sm:w-auto gap-2"
+                  >
+                    <Send className="w-4 h-4" />
+                    {feedbackLoading ? "Wird gesendet..." : "Feedback senden"}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="text-center space-y-4">
             <p className="text-xs sm:text-sm text-muted-foreground px-4">
               Bei Fragen zu Ihrer Bestellung erreichen Sie uns unter:
               <br />
-              <strong className="text-sm sm:text-base">0157 3704 0044 0532 0130 00</strong> oder{" "}
+              <strong className="text-sm sm:text-base">0176 38734161</strong> oder{" "}
               <strong className="break-all">kontakt@suedfruechte-hohenlohe.de</strong>
             </p>
 

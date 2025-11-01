@@ -15,7 +15,7 @@ const generalReplyTemplate = `<!DOCTYPE html>
                     <!-- Header -->
                     <tr>
                         <td style="padding: 30px; text-align: center; background: linear-gradient(135deg, #2d5016 0%, #4a7c2c 100%);">
-                            <img src="${process.env.NEXT_PUBLIC_LOGO_URL || "https://obxjafjbdxiipqfrmiou.supabase.co/storage/v1/object/public/branding/logo_white.png"}" alt="Südfrüchte Hohenlohe" style="max-width: 200px; height: auto;">
+                            <img src="${process.env.NEXT_PUBLIC_NEWS_LOGO_URL || process.env.NEXT_PUBLIC_LOGO_URL || "https://obxjafjbdxiipqfrmiou.supabase.co/storage/v1/object/public/branding/logo_white.png"}" alt="Südfrüchte Hohenlohe" style="max-width: 200px; height: auto;">
                         </td>
                     </tr>
                     
@@ -77,7 +77,7 @@ const complaintReplyTemplate = `<!DOCTYPE html>
                     <!-- Header -->
                     <tr>
                         <td style="padding: 30px; text-align: center; background: linear-gradient(135deg, #2d5016 0%, #4a7c2c 100%);">
-                            <img src="${process.env.NEXT_PUBLIC_LOGO_URL || "https://obxjafjbdxiipqfrmiou.supabase.co/storage/v1/object/public/branding/logo_white.png"}" alt="Südfrüchte Hohenlohe" style="max-width: 200px; height: auto;">
+                            <img src="${process.env.NEXT_PUBLIC_NEWS_LOGO_URL || process.env.NEXT_PUBLIC_LOGO_URL || "https://obxjafjbdxiipqfrmiou.supabase.co/storage/v1/object/public/branding/logo_white.png"}" alt="Südfrüchte Hohenlohe" style="max-width: 200px; height: auto;">
                         </td>
                     </tr>
                     

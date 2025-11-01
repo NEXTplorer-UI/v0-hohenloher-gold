@@ -51,13 +51,20 @@ export default function CustomerRegisterPage() {
     try {
       console.log("[v0] Customer registration attempt:", formData.email)
 
+      const isLocalhost =
+        typeof window !== "undefined" &&
+        (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+
+      const redirectUrl = isLocalhost
+        ? process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL
+        : process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "")
+
       // Register user with Supabase Auth
       const { data, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
-          emailRedirectTo:
-            process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/customer/dashboard`,
+          emailRedirectTo: `${redirectUrl}/customer/dashboard`,
           data: {
             first_name: formData.firstName,
             last_name: formData.lastName,

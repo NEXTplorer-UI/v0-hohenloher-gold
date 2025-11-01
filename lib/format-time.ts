@@ -32,3 +32,23 @@ export function formatDate(dateString: string): string {
     year: "numeric",
   })
 }
+
+/**
+ * Calculates payment deadline (order date + 14 days) and formats it in German
+ * @param orderDate - ISO date string or Date object
+ * @returns Formatted payment deadline string (e.g., "15.12.2024")
+ */
+export function calculatePaymentDeadline(orderDate: string | Date): string {
+  const date = typeof orderDate === "string" ? new Date(orderDate) : orderDate
+
+  // Add 14 days
+  const deadline = new Date(date)
+  deadline.setDate(deadline.getDate() + 14)
+
+  // Format as DD.MM.YYYY
+  return deadline.toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  })
+}

@@ -24,6 +24,8 @@ export interface ExtendedCustomer {
   // Status
   account_status?: "has_account" | "no_account"
   customer_status?: "active" | "inactive" | "blocked"
+  email_confirmed?: boolean
+  email_confirmed_at?: string | null
 
   // KPIs aus RPC
   order_count?: number
