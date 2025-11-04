@@ -50,6 +50,16 @@ export function UserAccountDropdown() {
     router.refresh()
   }
 
+  const handleLoginClick = () => {
+    console.log("[v0] Login menu item clicked - navigating to /customer/login")
+    router.push("/customer/login")
+  }
+
+  const handleRegisterClick = () => {
+    console.log("[v0] Register menu item clicked - navigating to /customer/register")
+    router.push("/customer/register")
+  }
+
   if (loading) {
     console.log("[v0] UserAccountDropdown loading...")
     return (
@@ -124,25 +134,13 @@ export function UserAccountDropdown() {
           <>
             <DropdownMenuLabel>Willkommen</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link
-                href="/customer/login"
-                className="cursor-pointer"
-                onClick={() => console.log("[v0] Login link clicked")}
-              >
-                <LogIn className="mr-2 h-4 w-4" />
-                <span>Anmelden</span>
-              </Link>
+            <DropdownMenuItem onClick={handleLoginClick} className="cursor-pointer">
+              <LogIn className="mr-2 h-4 w-4" />
+              <span>Anmelden</span>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link
-                href="/customer/register"
-                className="cursor-pointer"
-                onClick={() => console.log("[v0] Register link clicked")}
-              >
-                <UserPlus className="mr-2 h-4 w-4" />
-                <span>Registrieren</span>
-              </Link>
+            <DropdownMenuItem onClick={handleRegisterClick} className="cursor-pointer">
+              <UserPlus className="mr-2 h-4 w-4" />
+              <span>Registrieren</span>
             </DropdownMenuItem>
           </>
         )}
