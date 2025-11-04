@@ -12,6 +12,7 @@ export async function POST(request: NextRequest) {
       paymentMethod,
       deliveryMethod,
       pickupDate,
+      pickupLocation, // Added pickupLocation parameter
       orderItems,
       hasCitrusFruits,
       order_time,
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
       paymentMethod,
       deliveryMethod,
       pickupDate,
+      pickupLocation, // Pass pickupLocation to email service
       orderItems,
       hasCitrusFruits,
       order_time, // Pass order_time directly (email service expects orderDate parameter)

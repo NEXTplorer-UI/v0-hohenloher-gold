@@ -212,6 +212,7 @@ export async function sendOrderConfirmationEmail(orderData: OrderData) {
     console.log("[v0] [sendOrderConfirmationEmail] Order data received:", {
       deliveryMethod: orderData.deliveryMethod,
       deliveryDate: orderData.deliveryDate,
+      pickupLocation: orderData.pickupLocation,
       hasCitrusFruits,
     })
 
@@ -240,6 +241,7 @@ export async function sendOrderConfirmationEmail(orderData: OrderData) {
 
     console.log("[v0] [sendOrderConfirmationEmail] Sending email with:", {
       pickupDate: formattedPickupDate,
+      pickupLocation: orderData.pickupLocation,
       hasCitrusFruits,
       deliveryMethod: orderData.deliveryMethod,
     })
@@ -257,6 +259,7 @@ export async function sendOrderConfirmationEmail(orderData: OrderData) {
         paymentMethod: orderData.paymentMethod,
         deliveryMethod: orderData.deliveryMethod,
         pickupDate: formattedPickupDate,
+        pickupLocation: orderData.pickupLocation, // Added pickupLocation
         pickupStartTime: orderData.pickupStartTime,
         pickupEndTime: orderData.pickupEndTime,
         orderItems,

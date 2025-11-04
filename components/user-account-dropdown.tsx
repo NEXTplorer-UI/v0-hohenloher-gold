@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import { User, LogIn, UserPlus, LayoutDashboard, Package, Settings, LogOut } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState, useRef } from "react"
@@ -72,45 +73,44 @@ export function UserAccountDropdown() {
       </Button>
 
       {isOpen && (
-        <div
-          className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-[9999]"
-          style={{ top: "100%" }}
-        >
-          <div className="py-1" role="menu">
+        <Card className="absolute right-0 top-full mt-2 w-56 z-50 shadow-lg">
+          <CardContent className="p-0">
             {user ? (
               <>
-                <div className="px-4 py-2 border-b">
+                <div className="px-4 py-3 border-b">
                   <p className="text-sm font-medium leading-none">Mein Konto</p>
                   <p className="text-xs leading-none text-muted-foreground truncate mt-1">{user.email}</p>
                 </div>
-                <Link
-                  href="/customer/dashboard"
-                  className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <LayoutDashboard className="mr-2 h-4 w-4" />
-                  <span>Dashboard</span>
-                </Link>
-                <Link
-                  href="/customer/dashboard?tab=orders"
-                  className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <Package className="mr-2 h-4 w-4" />
-                  <span>Bestellungen</span>
-                </Link>
-                <Link
-                  href="/customer/dashboard?tab=profile"
-                  className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Einstellungen</span>
-                </Link>
-                <div className="border-t">
+                <div className="py-1">
+                  <Link
+                    href="/customer/dashboard"
+                    className="flex items-center px-4 py-2 text-sm hover:bg-accent cursor-pointer"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <LayoutDashboard className="mr-2 h-4 w-4" />
+                    <span>Dashboard</span>
+                  </Link>
+                  <Link
+                    href="/customer/dashboard?tab=orders"
+                    className="flex items-center px-4 py-2 text-sm hover:bg-accent cursor-pointer"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Package className="mr-2 h-4 w-4" />
+                    <span>Bestellungen</span>
+                  </Link>
+                  <Link
+                    href="/customer/dashboard?tab=profile"
+                    className="flex items-center px-4 py-2 text-sm hover:bg-accent cursor-pointer"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Einstellungen</span>
+                  </Link>
+                </div>
+                <div className="border-t py-1">
                   <button
                     onClick={handleLogout}
-                    className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer"
+                    className="flex items-center w-full px-4 py-2 text-sm text-destructive hover:bg-destructive/10 cursor-pointer"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Abmelden</span>
@@ -119,29 +119,31 @@ export function UserAccountDropdown() {
               </>
             ) : (
               <>
-                <div className="px-4 py-2 border-b">
+                <div className="px-4 py-3 border-b">
                   <p className="text-sm font-medium">Willkommen</p>
                 </div>
-                <Link
-                  href="/customer/login"
-                  className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <LogIn className="mr-2 h-4 w-4" />
-                  <span>Anmelden</span>
-                </Link>
-                <Link
-                  href="/customer/register"
-                  className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  <span>Registrieren</span>
-                </Link>
+                <div className="py-1">
+                  <Link
+                    href="/customer/login"
+                    className="flex items-center px-4 py-2 text-sm hover:bg-accent cursor-pointer"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <LogIn className="mr-2 h-4 w-4" />
+                    <span>Anmelden</span>
+                  </Link>
+                  <Link
+                    href="/customer/register"
+                    className="flex items-center px-4 py-2 text-sm hover:bg-accent cursor-pointer"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    <span>Registrieren</span>
+                  </Link>
+                </div>
               </>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   )

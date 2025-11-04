@@ -60,6 +60,7 @@ export async function GET(req: Request) {
       payment_status: row.payment_status,
       notes: row.notes,
       created_at: row.created_at,
+      qr_code_url: row.qr_code_url,
       customer: row.customer ?? { first_name: "", last_name: "", email: "", phone: null },
       order_items: Array.isArray(row.order_items) ? row.order_items : [],
     }))

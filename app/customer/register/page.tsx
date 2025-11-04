@@ -64,7 +64,7 @@ export default function CustomerRegisterPage() {
         email: formData.email,
         password: formData.password,
         options: {
-          emailRedirectTo: `${redirectUrl}/customer/dashboard`,
+          emailRedirectTo: `${redirectUrl}/customer/account-confirmed`,
           data: {
             first_name: formData.firstName,
             last_name: formData.lastName,

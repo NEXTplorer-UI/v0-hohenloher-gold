@@ -100,6 +100,8 @@ export async function POST(request: NextRequest) {
           pickup_location_id: checkout.pickup_location_id,
           checkout_id: checkout.id,
           transaction_id: transaction_id,
+          order_time: new Date().toISOString(),
+          created_at: new Date().toISOString(),
         }
 
         const newOrder = await retryWithBackoff(

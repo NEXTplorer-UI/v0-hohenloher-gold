@@ -22,6 +22,8 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
   const [error, setError] = useState<string | null>(null)
   const [paymentFailed, setPaymentFailed] = useState(false)
   const [failureReason, setFailureReason] = useState<string | null>(null)
+  const [adblockDetected, setAdblockDetected] = useState(false)
+  const [loadTimeout, setLoadTimeout] = useState(false)
 
   useEffect(() => {
     console.log("[v0] [SumUp Widget] Initializing with checkoutId:", checkoutId)
@@ -33,11 +35,23 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
       return
     }
 
+    const loadingTimeout = setTimeout(() => {
+      if (isLoading) {
+        console.error("[v0] [SumUp Widget] SDK loading timeout")
+        setLoadTimeout(true)
+        setError(
+          "Das Zahlungsformular konnte nicht geladen werden. Bitte überprüfen Sie Ihre Internetverbindung oder deaktivieren Sie Ihren Adblocker.",
+        )
+        setIsLoading(false)
+      }
+    }, 30000)
+
     const script = document.createElement("script")
     script.src = "https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js"
     script.async = true
 
     script.onload = () => {
+      clearTimeout(loadingTimeout)
       console.log("[v0] [SumUp Widget] SDK loaded successfully")
 
       if (window.SumUpCard) {
@@ -51,7 +65,6 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
               console.log("[v0] [SumUp Widget] Response received:", { type, body })
 
               if (type === "success") {
-                // Widget operation completed successfully, but check actual payment status
                 if (body?.status === "PAID") {
                   console.log("[v0] [SumUp Widget] Payment successful - status: PAID")
                   setIsLoading(false)
@@ -65,13 +78,15 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
                   onFailed?.(body)
                 } else if (body?.status === "PENDING") {
                   console.log("[v0] [SumUp Widget] Payment pending - status: PENDING")
-                  setFailureReason("Zahlung wird noch verarbeitet")
+                  setFailureReason("Zahlung wird noch verarbeitet. Bitte warten Sie einen Moment.")
                   setPaymentFailed(true)
                   setIsLoading(false)
                   onFailed?.(body)
                 } else {
                   console.warn("[v0] [SumUp Widget] Unknown payment status:", body?.status)
-                  setFailureReason(`Unbekannter Status: ${body?.status}`)
+                  setFailureReason(
+                    `Unbekannter Status: ${body?.status}. Bitte kontaktieren Sie uns, falls Probleme auftreten.`,
+                  )
                   setPaymentFailed(true)
                   setIsLoading(false)
                   onFailed?.(body)
@@ -89,6 +104,7 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
           setIsLoading(false)
           console.log("[v0] [SumUp Widget] Widget mounted successfully")
         } catch (err: any) {
+          clearTimeout(loadingTimeout)
           console.error("[v0] [SumUp Widget] Mount error:", err)
           console.error("[v0] [SumUp Widget] Error stack:", err.stack)
           setError(err.message || "Widget konnte nicht geladen werden")
@@ -96,6 +112,7 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
           onError?.(err.message)
         }
       } else {
+        clearTimeout(loadingTimeout)
         console.error("[v0] [SumUp Widget] SumUpCard not available")
         setError("SumUp Widget konnte nicht initialisiert werden")
         setIsLoading(false)
@@ -103,8 +120,12 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
     }
 
     script.onerror = (err) => {
+      clearTimeout(loadingTimeout)
       console.error("[v0] [SumUp Widget] SDK loading error:", err)
-      setError("SumUp SDK konnte nicht geladen werden")
+      setAdblockDetected(true)
+      setError(
+        "Das Zahlungsformular konnte nicht geladen werden. Möglicherweise blockiert ein Adblocker oder eine Firewall die Verbindung.",
+      )
       setIsLoading(false)
       onError?.("SumUp SDK konnte nicht geladen werden")
     }
@@ -113,6 +134,7 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
     document.body.appendChild(script)
 
     return () => {
+      clearTimeout(loadingTimeout)
       console.log("[v0] [SumUp Widget] Cleaning up")
       if (script.parentNode) {
         script.parentNode.removeChild(script)
@@ -129,6 +151,17 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
             <div className="flex-1">
               <h3 className="font-semibold text-red-900 mb-1">Zahlung fehlgeschlagen</h3>
               <p className="text-sm text-red-700">{failureReason}</p>
+              <div className="mt-3 text-xs text-red-600 space-y-1">
+                <p>
+                  <strong>Mögliche Ursachen:</strong>
+                </p>
+                <ul className="list-disc list-inside ml-2">
+                  <li>Karte wurde abgelehnt</li>
+                  <li>Unzureichendes Guthaben</li>
+                  <li>3D-Secure-Authentifizierung fehlgeschlagen</li>
+                  <li>Netzwerkprobleme</li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
@@ -159,8 +192,46 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
 
   if (error) {
     return (
-      <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
-        <p className="text-red-700">{error}</p>
+      <div className="space-y-4">
+        <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-red-900 mb-1">Zahlungsformular konnte nicht geladen werden</h3>
+              <p className="text-sm text-red-700 mb-3">{error}</p>
+              {(adblockDetected || loadTimeout) && (
+                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                  <p className="text-sm font-semibold text-yellow-900 mb-2">Lösungsvorschläge:</p>
+                  <ul className="text-xs text-yellow-800 space-y-1 list-disc list-inside">
+                    <li>Deaktivieren Sie Ihren Adblocker für diese Seite</li>
+                    <li>Überprüfen Sie Ihre Firewall-Einstellungen</li>
+                    <li>Versuchen Sie es mit einem anderen Browser</li>
+                    <li>Stellen Sie sicher, dass Sie eine stabile Internetverbindung haben</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <Button
+            onClick={() => {
+              window.location.reload()
+            }}
+            className="flex-1"
+          >
+            Seite neu laden
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              window.location.href = "/checkout"
+            }}
+            className="flex-1"
+          >
+            Andere Zahlungsweise wählen
+          </Button>
+        </div>
       </div>
     )
   }
@@ -174,6 +245,11 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
         </div>
       )}
       <div id="sumup-card" className={isLoading ? "hidden" : ""} />
+      {isLoading && (
+        <div className="text-center text-xs text-muted-foreground">
+          <p>Falls das Formular nicht lädt, überprüfen Sie bitte Ihren Adblocker.</p>
+        </div>
+      )}
     </div>
   )
 }

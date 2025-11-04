@@ -58,6 +58,10 @@ export default function AccountConfirmedPage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                  <span>Bestehende Bestellungen wurden automatisch Ihrem Konto zugeordnet</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
                   <span>Schnellerer Checkout bei zukünftigen Bestellungen</span>
                 </li>
                 <li className="flex items-start gap-2">

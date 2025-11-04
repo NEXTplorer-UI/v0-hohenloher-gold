@@ -161,6 +161,11 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
             ? `<p><strong>${vars.deliveryMethod === "delivery" ? "Voraussichtlicher Liefertermin:" : copy.orderConfirmation.pickupDate}</strong> {{pickupDate}}</p>`
             : ""
       }
+      ${
+        vars.pickupLocation && vars.deliveryMethod === "pickup"
+          ? `<p><strong>Abholort:</strong> {{pickupLocation}}</p>`
+          : ""
+      }
     </div>
     
     ${pickupLinkSection}
