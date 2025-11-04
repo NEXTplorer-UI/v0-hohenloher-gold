@@ -84,7 +84,13 @@ export function UserAccountDropdown() {
           <span className="sr-only">Benutzerkonto</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent
+        align="end"
+        className="w-56"
+        style={{ zIndex: 9999 }}
+        onPointerDownOutside={() => console.log("[v0] Clicked outside dropdown")}
+        onEscapeKeyDown={() => console.log("[v0] Escape key pressed")}
+      >
         {user ? (
           <>
             <DropdownMenuLabel>
@@ -132,7 +138,9 @@ export function UserAccountDropdown() {
           </>
         ) : (
           <>
-            <DropdownMenuLabel>Willkommen</DropdownMenuLabel>
+            <DropdownMenuLabel onClick={() => console.log("[v0] Dropdown content rendered")}>
+              Willkommen
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLoginClick} className="cursor-pointer">
               <LogIn className="mr-2 h-4 w-4" />
