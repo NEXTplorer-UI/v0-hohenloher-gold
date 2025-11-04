@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { User, LogIn, UserPlus, LayoutDashboard, Package, Settings, LogOut } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
@@ -19,6 +19,8 @@ import type { User as SupabaseUser } from "@supabase/supabase-js"
 export function UserAccountDropdown() {
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isOpen, setIsOpen] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -42,6 +44,31 @@ export function UserAccountDropdown() {
 
     return () => subscription.unsubscribe()
   }, [supabase.auth])
+
+  useEffect(() => {
+    if (isOpen && contentRef.current) {
+      setTimeout(() => {
+        const element = contentRef.current
+        if (element) {
+          const rect = element.getBoundingClientRect()
+          const styles = window.getComputedStyle(element)
+          console.log("[v0] Dropdown content dimensions:", {
+            width: rect.width,
+            height: rect.height,
+            top: rect.top,
+            left: rect.left,
+            right: rect.right,
+            bottom: rect.bottom,
+            display: styles.display,
+            visibility: styles.visibility,
+            opacity: styles.opacity,
+            zIndex: styles.zIndex,
+            position: styles.position,
+          })
+        }
+      }, 100)
+    }
+  }, [isOpen])
 
   const handleLogout = async () => {
     console.log("[v0] Logout clicked")
@@ -72,7 +99,14 @@ export function UserAccountDropdown() {
   console.log("[v0] UserAccountDropdown rendering, user:", user ? "logged in" : "not logged in")
 
   return (
-    <DropdownMenu onOpenChange={(open) => console.log("[v0] Dropdown open state:", open)}>
+    <DropdownMenu
+      modal={false}
+      open={isOpen}
+      onOpenChange={(open) => {
+        console.log("[v0] Dropdown open state:", open)
+        setIsOpen(open)
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
@@ -85,6 +119,7 @@ export function UserAccountDropdown() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
+        ref={contentRef}
         align="end"
         className="w-56"
         style={{ zIndex: 9999 }}
