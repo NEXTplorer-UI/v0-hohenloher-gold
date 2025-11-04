@@ -23,8 +23,11 @@ export function UserAccountDropdown() {
   const supabase = createClient()
 
   useEffect(() => {
+    console.log("[v0] UserAccountDropdown mounted")
+
     // Get initial session
     supabase.auth.getUser().then(({ data: { user } }) => {
+      console.log("[v0] Initial user state:", user ? "logged in" : "not logged in")
       setUser(user)
       setLoading(false)
     })
@@ -33,6 +36,7 @@ export function UserAccountDropdown() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("[v0] Auth state changed:", _event, session?.user ? "logged in" : "not logged in")
       setUser(session?.user ?? null)
     })
 
@@ -40,12 +44,14 @@ export function UserAccountDropdown() {
   }, [supabase.auth])
 
   const handleLogout = async () => {
+    console.log("[v0] Logout clicked")
     await supabase.auth.signOut()
     router.push("/")
     router.refresh()
   }
 
   if (loading) {
+    console.log("[v0] UserAccountDropdown loading...")
     return (
       <Button variant="ghost" size="sm" disabled className="relative">
         <User className="w-4 h-4" />
@@ -53,10 +59,17 @@ export function UserAccountDropdown() {
     )
   }
 
+  console.log("[v0] UserAccountDropdown rendering, user:", user ? "logged in" : "not logged in")
+
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => console.log("[v0] Dropdown open state:", open)}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="relative">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="relative"
+          onClick={() => console.log("[v0] Dropdown trigger clicked")}
+        >
           <User className="w-4 h-4" />
           <span className="sr-only">Benutzerkonto</span>
         </Button>
@@ -72,19 +85,31 @@ export function UserAccountDropdown() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/customer/dashboard" className="cursor-pointer">
+              <Link
+                href="/customer/dashboard"
+                className="cursor-pointer"
+                onClick={() => console.log("[v0] Dashboard link clicked")}
+              >
                 <LayoutDashboard className="mr-2 h-4 w-4" />
                 <span>Dashboard</span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/customer/dashboard?tab=orders" className="cursor-pointer">
+              <Link
+                href="/customer/dashboard?tab=orders"
+                className="cursor-pointer"
+                onClick={() => console.log("[v0] Orders link clicked")}
+              >
                 <Package className="mr-2 h-4 w-4" />
                 <span>Bestellungen</span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/customer/dashboard?tab=profile" className="cursor-pointer">
+              <Link
+                href="/customer/dashboard?tab=profile"
+                className="cursor-pointer"
+                onClick={() => console.log("[v0] Settings link clicked")}
+              >
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Einstellungen</span>
               </Link>
@@ -100,13 +125,21 @@ export function UserAccountDropdown() {
             <DropdownMenuLabel>Willkommen</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/customer/login" className="cursor-pointer">
+              <Link
+                href="/customer/login"
+                className="cursor-pointer"
+                onClick={() => console.log("[v0] Login link clicked")}
+              >
                 <LogIn className="mr-2 h-4 w-4" />
                 <span>Anmelden</span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/customer/register" className="cursor-pointer">
+              <Link
+                href="/customer/register"
+                className="cursor-pointer"
+                onClick={() => console.log("[v0] Register link clicked")}
+              >
                 <UserPlus className="mr-2 h-4 w-4" />
                 <span>Registrieren</span>
               </Link>
