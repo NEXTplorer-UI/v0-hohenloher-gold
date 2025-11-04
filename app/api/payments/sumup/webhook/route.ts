@@ -5,6 +5,7 @@ import { emailCopy } from "@/lib/email/copy"
 import { Resend } from "resend"
 import { retryWithBackoff } from "@/lib/retry-utils"
 import { sendAdminNotification } from "@/lib/admin-notifications"
+import { createInvoiceAfterPayment } from "@/lib/hellocash/create-invoice-after-payment"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -38,13 +39,11 @@ export async function POST(request: NextRequest) {
 
         console.log("[v0] [sumup-webhook] Found checkout:", checkout.id, "version:", checkout.version)
 
-        // Check if already processing
         if (checkout.status === "processing" || checkout.status === "completed") {
           console.log("[v0] [sumup-webhook] Checkout already being processed")
           return NextResponse.json({ received: true, message: "Already processing" })
         }
 
-        // Try to acquire lock by updating status with version check
         const { data: lockedCheckout, error: lockError } = await supabase
           .from("checkouts")
           .update({
@@ -52,7 +51,7 @@ export async function POST(request: NextRequest) {
             payment_status: "paid",
           })
           .eq("id", checkout.id)
-          .eq("version", checkout.version) // Optimistic lock
+          .eq("version", checkout.version)
           .select()
           .single()
 
@@ -63,7 +62,6 @@ export async function POST(request: NextRequest) {
 
         console.log("[v0] [sumup-webhook] Lock acquired, version:", lockedCheckout.version)
 
-        // Check if order already exists
         const { data: existingOrder } = await supabase
           .from("orders")
           .select("order_number")
@@ -73,7 +71,6 @@ export async function POST(request: NextRequest) {
         if (existingOrder) {
           console.log("[v0] [sumup-webhook] Order already exists:", existingOrder.order_number)
 
-          // Update checkout to completed
           await supabase
             .from("checkouts")
             .update({
@@ -85,7 +82,6 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ received: true, message: "Order already processed" })
         }
 
-        // Create order with retry logic
         const orderData = {
           customer_email: checkout.customer_email,
           customer_first_name: checkout.customer_first_name,
@@ -118,7 +114,13 @@ export async function POST(request: NextRequest) {
 
         console.log("[v0] [sumup-webhook] Order created successfully:", newOrder.order_number)
 
-        // Update checkout to completed
+        const invoiceResult = await createInvoiceAfterPayment(newOrder.id)
+        if (!invoiceResult.success) {
+          console.error("[v0] [sumup-webhook] Invoice creation failed:", invoiceResult.error)
+        } else {
+          console.log("[v0] [sumup-webhook] Invoice created:", invoiceResult.invoiceNumber)
+        }
+
         await supabase
           .from("checkouts")
           .update({
@@ -127,7 +129,6 @@ export async function POST(request: NextRequest) {
           })
           .eq("id", checkout.id)
 
-        // Send confirmation email with retry
         if (checkout.customer_email) {
           try {
             await retryWithBackoff(
@@ -159,7 +160,6 @@ export async function POST(request: NextRequest) {
           } catch (emailError: any) {
             console.error("[v0] [sumup-webhook] Failed to send email after retries:", emailError)
 
-            // Queue email for later retry
             await supabase.from("pending_emails").insert({
               order_id: newOrder.id,
               email: checkout.customer_email,
@@ -168,7 +168,6 @@ export async function POST(request: NextRequest) {
               scheduled_for: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
             })
 
-            // Notify admin
             await sendAdminNotification({
               type: "email_failed",
               severity: "warning",
@@ -195,7 +194,6 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("[v0] [sumup-webhook] Error processing webhook:", error)
 
-    // Notify admin of critical error
     await sendAdminNotification({
       type: "webhook_error",
       severity: "critical",

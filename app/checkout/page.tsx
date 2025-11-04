@@ -98,6 +98,7 @@ export default function CheckoutPage() {
   const [pickupLocations, setPickupLocations] = useState<any[]>([])
   const [isLoadingLocations, setIsLoadingLocations] = useState(false)
   const [orderMessage, setOrderMessage] = useState("") // Renamed from 'notes'
+  const [customPickupPerson, setCustomPickupPerson] = useState("")
 
   const [bulkOrderNames, setBulkOrderNames] = useState<string[]>(["", "", ""])
   const [isBulkOrderExpanded, setIsBulkOrderExpanded] = useState(false)
@@ -517,7 +518,10 @@ export default function CheckoutPage() {
                 finalPickupLocationId = allPickupLocations[0].id
               }
             } else if (pickupLocation === "station") {
-              if (selectedLocation) {
+              if (selectedLocation?.id === "custom") {
+                finalPickupLocation = customPickupPerson // Use custom name
+                finalPickupLocationId = null
+              } else if (selectedLocation) {
                 finalPickupLocation = selectedLocation.name
                 finalPickupLocationId = selectedLocation.id
               } else if (nearestLocations[0]) {
@@ -605,7 +609,10 @@ export default function CheckoutPage() {
             finalPickupLocationId = allPickupLocations[0].id
           }
         } else if (pickupLocation === "station") {
-          if (selectedLocation) {
+          if (selectedLocation?.id === "custom") {
+            finalPickupLocation = customPickupPerson // Use custom name
+            finalPickupLocationId = null
+          } else if (selectedLocation) {
             finalPickupLocation = selectedLocation.name
             finalPickupLocationId = selectedLocation.id
           } else if (nearestLocations[0]) {
@@ -716,6 +723,7 @@ export default function CheckoutPage() {
     acceptedPrivacy, // Added to dependencies
     bulkOrderNames, // Added to dependencies
     isSubmitting,
+    customPickupPerson, // Added dependency
   ])
 
   const handleSumUpFailed = async (failureData: any) => {
@@ -1275,27 +1283,6 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
-                {hasFreshFruits && deliveryDateInfo?.deliveryDate && (
-                  <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="h-4 w-4 text-green-700" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-green-900">
-                          Liefertermin:{" "}
-                          {new Date(deliveryDateInfo.deliveryDate).toLocaleDateString("de-DE", {
-                            day: "2-digit",
-                            month: "long",
-                            year: "numeric",
-                          })}
-                        </p>
-                        <p className="text-xs text-green-700 mt-0.5">
-                          Ihre Südfrüchte werden frisch zu diesem Termin geliefert
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 <RadioGroup value={deliveryMethod} onValueChange={setDeliveryMethod}>
                   <div className="flex items-center space-x-2 p-4 border rounded-lg">
                     <RadioGroupItem
@@ -1398,24 +1385,11 @@ export default function CheckoutPage() {
                       </RadioGroup>
                     </div>
 
-                    {(pickupLocation === "station" || pickupLocation === "warehouse") && (
-                      <Card className="border-blue-200 bg-blue-50">
-                        <CardContent className="p-3">
-                          <div className="flex items-start space-x-2">
-                            <Info className="w-4 h-4 text-blue-700 mt-0.5 flex-shrink-0" />
-                            <p className="text-sm text-blue-800">
-                              <strong>Ihre gewohnte Abholstation nicht dabei?</strong> Tragen Sie bitte den Namen Ihrer
-                              Abholperson in das Nachrichtenfeld ein.
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
+                    {/* CHANGED: Removed the blue info card completely */}
                     {pickupLocation === "station" && (
                       <div className="space-y-2">
                         <Label htmlFor="plz">PLZ für Abholort</Label>
-                        {isLoadingNearbyPickups && ( // Use renamed state
+                        {isLoadingNearbyPickups && (
                           <p className="text-sm text-muted-foreground">Abholorte werden geladen...</p>
                         )}
                         <div className="flex space-x-2">
@@ -1424,7 +1398,7 @@ export default function CheckoutPage() {
                             placeholder="74653"
                             value={searchPlz}
                             onChange={(e) => setSearchPlz(e.target.value)}
-                            disabled={isLoadingNearbyPickups} // Use renamed state
+                            disabled={isLoadingNearbyPickups}
                           />
                           <Button
                             variant="outline"
@@ -1432,69 +1406,130 @@ export default function CheckoutPage() {
                             disabled={searchPlz.length < 5 || isLoadingNearbyPickups}
                           >
                             {" "}
-                            {/* Use renamed state */}
                             Suchen
                           </Button>
                         </div>
 
-                        {nearestLocations.length > 0 && (
-                          <div className="space-y-3 mt-3">
-                            <p className="text-sm font-medium">
-                              {nearestLocations.length === 1
-                                ? "Nächstgelegener Abholort:"
-                                : `${nearestLocations.length} Abholorte in Ihrer Nähe:`}
-                            </p>
-
-                            <div className="space-y-2">
-                              {nearestLocations.map((location) => (
-                                <div
-                                  key={location.id}
-                                  className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                                    selectedLocation?.id === location.id
-                                      ? "border-green-600 bg-green-50 ring-2 ring-green-600"
-                                      : "border-border hover:border-primary/50 hover:bg-accent/5"
-                                  }`}
-                                  onClick={() => setSelectedLocation(location)}
-                                >
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <p className="font-medium text-sm">{location.name}</p>
-                                      <p className="text-xs text-muted-foreground mt-1">{location.address}</p>
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        {location.distanceKm
-                                          ? `ca. ${location.distanceKm.toFixed(1)} km entfernt`
-                                          : `PLZ: ${location.postal_code}`}{" "}
-                                        • Kontakt: {location.contact_phone}
-                                      </p>
-                                    </div>
-                                    <div
-                                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                                        selectedLocation?.id === location.id
-                                          ? "border-green-600 bg-green-600"
-                                          : "border-muted-foreground"
-                                      }`}
-                                    >
-                                      {selectedLocation?.id === location.id && (
-                                        <div className="w-2 h-2 bg-white rounded-full" />
-                                      )}
-                                    </div>
-                                  </div>
+                        <div className="space-y-3 mt-3">
+                          <div className="space-y-2">
+                            {/* CHANGED: "Mein Abholort ist nicht dabei" always visible at the top */}
+                            <div
+                              className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                                selectedLocation?.id === "custom"
+                                  ? "border-green-600 bg-green-50 ring-2 ring-green-600"
+                                  : "border-border hover:border-primary/50 hover:bg-accent/5"
+                              }`}
+                              onClick={() => {
+                                setSelectedLocation({ id: "custom", name: "Mein Abholort ist nicht dabei" })
+                              }}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <p className="font-medium text-sm">Mein Abholort ist nicht dabei</p>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Geben Sie den Namen Ihrer Abholperson ein
+                                  </p>
                                 </div>
-                              ))}
+                                <div
+                                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                                    selectedLocation?.id === "custom"
+                                      ? "border-green-600 bg-green-600"
+                                      : "border-muted-foreground"
+                                  }`}
+                                >
+                                  {selectedLocation?.id === "custom" && (
+                                    <div className="w-2 h-2 bg-white rounded-full" />
+                                  )}
+                                </div>
+                              </div>
 
-                              {nearestLocations.length > 1 && !selectedLocation && (
-                                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
-                                  Bitte wählen Sie einen Abholort aus der Liste aus.
-                                </p>
+                              {selectedLocation?.id === "custom" && (
+                                <div className="mt-3 pt-3 border-t border-green-200">
+                                  <Label htmlFor="customPickupPerson" className="text-sm font-medium">
+                                    Name der Abholperson *
+                                  </Label>
+                                  <Input
+                                    id="customPickupPerson"
+                                    value={customPickupPerson}
+                                    onChange={(e) => setCustomPickupPerson(e.target.value)}
+                                    placeholder="z.B. Max Mustermann"
+                                    className="mt-2"
+                                    onClick={(e) => e.stopPropagation()} // Prevent click from propagating to parent div
+                                  />
+                                  {customPickupPerson && (
+                                    <p className="text-xs text-green-700 mt-2 flex items-center gap-1">
+                                      <div className="w-2 h-2 bg-green-600 rounded-full" />
+                                      Abholperson: <strong>{customPickupPerson}</strong>
+                                    </p>
+                                  )}
+                                </div>
                               )}
                             </div>
+
+                            {/* CHANGED: Other pickup locations only shown when PLZ is entered */}
+                            {searchPlz && searchPlz.length >= 5 && nearestLocations.length > 0 && (
+                              <>
+                                <p className="text-sm font-medium mt-4">
+                                  {nearestLocations.length === 1
+                                    ? "Nächstgelegener Abholort:"
+                                    : `${nearestLocations.length} Abholorte in Ihrer Nähe:`}
+                                </p>
+
+                                {nearestLocations.map((location) => (
+                                  <div
+                                    key={location.id}
+                                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                                      selectedLocation?.id === location.id
+                                        ? "border-green-600 bg-green-50 ring-2 ring-green-600"
+                                        : "border-border hover:border-primary/50 hover:bg-accent/5"
+                                    }`}
+                                    onClick={() => {
+                                      setSelectedLocation(location)
+                                      setCustomPickupPerson("") // Clear custom pickup when selecting a location
+                                    }}
+                                  >
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex-1">
+                                        <p className="font-medium text-sm">{location.name}</p>
+                                        <p className="text-xs text-muted-foreground mt-1">{location.address}</p>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                          {location.distanceKm
+                                            ? `ca. ${location.distanceKm.toFixed(1)} km entfernt`
+                                            : `PLZ: ${location.postal_code}`}{" "}
+                                          • Kontakt: {location.contact_phone}
+                                        </p>
+                                      </div>
+                                      <div
+                                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                                          selectedLocation?.id === location.id
+                                            ? "border-green-600 bg-green-600"
+                                            : "border-muted-foreground"
+                                        }`}
+                                      >
+                                        {selectedLocation?.id === location.id && (
+                                          <div className="w-2 h-2 bg-white rounded-full" />
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+
+                                {nearestLocations.length > 1 && !selectedLocation && (
+                                  <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                                    Bitte wählen Sie einen Abholort aus der Liste aus.
+                                  </p>
+                                )}
+                              </>
+                            )}
                           </div>
-                        )}
+                        </div>
 
                         {nearestLocations.length === 0 &&
                           !isLoadingNearbyPickups &&
                           searchPlz.length >= 5 && ( // Use renamed state
-                            <p className="text-sm text-muted-foreground">Keine Abholorte in Ihrer Nähe gefunden.</p>
+                            <p className="text-sm text-muted-foreground mt-3">
+                              Keine Abholorte in Ihrer Nähe gefunden.
+                            </p>
                           )}
                       </div>
                     )}

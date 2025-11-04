@@ -19,8 +19,11 @@ import {
   Plus,
   X,
   RefreshCw,
+  XCircle,
+  FileText,
+  Printer,
 } from "lucide-react"
-import { mapDBToUIStatus, getEmailTemplateForStatus } from "@/lib/order-status-mapping"
+import { mapDBToUIStatus } from "@/lib/order-status-mapping"
 import type { EmailTemplateId } from "@/lib/email/build"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -97,6 +100,7 @@ const OrderItem = memo(
     onStatusChange,
     onAdminNotesChange,
     onSyncStatus, // Added onSyncStatus prop
+    onCancelInvoice, // Added onCancelInvoice prop
     isSelected,
     onSelectionChange,
   }: {
@@ -105,6 +109,7 @@ const OrderItem = memo(
     onStatusChange: (orderId: string, status?: string, paymentStatus?: string) => void
     onAdminNotesChange: (orderId: string, adminNotes: string) => void
     onSyncStatus: (orderId: string) => Promise<void> // Added onSyncStatus prop
+    onCancelInvoice: (orderId: string) => Promise<void> // Added onCancelInvoice prop type
     isSelected: boolean
     onSelectionChange: (orderId: string, selected: boolean) => void
   }) => {
@@ -114,6 +119,9 @@ const OrderItem = memo(
     const [adminNotes, setAdminNotes] = useState(order.admin_notes || "")
     const [isSavingNotes, setIsSavingNotes] = useState(false)
     const [isSyncing, setIsSyncing] = useState(false) // Added isSyncing state
+    const [isCancelling, setIsCancelling] = useState(false) // Added isCancelling state
+    const [showCancelModal, setShowCancelModal] = useState(false) // Added showCancelModal state
+    const [cancelReason, setCancelReason] = useState("") // Added cancelReason state
     const customerName = `${order.customer.first_name} ${order.customer.last_name}`
     const orderDate = new Date(order.created_at).toLocaleDateString("de-DE")
     const items = order.order_items.map((item) => `${item.product_name} (${item.quantity}x)`).join(", ")
@@ -141,6 +149,22 @@ const OrderItem = memo(
         await onSyncStatus(order.id)
       } finally {
         setIsSyncing(false)
+      }
+    }
+
+    const handleCancelInvoice = async () => {
+      if (!cancelReason.trim()) {
+        alert("Bitte geben Sie einen Stornierungsgrund ein")
+        return
+      }
+
+      setIsCancelling(true)
+      try {
+        await onCancelInvoice(order.id)
+        setShowCancelModal(false)
+        setCancelReason("")
+      } finally {
+        setIsCancelling(false)
       }
     }
 
@@ -374,6 +398,43 @@ const OrderItem = memo(
                 </Button>
               )}
 
+              {order.hellocash_invoice_id && order.payment_status === "paid" && (
+                <div className="flex gap-2 w-full">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(`/api/invoices/${order.id}/pdf`, "_blank")}
+                    className="flex-1"
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Rechnung
+                  </Button>
+                  {order.status !== "cancelled" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowCancelModal(true)}
+                      className="flex-1 text-destructive hover:text-destructive"
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Stornieren
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {order.hellocash_invoice_id && order.status === "cancelled" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => window.open(`/api/invoices/${order.id}/pdf?cancellation=true`, "_blank")}
+                  className="w-full"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Storno-Beleg
+                </Button>
+              )}
+
               <div className="flex gap-2">
                 <Select value={uiStatus} onValueChange={(value) => onStatusChange(order.id, value, undefined)}>
                   <SelectTrigger className="w-32">
@@ -401,20 +462,66 @@ const OrderItem = memo(
                   </SelectContent>
                 </Select>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  const templateId = getEmailTemplateForStatus(uiStatus)
-                  onNotify(order.id, templateId as EmailTemplateId)
-                }}
-              >
-                <Mail className="h-4 w-4 mr-2" />
-                Benachrichtigen
-              </Button>
+              <Select onValueChange={(templateId) => onNotify(order.id, templateId as EmailTemplateId)}>
+                <SelectTrigger className="w-full">
+                  <Mail className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Benachrichtigung senden" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="orderConfirmation">Bestellbestätigung</SelectItem>
+                  <SelectItem value="paymentReceipt">Zahlungsbestätigung (mit Rechnung)</SelectItem>
+                  <SelectItem value="readyForPickup">Abholbereit</SelectItem>
+                  <SelectItem value="orderPickedUp">Abgeholt (Danke)</SelectItem>
+                  <SelectItem value="shippingNotification">Versandbestätigung</SelectItem>
+                  <SelectItem value="orderCancelled">Stornierung</SelectItem>
+                  <SelectItem value="pickupReminder">Abholtermin-Erinnerung</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
+
+        {showCancelModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md mx-4">
+              <CardHeader>
+                <CardTitle>Rechnung stornieren</CardTitle>
+                <CardDescription>
+                  Bestellung: {order.order_number}
+                  <br />
+                  Diese Aktion kann nicht rückgängig gemacht werden.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="cancelReason">Stornierungsgrund *</Label>
+                  <textarea
+                    id="cancelReason"
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder="Grund für die Stornierung eingeben..."
+                    className="w-full min-h-[100px] p-2 text-sm border rounded-md resize-y"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setShowCancelModal(false)} disabled={isCancelling}>
+                    Abbrechen
+                  </Button>
+                  <Button variant="destructive" onClick={handleCancelInvoice} disabled={isCancelling}>
+                    {isCancelling ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Storniere...
+                      </>
+                    ) : (
+                      "Rechnung stornieren"
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </Card>
     )
   },
@@ -984,6 +1091,56 @@ function OrderManagement() {
     [fetchOrders, toast],
   )
 
+  const handleCancelInvoice = useCallback(
+    async (orderId: string) => {
+      const order = orders.find((o) => o.id === orderId)
+      if (!order) return
+
+      try {
+        console.log(`[v0] Cancelling invoice for order ${order.order_number}`)
+
+        const reason = prompt("Stornierungsgrund:") // Using prompt for simplicity as per update's implication
+        if (!reason) return
+
+        const response = await fetch(`/api/admin/invoices/${orderId}/cancel`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ reason }),
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          console.log(`[v0] Invoice cancelled successfully:`, result)
+
+          toast({
+            title: "Rechnung storniert",
+            description: `Rechnung für ${order.order_number} wurde erfolgreich storniert`,
+          })
+
+          // Reload orders to show updated status
+          await fetchOrders()
+        } else {
+          const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+          toast({
+            title: "Fehler",
+            description: errorData.error || "Rechnung konnte nicht storniert werden",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error(`[v0] Error cancelling invoice:`, error)
+        toast({
+          title: "Fehler",
+          description: error instanceof Error ? error.message : "Unbekannter Fehler",
+          variant: "destructive",
+        })
+      }
+    },
+    [orders, fetchOrders, toast],
+  )
+
   const handleOrderSelection = useCallback((orderId: string, selected: boolean) => {
     setSelectedOrderIds((prev) => {
       const newSet = new Set(prev)
@@ -1358,6 +1515,11 @@ function OrderManagement() {
                 <SelectItem value="without">Ohne Kommentar</SelectItem>
               </SelectContent>
             </Select>
+            {/* CHANGE: Added print QR codes button */}
+            <Button onClick={() => window.open("/admin/print-qr-codes", "_blank")} variant="outline">
+              <Printer className="h-4 w-4 mr-2" />
+              QR-Codes drucken
+            </Button>
             {selectedOrderIds.size > 0 ? (
               <>
                 <Button onClick={() => exportOrders(Array.from(selectedOrderIds))} variant="default">
@@ -1410,7 +1572,8 @@ function OrderManagement() {
                     onNotify={handleNotify}
                     onStatusChange={handleStatusChange}
                     onAdminNotesChange={handleAdminNotesChange}
-                    onSyncStatus={handleSyncStatus} // Pass handleSyncStatus here
+                    onSyncStatus={handleSyncStatus}
+                    onCancelInvoice={handleCancelInvoice} // Pass handleCancelInvoice
                     isSelected={selectedOrderIds.has(order.id)}
                     onSelectionChange={handleOrderSelection}
                   />

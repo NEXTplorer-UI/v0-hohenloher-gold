@@ -67,7 +67,8 @@ export async function GET(request: NextRequest) {
         pickup_location,
         pickup_date,
         notes,
-        created_at
+        created_at,
+        hellocash_invoice_number
       `,
       )
       .eq("customer_id", customer.id)

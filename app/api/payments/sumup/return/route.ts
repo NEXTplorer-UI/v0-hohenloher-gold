@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/server"
 import { verifySumUpCheckout } from "@/lib/sumup/verify"
+import { createInvoiceAfterPayment } from "@/lib/hellocash/create-invoice-after-payment"
 
 export async function GET(req: NextRequest) {
   try {
@@ -38,7 +39,17 @@ export async function GET(req: NextRequest) {
         })
         .eq("id", checkout.id)
 
-      // Redirect to order processing page to show progress
+      const { data: order } = await supabase.from("orders").select("id").eq("checkout_id", checkout.id).single()
+
+      if (order) {
+        const invoiceResult = await createInvoiceAfterPayment(order.id)
+        if (!invoiceResult.success) {
+          console.error("[v0] [SumUp Return] Invoice creation failed:", invoiceResult.error)
+        } else {
+          console.log("[v0] [SumUp Return] Invoice created:", invoiceResult.invoiceNumber)
+        }
+      }
+
       return NextResponse.redirect(new URL(`/order-processing?checkoutId=${checkout.id}&source=sumup`, req.url))
     } else {
       const { error: updateError } = await supabase

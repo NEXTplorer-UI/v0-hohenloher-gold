@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
+import { createInvoiceAfterPayment } from "@/lib/hellocash/create-invoice-after-payment"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -19,7 +20,6 @@ export async function POST(req: Request) {
     })
 
     if (!validation?.valid) {
-      // Bereits bezahlt ist OK für diese Aktion
       if (validation?.error === "already_paid") {
         return NextResponse.json({
           ok: true,
@@ -47,10 +47,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Order nicht gefunden" }, { status: 404 })
     }
 
-    // const helloCashStatus = await fetch(`${HELLOCASH_API_BASE}/invoices/${order.hellocash_invoice_id}`)
-    // if (helloCashStatus.data.status !== 'paid') {
-    //   return NextResponse.json({ error: "Zahlung in helloCash noch nicht bestätigt" }, { status: 400 })
-    // }
+    const invoiceResult = await createInvoiceAfterPayment(order.id)
+
+    if (!invoiceResult.success) {
+      console.error("[mark-paid] Invoice creation failed:", invoiceResult.error)
+      // Continue with status update even if invoice creation fails
+    }
 
     const { error: updateError } = await supabase
       .from("orders")
@@ -84,6 +86,7 @@ export async function POST(req: Request) {
       ok: true,
       hellocash_status: "paid",
       order_number: order.order_number,
+      invoice_number: invoiceResult.invoiceNumber,
     })
   } catch (error: any) {
     console.error("[mark-paid] Error:", error)

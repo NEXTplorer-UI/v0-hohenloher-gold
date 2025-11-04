@@ -92,7 +92,8 @@ export async function GET(request: NextRequest) {
       "Artikel (Einzelpreis)",
       "Artikel (Gesamtpreis)",
       "Notizen",
-      "Admin-Notizen", // Added admin notes column
+      "Admin-Notizen",
+      "QR-Code URL", // Added QR code URL column
     ]
 
     // Helper function to escape CSV values
@@ -182,7 +183,8 @@ export async function GET(request: NextRequest) {
               item.unit_price?.toString() || "0",
               item.total_price?.toString() || "0",
               escapeCSV(order.notes),
-              escapeCSV(order.admin_notes), // Added admin notes to export
+              escapeCSV(order.admin_notes),
+              escapeCSV(order.qr_code_url), // Added QR code URL to export
             ].join(";"),
           )
         })
@@ -210,7 +212,8 @@ export async function GET(request: NextRequest) {
             "",
             "",
             escapeCSV(order.notes),
-            escapeCSV(order.admin_notes), // Added admin notes to export
+            escapeCSV(order.admin_notes),
+            escapeCSV(order.qr_code_url), // Added QR code URL to export
           ].join(";"),
         )
       }

@@ -9,6 +9,7 @@ import {
   getEmailTemplateForPaymentStatus,
   mapDBToUIStatus,
 } from "@/lib/order-status-mapping"
+import { createInvoiceAfterPayment } from "@/lib/hellocash/create-invoice-after-payment"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -62,6 +63,65 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`[v0] [notify-customer] Using template: ${templateId}`)
+
+    if (templateId === "orderCancelled" && order.hellocash_invoice_id && order.status !== "cancelled") {
+      console.log(`[v0] [notify-customer] Cancelling invoice in helloCash...`)
+      try {
+        const helloCashToken = process.env.HELLOCASH_API_TOKEN
+        if (helloCashToken) {
+          const cancelResponse = await fetch(
+            `https://api.hellocash.business/api/v1/invoices/${order.hellocash_invoice_id}/cancellation`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${helloCashToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                cancellation_cashier_id: 838,
+                cancellation_reason: "Bestellung storniert per E-Mail-Benachrichtigung",
+                cancellation_payment_method: "cash",
+              }),
+            },
+          )
+
+          if (cancelResponse.ok) {
+            const cancellationData = await cancelResponse.json()
+            console.log(`[v0] [notify-customer] Invoice cancelled successfully in helloCash`)
+
+            // Update order status
+            await supabase
+              .from("orders")
+              .update({
+                status: "cancelled",
+                hellocash_status: "cancelled",
+                admin_notes: `Storniert per E-Mail\nStorno-Nummer: ${cancellationData.cancellation_details?.number || "N/A"}`,
+              })
+              .eq("id", orderId)
+          } else {
+            console.error(`[v0] [notify-customer] Failed to cancel invoice in helloCash`)
+          }
+        }
+      } catch (cancelError) {
+        console.error(`[v0] [notify-customer] Error cancelling invoice:`, cancelError)
+      }
+    }
+
+    if (templateId === "paymentReceipt" && !order.hellocash_invoice_id && order.payment_status === "paid") {
+      console.log(`[v0] [notify-customer] No invoice found, creating invoice now...`)
+      try {
+        const invoiceResult = await createInvoiceAfterPayment(orderId)
+        if (invoiceResult.success) {
+          order.hellocash_invoice_id = invoiceResult.invoiceId
+          order.hellocash_invoice_number = invoiceResult.invoiceNumber
+          console.log(`[v0] [notify-customer] Invoice created successfully: ${invoiceResult.invoiceNumber}`)
+        } else {
+          console.error(`[v0] [notify-customer] Failed to create invoice: ${invoiceResult.error}`)
+        }
+      } catch (invoiceError) {
+        console.error(`[v0] [notify-customer] Error creating invoice:`, invoiceError)
+      }
+    }
 
     const itemsBySchedule = (order.order_items || []).reduce((acc: any, item: any) => {
       const scheduleId = item.delivery_schedule_id || "no_schedule"
@@ -123,11 +183,55 @@ export async function POST(request: NextRequest) {
 
     const { subject, html } = buildEmail(templateId, finalVars, emailCopy)
 
+    let attachments: Array<{ filename: string; content: string }> | undefined
+
+    if (templateId === "paymentReceipt" && order.hellocash_invoice_id) {
+      try {
+        console.log(`[v0] [notify-customer] Fetching invoice PDF from helloCash...`)
+
+        const helloCashToken = process.env.HELLOCASH_API_TOKEN
+        if (!helloCashToken) {
+          console.warn(`[v0] [notify-customer] HELLOCASH_API_TOKEN not configured, skipping invoice attachment`)
+        } else {
+          const pdfResponse = await fetch(
+            `https://api.hellocash.business/api/v1/invoices/${order.hellocash_invoice_id}/pdf?cancellation=false&locale=de_DE`,
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${helloCashToken}`,
+                Accept: "application/json",
+              },
+            },
+          )
+
+          if (pdfResponse.ok) {
+            const pdfData = await pdfResponse.json()
+            const pdfBase64 = pdfData.pdf_base64_encoded
+
+            attachments = [
+              {
+                filename: `Rechnung_${order.order_number}.pdf`,
+                content: pdfBase64,
+              },
+            ]
+
+            console.log(`[v0] [notify-customer] Invoice PDF attached successfully`)
+          } else {
+            const errorText = await pdfResponse.text()
+            console.error(`[v0] [notify-customer] Failed to fetch invoice PDF: ${pdfResponse.status}`, errorText)
+          }
+        }
+      } catch (pdfError) {
+        console.error(`[v0] [notify-customer] Error fetching invoice PDF:`, pdfError)
+      }
+    }
+
     const result = await resend.emails.send({
       from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
       to: order.customer.email,
       subject,
       html,
+      attachments,
     })
 
     console.log(`[v0] [notify-customer] Email sent successfully to ${order.customer.email}`)
@@ -145,6 +249,7 @@ export async function POST(request: NextRequest) {
           </div>
           ${html}
         `,
+        attachments,
       })
       console.log(`[v0] [notify-customer] Admin copy sent to ${adminEmail}`)
     } catch (adminEmailError) {

@@ -6,6 +6,7 @@ import { mapUIToDBStatus, type UIOrderStatus } from "@/lib/order-status-mapping"
 import { buildEmail } from "@/lib/email/build"
 import { emailCopy } from "@/lib/email/copy"
 import { Resend } from "resend"
+import { createInvoiceAfterPayment } from "@/lib/hellocash/create-invoice-after-payment"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
@@ -63,8 +64,18 @@ export async function POST(request: NextRequest) {
     console.log("[v0] [update-order-status] Order status updated successfully:", orderId)
 
     if (paymentStatus === "paid" && previousPaymentStatus !== "paid") {
+      console.log("[v0] [update-order-status] Creating invoice after payment confirmation")
+      const invoiceResult = await createInvoiceAfterPayment(orderId)
+
+      if (!invoiceResult.success) {
+        console.error("[v0] [update-order-status] Invoice creation failed:", invoiceResult.error)
+        // Continue with email sending even if invoice creation fails
+      } else {
+        console.log("[v0] [update-order-status] Invoice created:", invoiceResult.invoiceNumber)
+      }
+
       try {
-        const templateId = "payment-receipt-template" // Assuming a template ID for payment receipt
+        const templateId = "paymentReceipt"
         if (templateId && currentOrder.customers?.email) {
           console.log(`[v0] [update-order-status] Sending payment receipt email to ${currentOrder.customers.email}`)
 
@@ -95,7 +106,6 @@ export async function POST(request: NextRequest) {
         }
       } catch (emailError) {
         console.error(`[v0] [update-order-status] Failed to send payment receipt email:`, emailError)
-        // Don't fail the status update if email fails
       }
     }
 
@@ -103,8 +113,8 @@ export async function POST(request: NextRequest) {
       try {
         if (status === "confirmed" && previousStatus !== "confirmed") {
           await createMovementsFromOrder(
-            currentOrder.id, // orderId (UUID)
-            currentOrder.order_number, // orderNumber (HG-2024-001)
+            currentOrder.id,
+            currentOrder.order_number,
             currentOrder.order_items.map((item: any) => ({
               id: item.id,
               product_id: item.product_id,
@@ -113,22 +123,22 @@ export async function POST(request: NextRequest) {
               quantity: item.quantity,
               unit_price: item.unit_price,
             })),
-            "Bestellung bestätigt - Ausgang gebucht", // reason
+            "Bestellung bestätigt - Ausgang gebucht",
           )
           console.log(`[v0] Created outgoing inventory movements for confirmed order ${currentOrder.order_number}`)
         } else if (status === "cancelled" && previousStatus === "confirmed") {
           await createMovementsFromOrder(
-            currentOrder.id, // orderId (UUID)
-            currentOrder.order_number, // orderNumber (HG-2024-001)
+            currentOrder.id,
+            currentOrder.order_number,
             currentOrder.order_items.map((item: any) => ({
               id: item.id,
               product_id: item.product_id,
               product_name: item.product_name,
               product_category: item.product_category,
-              quantity: item.quantity, // Will be negated in movement service
+              quantity: item.quantity,
               unit_price: item.unit_price,
             })),
-            "Bestellung storniert - Lager zurückgebucht", // reason
+            "Bestellung storniert - Lager zurückgebucht",
           )
           console.log(`[v0] Created reversal inventory movements for cancelled order ${currentOrder.order_number}`)
         }

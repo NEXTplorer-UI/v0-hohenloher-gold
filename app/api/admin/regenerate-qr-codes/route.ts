@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/auth/api-auth"
 import QRCode from "qrcode"
 import { put } from "@vercel/blob"
 
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 export async function POST(req: Request) {
   try {
     await requireAdmin(req as any)
@@ -33,7 +35,6 @@ export async function POST(req: Request) {
     let errorCount = 0
     const errors: string[] = []
 
-    // Process each order
     for (const order of orders) {
       try {
         const pickupUrl = `https://suedfruechte-hohenlohe.de/pos/pickup?token=${order.pickup_token}`
@@ -57,9 +58,31 @@ export async function POST(req: Request) {
         const qrBlob = new Blob([bytes], { type: "image/png" })
 
         const fileName = `qr-codes/${order.pickup_token}.png`
-        const blob = await put(fileName, qrBlob, {
-          access: "public",
-        })
+
+        let uploadSuccess = false
+        let retries = 0
+        const maxRetries = 3
+        let blob
+
+        while (!uploadSuccess && retries < maxRetries) {
+          try {
+            blob = await put(fileName, qrBlob, {
+              access: "public",
+            })
+            uploadSuccess = true
+          } catch (uploadError: any) {
+            retries++
+            if (retries >= maxRetries) {
+              throw uploadError
+            }
+            // Exponential backoff: 1s, 2s, 4s
+            const backoffDelay = Math.pow(2, retries) * 1000
+            console.log(
+              `[v0] Upload failed for ${order.order_number}, retrying in ${backoffDelay}ms (attempt ${retries}/${maxRetries})`,
+            )
+            await delay(backoffDelay)
+          }
+        }
 
         const now = new Date()
         const expiresAt = new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000) // +45 days
@@ -67,7 +90,7 @@ export async function POST(req: Request) {
         const { error: updateError } = await supabase
           .from("orders")
           .update({
-            qr_code_url: blob.url,
+            qr_code_url: blob!.url,
             qr_code_type: "order",
             qr_code_generated_at: now.toISOString(),
             qr_code_expires_at: expiresAt.toISOString(),
@@ -80,6 +103,8 @@ export async function POST(req: Request) {
 
         successCount++
         console.log(`[v0] QR code regenerated for order ${order.order_number}`)
+
+        await delay(200)
       } catch (error: any) {
         errorCount++
         const errorMsg = `Order ${order.order_number}: ${error.message}`

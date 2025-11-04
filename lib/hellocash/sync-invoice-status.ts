@@ -4,7 +4,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-const HELLOCASH_API_URL = "https://api.hellocash.net"
+const HELLOCASH_API_URL = "https://api.hellocash.business"
 const HELLOCASH_BEARER_TOKEN = process.env.HELLOCASH_BEARER_TOKEN
 
 interface SyncResult {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/server"
 import { withErrorHandling } from "@/lib/errors/error-handler"
 import { AuthenticationError, DatabaseError } from "@/lib/errors/api-errors"
 
@@ -17,6 +18,8 @@ export const POST = withErrorHandling(async () => {
     throw new AuthenticationError()
   }
 
+  const adminSupabase = createAdminClient()
+
   // Anonymize customer data (GDPR compliant - keep records for legal/accounting)
   const anonymizedData = {
     first_name: "Gelöscht",
@@ -31,11 +34,11 @@ export const POST = withErrorHandling(async () => {
     address: null,
     marketing_consent: false,
     newsletter_subscribed: false,
-    notes: "Account gelöscht auf Anfrage des Nutzers (GDPR Art. 17)",
-    user_id: null, // Disconnect from auth user
+    special_requests: "Account gelöscht auf Anfrage des Nutzers (GDPR Art. 17)",
+    user_id: null,
   }
 
-  const { error: customerError } = await supabase.from("customers").update(anonymizedData).eq("user_id", user.id)
+  const { error: customerError } = await adminSupabase.from("customers").update(anonymizedData).eq("user_id", user.id)
 
   if (customerError) {
     console.error("[v0] Error anonymizing customer:", customerError)
@@ -43,37 +46,43 @@ export const POST = withErrorHandling(async () => {
   }
 
   // Anonymize orders (keep for accounting, but remove personal data)
-  const { error: ordersError } = await supabase
+  const { error: ordersError } = await adminSupabase
     .from("orders")
     .update({
-      customer_email: `deleted-${user.id}@anonymized.local`,
-      customer_name: "Gelöscht",
-      customer_phone: null,
-      delivery_address: "Adresse gelöscht",
       notes: "Kundendaten anonymisiert (GDPR Art. 17)",
-      user_id: null, // Disconnect from auth user
+      user_id: null,
     })
     .eq("user_id", user.id)
 
   if (ordersError) {
     console.error("[v0] Error anonymizing orders:", ordersError)
-    // Don't throw - orders anonymization is optional
   }
 
   // Delete profile
-  const { error: profileError } = await supabase.from("profiles").delete().eq("id", user.id)
+  const { error: profileError } = await adminSupabase.from("profiles").delete().eq("id", user.id)
 
   if (profileError) {
     console.error("[v0] Error deleting profile:", profileError)
-    // Don't throw - profile deletion is optional
   }
 
-  const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(user.id)
+  try {
+    const { error: banError } = await adminSupabase.auth.admin.updateUserById(user.id, {
+      ban_duration: "876000h", // Ban for 100 years (effectively permanent)
+    })
 
-  if (deleteAuthError) {
-    console.error("[v0] Error deleting auth user:", deleteAuthError)
-    throw new DatabaseError("Fehler beim Löschen des Accounts", deleteAuthError)
+    if (banError) {
+      console.error("[v0] Error banning auth user:", banError.message)
+      // If banning fails, try to sign out the user at least
+      await supabase.auth.signOut()
+      throw new DatabaseError("Fehler beim Deaktivieren des Accounts", banError)
+    }
+  } catch (error) {
+    console.error("[v0] Error banning auth user:", error)
+    throw new DatabaseError("Fehler beim Deaktivieren des Accounts")
   }
+
+  // Sign out the user
+  await supabase.auth.signOut()
 
   return NextResponse.json({
     success: true,

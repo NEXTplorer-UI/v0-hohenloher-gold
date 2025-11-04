@@ -100,13 +100,13 @@ export function UserAccountDropdown() {
             <DropdownMenuLabel>Willkommen</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/auth/login" className="cursor-pointer">
+              <Link href="/customer/login" className="cursor-pointer">
                 <LogIn className="mr-2 h-4 w-4" />
                 <span>Anmelden</span>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/auth/register" className="cursor-pointer">
+              <Link href="/customer/register" className="cursor-pointer">
                 <UserPlus className="mr-2 h-4 w-4" />
                 <span>Registrieren</span>
               </Link>

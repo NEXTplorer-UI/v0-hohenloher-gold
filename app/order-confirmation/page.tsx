@@ -121,8 +121,6 @@ function OrderConfirmationContent() {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false)
   const [feedbackLoading, setFeedbackLoading] = useState(false)
 
-  const NEXT_PICKUP_DATE = "15. Dezember 2024"
-
   useEffect(() => {
     const fetchOrderDetails = async () => {
       try {
@@ -248,7 +246,15 @@ function OrderConfirmationContent() {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
                     <div>
                       <p className="font-medium text-sm sm:text-base">Nächster Abholtermin</p>
-                      <p className="text-lg font-bold text-foreground mt-2 mb-3">{NEXT_PICKUP_DATE}</p>
+                      <p className="text-lg font-bold text-foreground mt-2 mb-3">
+                        {orderDetails?.pickup_date
+                          ? new Date(orderDetails.pickup_date + "T00:00:00").toLocaleDateString("de-DE", {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            })
+                          : "Wird noch bekannt gegeben"}
+                      </p>
                       {orderDetails?.delivery_comment && (
                         <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                           <p className="text-sm text-yellow-800">{orderDetails.delivery_comment}</p>
@@ -256,7 +262,16 @@ function OrderConfirmationContent() {
                       )}
                       <p className="text-sm text-muted-foreground mt-3 flex items-center space-x-1">
                         <Clock className="w-4 h-4" />
-                        <span>Bestellschluss: {orderDetails?.order_deadline || "Wird bekannt gegeben"}</span>
+                        <span>
+                          Bestellschluss:{" "}
+                          {orderDetails?.order_deadline
+                            ? new Date(orderDetails.order_deadline + "T00:00:00").toLocaleDateString("de-DE", {
+                                day: "numeric",
+                                month: "long",
+                                year: "numeric",
+                              })
+                            : "Wird bekannt gegeben"}
+                        </span>
                       </p>
                       {orderDetails?.pickup_start_time && orderDetails?.pickup_end_time && (
                         <p className="text-sm text-muted-foreground mt-1">
@@ -270,7 +285,19 @@ function OrderConfirmationContent() {
                       variant="outline"
                       size="sm"
                       className="gap-2 bg-transparent w-full sm:w-auto"
-                      onClick={() => downloadCalendarEvent(NEXT_PICKUP_DATE, orderNumber)}
+                      onClick={() =>
+                        downloadCalendarEvent(
+                          orderDetails?.pickup_date
+                            ? new Date(orderDetails.pickup_date + "T00:00:00").toLocaleDateString("de-DE", {
+                                day: "numeric",
+                                month: "long",
+                                year: "numeric",
+                              })
+                            : "Wird noch bekannt gegeben",
+                          orderNumber,
+                        )
+                      }
+                      disabled={!orderDetails?.pickup_date}
                     >
                       <Download className="w-4 h-4" />
                       <span className="text-sm">Termin herunterladen</span>

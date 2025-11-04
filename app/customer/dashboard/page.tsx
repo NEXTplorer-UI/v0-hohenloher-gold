@@ -56,6 +56,7 @@ interface Order {
   pickup_date?: string
   notes?: string
   items: OrderItem[]
+  hellocash_invoice_number?: string
 }
 
 interface OrderItem {
@@ -403,6 +404,11 @@ function DashboardContent({ user }: { user: any }) {
                                 )}
                                 {order.delivery_method === "delivery" && <span className="text-xs">Lieferung</span>}
                               </div>
+                              {order.hellocash_invoice_number && (
+                                <div className="text-sm text-muted-foreground">
+                                  <span className="font-medium">Rechnungsnummer:</span> {order.hellocash_invoice_number}
+                                </div>
+                              )}
                               {order.pickup_date && (
                                 <div className="text-sm text-muted-foreground">
                                   <span className="font-medium">Liefertermin:</span>{" "}
@@ -414,6 +420,21 @@ function DashboardContent({ user }: { user: any }) {
                                 </div>
                               )}
                             </div>
+                            {order.payment_status === "paid" && order.hellocash_invoice_number && (
+                              <div className="flex-shrink-0">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-2 bg-transparent"
+                                  onClick={() => {
+                                    window.open(`/api/invoices/${order.id}/pdf`, "_blank")
+                                  }}
+                                >
+                                  <Download className="w-4 h-4" />
+                                  Rechnung herunterladen
+                                </Button>
+                              </div>
+                            )}
                           </div>
                           <div className="mt-4">
                             <p className="text-sm font-medium mb-2">Artikel ({order.items.length}):</p>
