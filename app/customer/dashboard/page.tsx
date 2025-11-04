@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Switch } from "@/components/ui/switch"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import {
@@ -20,6 +21,7 @@ import {
   Shield,
   RefreshCw,
   Users,
+  Bell,
 } from "lucide-react"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { ProfileEditModal } from "@/components/customer/profile-edit-modal"
@@ -34,6 +36,9 @@ interface CustomerProfile {
   address?: string
   city?: string
   postal_code?: string
+  newsletter_subscribed?: boolean
+  reminder_notifications?: boolean
+  marketing_consent?: boolean
 }
 
 interface Order {
@@ -70,6 +75,10 @@ function DashboardContent({ user }: { user: any }) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isProfileEditOpen, setIsProfileEditOpen] = useState(false)
+  const [newsletterSubscribed, setNewsletterSubscribed] = useState(false)
+  const [reminderNotifications, setReminderNotifications] = useState(false)
+  const [marketingConsent, setMarketingConsent] = useState(false)
+  const [isSavingPreferences, setIsSavingPreferences] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -102,6 +111,9 @@ function DashboardContent({ user }: { user: any }) {
         console.log("[v0] Profile error:", profileError)
       } else {
         setProfile(profileData)
+        setNewsletterSubscribed(profileData.newsletter_subscribed || false)
+        setReminderNotifications(profileData.reminder_notifications || false)
+        setMarketingConsent(profileData.marketing_consent || false)
       }
     } catch (error) {
       console.error("[v0] Error loading customer data:", error)
@@ -118,19 +130,44 @@ function DashboardContent({ user }: { user: any }) {
   }
 
   const handleExportData = async () => {
+    console.log("[v0] Export data button clicked")
     try {
+      console.log("[v0] Fetching export data from API...")
       const response = await fetch("/api/customer/export-data")
+
+      console.log("[v0] Response status:", response.status)
+      console.log("[v0] Response headers:", Object.fromEntries(response.headers.entries()))
+
       if (!response.ok) {
         throw new Error("Export fehlgeschlagen")
       }
 
-      const blob = await response.blob()
+      // Get the filename from Content-Disposition header or use default
+      const contentDisposition = response.headers.get("Content-Disposition")
+      let filename = `hohenloher-gold-datenexport-${new Date().toISOString().split("T")[0]}.txt`
+
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/)
+        if (filenameMatch) {
+          filename = filenameMatch[1]
+        }
+      }
+
+      console.log("[v0] Downloading file:", filename)
+
+      // Get the text content and create a proper blob
+      const text = await response.text()
+      const blob = new Blob([text], { type: "text/csv; charset=utf-8" })
+
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `hohenloher-gold-daten-${Date.now()}.json`
+      a.download = filename
       document.body.appendChild(a)
       a.click()
+
+      console.log("[v0] Download triggered successfully")
+
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (error) {
@@ -208,9 +245,54 @@ function DashboardContent({ user }: { user: any }) {
     loadCustomerData(user.id)
   }
 
+  const handlePreferenceChange = async (field: "newsletter" | "reminders" | "marketing", value: boolean) => {
+    setIsSavingPreferences(true)
+    try {
+      const updateData =
+        field === "newsletter"
+          ? { newsletter_subscribed: value }
+          : field === "reminders"
+            ? { reminder_notifications: value }
+            : { marketing_consent: value }
+
+      const response = await fetch("/api/customer/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      })
+
+      if (!response.ok) {
+        throw new Error("Fehler beim Speichern")
+      }
+
+      const result = await response.json()
+
+      if (field === "newsletter") {
+        setNewsletterSubscribed(value)
+      } else if (field === "reminders") {
+        setReminderNotifications(value)
+      } else {
+        setMarketingConsent(value)
+      }
+
+      console.log("[v0] Preferences updated successfully")
+    } catch (error) {
+      console.error("[v0] Error updating preferences:", error)
+      alert("Fehler beim Speichern der Einstellungen")
+      if (field === "newsletter") {
+        setNewsletterSubscribed(!value)
+      } else if (field === "reminders") {
+        setReminderNotifications(!value)
+      } else {
+        setMarketingConsent(!value)
+      }
+    } finally {
+      setIsSavingPreferences(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50">
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-end items-center mb-6">
           <div className="flex items-center gap-4 bg-white px-4 py-2 rounded-lg shadow-sm border">
@@ -235,7 +317,6 @@ function DashboardContent({ user }: { user: any }) {
           </div>
         </div>
 
-        {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-foreground mb-2">
             Willkommen zurück, {profile?.first_name || "Kunde"}!
@@ -263,7 +344,6 @@ function DashboardContent({ user }: { user: any }) {
             </TabsTrigger>
           </TabsList>
 
-          {/* Orders Tab */}
           <TabsContent value="orders" className="space-y-6">
             <Card>
               <CardHeader>
@@ -326,7 +406,7 @@ function DashboardContent({ user }: { user: any }) {
                               {order.pickup_date && (
                                 <div className="text-sm text-muted-foreground">
                                   <span className="font-medium">Liefertermin:</span>{" "}
-                                  {new Date(order.pickup_date).toLocaleDateString("de-DE", {
+                                  {new Date(order.pickup_date + "T00:00:00").toLocaleDateString("de-DE", {
                                     day: "2-digit",
                                     month: "long",
                                     year: "numeric",
@@ -368,7 +448,6 @@ function DashboardContent({ user }: { user: any }) {
             </Card>
           </TabsContent>
 
-          {/* Profile Tab */}
           <TabsContent value="profile" className="space-y-6">
             <Card>
               <CardHeader>
@@ -418,14 +497,92 @@ function DashboardContent({ user }: { user: any }) {
                 </div>
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="w-5 h-5" />
+                  Benachrichtigungseinstellungen
+                </CardTitle>
+                <CardDescription>
+                  Verwalten Sie Ihre E-Mail-Benachrichtigungen und Newsletter-Einstellungen
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-start justify-between gap-4 p-4 border rounded-lg">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold">Marketing-E-Mails</span>
+                      {marketingConsent && (
+                        <Badge variant="secondary" className="text-xs">
+                          Aktiv
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Erhalten Sie personalisierte Angebote und Produktempfehlungen per E-Mail
+                    </p>
+                  </div>
+                  <Switch
+                    checked={marketingConsent}
+                    onCheckedChange={(checked) => handlePreferenceChange("marketing", checked)}
+                    disabled={isSavingPreferences}
+                  />
+                </div>
+
+                <div className="flex items-start justify-between gap-4 p-4 border rounded-lg">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold">Newsletter</span>
+                      {newsletterSubscribed && (
+                        <Badge variant="secondary" className="text-xs">
+                          Aktiv
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Erhalten Sie Neuigkeiten, Angebote und Informationen zu neuen Produkten per E-Mail
+                    </p>
+                  </div>
+                  <Switch
+                    checked={newsletterSubscribed}
+                    onCheckedChange={(checked) => handlePreferenceChange("newsletter", checked)}
+                    disabled={isSavingPreferences}
+                  />
+                </div>
+
+                <div className="flex items-start justify-between gap-4 p-4 border rounded-lg">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-semibold">Abholungs-Erinnerungen</span>
+                      {reminderNotifications && (
+                        <Badge variant="secondary" className="text-xs">
+                          Aktiv
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Erhalten Sie Erinnerungen an bevorstehende Abholtermine für Ihre Bestellungen
+                    </p>
+                  </div>
+                  <Switch
+                    checked={reminderNotifications}
+                    onCheckedChange={(checked) => handlePreferenceChange("reminders", checked)}
+                    disabled={isSavingPreferences}
+                  />
+                </div>
+
+                {isSavingPreferences && (
+                  <p className="text-sm text-muted-foreground text-center">Einstellungen werden gespeichert...</p>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
-          {/* Distributor Tab */}
           <TabsContent value="distributor" className="space-y-6">
             <DistributorTab />
           </TabsContent>
 
-          {/* Privacy Tab */}
           <TabsContent value="privacy" className="space-y-6">
             <Card>
               <CardHeader>
@@ -438,7 +595,6 @@ function DashboardContent({ user }: { user: any }) {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Data Export Section */}
                 <div className="border rounded-lg p-6 space-y-4">
                   <div className="flex items-start gap-4">
                     <div className="p-3 bg-primary/10 rounded-lg">
@@ -455,13 +611,12 @@ function DashboardContent({ user }: { user: any }) {
                       </p>
                       <Button onClick={handleExportData} variant="outline" className="gap-2 bg-transparent">
                         <Download className="w-4 h-4" />
-                        Daten als JSON exportieren
+                        Daten exportieren
                       </Button>
                     </div>
                   </div>
                 </div>
 
-                {/* Data Retention Policy */}
                 <div className="border rounded-lg p-6 space-y-4">
                   <div className="flex items-start gap-4">
                     <div className="p-3 bg-blue-100 rounded-lg">
@@ -482,7 +637,6 @@ function DashboardContent({ user }: { user: any }) {
                   </div>
                 </div>
 
-                {/* Account Deletion Section */}
                 <div className="border border-destructive/50 rounded-lg p-6 space-y-4 bg-destructive/5">
                   <div className="flex items-start gap-4">
                     <div className="p-3 bg-destructive/10 rounded-lg">
@@ -517,7 +671,6 @@ function DashboardContent({ user }: { user: any }) {
                   </div>
                 </div>
 
-                {/* Privacy Policy Link */}
                 <div className="text-center pt-4">
                   <p className="text-sm text-muted-foreground">
                     Weitere Informationen finden Sie in unserer{" "}
@@ -532,7 +685,6 @@ function DashboardContent({ user }: { user: any }) {
         </Tabs>
       </main>
 
-      {/* Profile Edit Modal */}
       {profile && (
         <ProfileEditModal
           open={isProfileEditOpen}

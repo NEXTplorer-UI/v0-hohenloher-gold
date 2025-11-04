@@ -44,10 +44,7 @@ export async function POST(request: NextRequest) {
 
     const { name, address, postal_code, city, contact_person, contact_phone, is_active } = body
 
-    // Validation
-    if (!name || !address || !postal_code || !city) {
-      return NextResponse.json({ error: "Name, Adresse, PLZ und Stadt sind Pflichtfelder" }, { status: 400 })
-    }
+    // All fields are now optional
 
     const { data: location, error } = await supabase
       .from("pickup_locations")

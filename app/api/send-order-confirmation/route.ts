@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
       orderItems,
       hasCitrusFruits,
       order_time,
+      pickupToken, // Added pickupToken parameter
     } = body
 
     if (!customerEmail || !customerName || !orderId || !orderTotal || !paymentMethod) {
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
       orderItems,
       hasCitrusFruits,
       order_time, // Pass order_time directly (email service expects orderDate parameter)
+      pickupToken, // Pass pickupToken to email service
     )
 
     if (success) {

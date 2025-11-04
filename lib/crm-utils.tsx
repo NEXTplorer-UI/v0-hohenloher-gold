@@ -47,6 +47,7 @@ export interface OrderData {
   pickupStartTime?: string | null
   pickupEndTime?: string | null
   isTest?: boolean // Added optional test flag
+  pickupToken?: string // Added optional pickup token
 }
 
 export async function saveCustomerToCRM(customerData: CustomerData) {
@@ -199,7 +200,7 @@ export async function sendOrderConfirmationEmail(orderData: OrderData) {
     const orderItems = orderData.items.map((item) => ({
       product_name: item.name,
       quantity: item.quantity,
-      unit: item.unit,
+      product_size: item.unit, // Pass the unit as product_size
       unit_price: Number.parseFloat(item.price),
       total_price: item.quantity * Number.parseFloat(item.price),
     }))
@@ -208,24 +209,40 @@ export async function sendOrderConfirmationEmail(orderData: OrderData) {
       (item) => item.category.toLowerCase() === "citrus" || item.category.toLowerCase() === "südfrüchte",
     )
 
+    console.log("[v0] [sendOrderConfirmationEmail] Order data received:", {
+      deliveryMethod: orderData.deliveryMethod,
+      deliveryDate: orderData.deliveryDate,
+      hasCitrusFruits,
+    })
+
     let formattedPickupDate: string | undefined = undefined
     if (orderData.deliveryMethod === "pickup" && orderData.deliveryDate) {
-      const date = new Date(orderData.deliveryDate)
+      // Add T00:00:00 to ensure local time interpretation
+      const date = new Date(orderData.deliveryDate + "T00:00:00")
       formattedPickupDate = date.toLocaleDateString("de-DE", {
         day: "2-digit",
         month: "long",
         year: "numeric",
       })
+      console.log("[v0] [sendOrderConfirmationEmail] Formatted pickup date:", formattedPickupDate)
     }
 
     if (orderData.deliveryMethod === "delivery" && orderData.deliveryDate) {
-      const date = new Date(orderData.deliveryDate)
+      // Add T00:00:00 to ensure local time interpretation
+      const date = new Date(orderData.deliveryDate + "T00:00:00")
       formattedPickupDate = date.toLocaleDateString("de-DE", {
         day: "2-digit",
         month: "long",
         year: "numeric",
       })
+      console.log("[v0] [sendOrderConfirmationEmail] Formatted delivery date:", formattedPickupDate)
     }
+
+    console.log("[v0] [sendOrderConfirmationEmail] Sending email with:", {
+      pickupDate: formattedPickupDate,
+      hasCitrusFruits,
+      deliveryMethod: orderData.deliveryMethod,
+    })
 
     const response = await fetch("/api/send-order-confirmation", {
       method: "POST",
@@ -244,6 +261,7 @@ export async function sendOrderConfirmationEmail(orderData: OrderData) {
         pickupEndTime: orderData.pickupEndTime,
         orderItems,
         hasCitrusFruits,
+        pickupToken: orderData.pickupToken, // Pass pickup token if available
       }),
     })
 

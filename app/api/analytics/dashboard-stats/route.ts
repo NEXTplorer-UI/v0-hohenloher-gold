@@ -68,6 +68,8 @@ export async function GET(request: NextRequest) {
         {} as Record<string, { count: number; revenue: number }>,
       ) || {}
 
+    console.log("[v0] Payment methods found:", Object.keys(paymentMethodStats))
+
     // Calculate revenue growth (this month vs last month)
     const now_date = new Date()
     const thisMonth = new Date(now_date.getFullYear(), now_date.getMonth(), 1)
@@ -108,7 +110,7 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Dashboard stats: Fetched", activeCustomers?.length || 0, "active customers")
 
-    // Get new customers this week
+    // Fetch new customers this week
     const weekAgo = new Date()
     weekAgo.setDate(weekAgo.getDate() - 7)
 
@@ -125,39 +127,44 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Dashboard stats: Fetched", newCustomers?.length || 0, "new customers")
 
-    // Get pending orders
-    console.log("[v0] Dashboard stats: Fetching pending orders...")
+    // Fetch open orders
+    console.log("[v0] Dashboard stats: Fetching open orders...")
     const { data: pendingOrders, error: pendingError } = await supabase
       .from("orders")
-      .select("id, pickup_date")
-      .eq("status", "pending")
+      .select("id, pickup_date, status")
+      .in("status", ["pending", "confirmed", "ready_for_pickup"])
 
     if (pendingError) {
-      console.error("[v0] Dashboard stats error fetching pending orders:", pendingError)
-      throw new Error(`Failed to fetch pending orders: ${pendingError.message}`)
+      console.error("[v0] Dashboard stats error fetching open orders:", pendingError)
+      throw new Error(`Failed to fetch open orders: ${pendingError.message}`)
     }
 
-    console.log("[v0] Dashboard stats: Fetched", pendingOrders?.length || 0, "pending orders")
+    console.log("[v0] Dashboard stats: Fetched", pendingOrders?.length || 0, "open orders")
 
     const nextPickup = pendingOrders?.reduce(
       (earliest, order) => {
         if (!order.pickup_date) return earliest
-        const pickupDate = new Date(order.pickup_date)
+        const pickupDate = new Date(order.pickup_date + "T00:00:00")
         return !earliest || pickupDate < earliest ? pickupDate : earliest
       },
       null as Date | null,
     )
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const now_utc = new Date()
+    const today = new Date(now_utc.getFullYear(), now_utc.getMonth(), now_utc.getDate())
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
+
+    console.log("[v0] Date range for today:", today.toISOString(), "to", tomorrow.toISOString())
 
     const todayOrders =
       orders?.filter((order) => {
         const orderDate = new Date(order.created_at)
-        return orderDate >= today && orderDate < tomorrow
+        const orderDateOnly = new Date(orderDate.getFullYear(), orderDate.getMonth(), orderDate.getDate())
+        return orderDateOnly.getTime() === today.getTime()
       }).length || 0
+
+    console.log("[v0] Orders today:", todayOrders)
 
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
@@ -165,17 +172,26 @@ export async function GET(request: NextRequest) {
     const yesterdayOrders =
       orders?.filter((order) => {
         const orderDate = new Date(order.created_at)
-        return orderDate >= yesterday && orderDate < today
+        const orderDateOnly = new Date(orderDate.getFullYear(), orderDate.getMonth(), orderDate.getDate())
+        return orderDateOnly.getTime() === yesterday.getTime()
       }).length || 0
 
+    console.log("[v0] Orders yesterday:", yesterdayOrders)
+
     const weekStart = new Date(today)
-    weekStart.setDate(today.getDate() - today.getDay())
+    const dayOfWeek = weekStart.getDay()
+    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1 // If Sunday (0), go back 6 days, else go back to Monday
+    weekStart.setDate(today.getDate() - daysToMonday)
+
+    console.log("[v0] Week starts on:", weekStart.toISOString())
 
     const thisWeekOrders =
       orders?.filter((order) => {
         const orderDate = new Date(order.created_at)
         return orderDate >= weekStart
       }).length || 0
+
+    console.log("[v0] Orders this week:", thisWeekOrders)
 
     const lastWeekStart = new Date(weekStart)
     lastWeekStart.setDate(weekStart.getDate() - 7)
@@ -188,13 +204,13 @@ export async function GET(request: NextRequest) {
 
     const weeklyGrowth = lastWeekOrders > 0 ? ((thisWeekOrders - lastWeekOrders) / lastWeekOrders) * 100 : 0
 
-    const avgOrderValue = activeOrders.length > 0 ? totalRevenue / activeOrders.length : 0
-
     const pickedUpOrders = activeOrders.filter((order) => order.status === "completed").length
     const completionRate = activeOrders.length > 0 ? (pickedUpOrders / activeOrders.length) * 100 : 0
 
     const pickupMethodOrders = activeOrders.filter((order) => order.delivery_method === "pickup").length
     const deliveryMethodOrders = activeOrders.filter((order) => order.delivery_method === "delivery").length
+
+    const avgOrderValue = activeOrders.length > 0 ? totalRevenue / activeOrders.length : 0
 
     const stats = {
       totalRevenue: Math.round(totalRevenue * 100) / 100,

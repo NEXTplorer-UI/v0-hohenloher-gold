@@ -44,41 +44,11 @@ export async function GET(request: NextRequest) {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
     const newSubscribers7d = subscribers?.filter((sub) => new Date(sub.created_at) >= sevenDaysAgo).length || 0
 
-    const { data: emailStats, error: emailStatsError } = await supabase.from("email_sends").select("*")
-
-    let openRate = 0
-    let clickRate = 0
-    let bounceRate = 0
-
-    if (!emailStatsError && emailStats && emailStats.length > 0) {
-      const totalSent = emailStats.filter((e) => e.status === "sent").length
-      const totalOpened = emailStats.filter((e) => e.opened_at !== null).length
-      const totalClicked = emailStats.filter((e) => e.clicked_at !== null).length
-      const totalBounced = emailStats.filter((e) => e.bounced_at !== null).length
-
-      if (totalSent > 0) {
-        openRate = Math.round((totalOpened / totalSent) * 100)
-        clickRate = Math.round((totalClicked / totalSent) * 100)
-        bounceRate = Math.round((totalBounced / totalSent) * 100)
-      }
-
-      console.log("[v0] Email tracking stats:", {
-        totalSent,
-        totalOpened,
-        totalClicked,
-        totalBounced,
-        openRate,
-        clickRate,
-        bounceRate,
-      })
-    }
-
-    const { data: newsletterSends, error: newsletterSendsError } = await supabase
-      .from("newsletter_sends")
-      .select("id")
-      .eq("status", "completed")
-
-    const newslettersSent = newsletterSends?.length || 0
+    // Email statistics will be retrieved from Resend API in the future if needed
+    const openRate = 0
+    const clickRate = 0
+    const bounceRate = 0
+    const newslettersSent = 0
 
     console.log("[v0] Newsletter stats loaded successfully:", {
       subscribers: totalSubscribers,

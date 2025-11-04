@@ -95,7 +95,7 @@ export async function GET(request: Request) {
         const customerName = `${customer.first_name} ${customer.last_name}`
 
         // Format pickup date
-        const pickupDate = new Date(order.pickup_date).toLocaleDateString("de-DE", {
+        const pickupDate = new Date(order.pickup_date + "T00:00:00").toLocaleDateString("de-DE", {
           weekday: "long",
           year: "numeric",
           month: "long",

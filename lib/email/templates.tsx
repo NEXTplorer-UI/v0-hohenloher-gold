@@ -35,16 +35,60 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
 
   const paymentMethodDisplay = getPaymentMethodLabel(vars.paymentMethod)
 
-  const itemsList = vars.orderItems
-    ? (vars.orderItems as any[])
-        .map(
-          (item) =>
-            `<div class="data-row">
-          <span class="data-label">${item.product_name}</span>
-          <span class="data-value">${item.quantity} ${item.unit || "Stück"} à €${item.unit_price?.toFixed(2) || "0.00"} = €${item.total_price?.toFixed(2) || "0.00"}</span>
-        </div>`,
-        )
+  const itemsBySchedule = vars.itemsBySchedule as any[] | undefined
+  const hasDeliverySchedules = itemsBySchedule && itemsBySchedule.length > 0
+
+  const itemsList = hasDeliverySchedules
+    ? itemsBySchedule
+        .map((group: any) => {
+          const schedule = group.schedule
+          const scheduleHeader = schedule
+            ? `<div style="background: #fef3c7; padding: 12px; border-radius: 6px; margin: 20px 0 12px 0; border-left: 4px solid #d4af37;">
+               <p style="margin: 0; font-weight: bold; color: #000;">📅 Liefertermin: ${new Date(schedule.delivery_date).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</p>
+               ${schedule.pickup_start_time && schedule.pickup_end_time ? `<p style="margin: 5px 0 0 0; color: #666;">⏰ Abholzeit: ${schedule.pickup_start_time} - ${schedule.pickup_end_time} Uhr</p>` : ""}
+             </div>`
+            : ""
+
+          const items = group.items
+            .map(
+              (item: any) =>
+                `<div class="data-row">
+            <span class="data-label">${item.products?.name || item.product_name || "Unbekanntes Produkt"}${item.product_size ? ` (${item.product_size})` : ""}</span>
+            <span class="data-value">${item.quantity} ${item.products?.unit || item.unit || "Stück"} à €${(item.unit_price / 100).toFixed(2)} = €${(item.total_price / 100).toFixed(2)}</span>
+          </div>`,
+            )
+            .join("")
+
+          return scheduleHeader + items
+        })
         .join("")
+    : vars.orderItems
+      ? (vars.orderItems as any[])
+          .map(
+            (item) =>
+              `<div class="data-row">
+            <span class="data-label">${item.product_name}${item.product_size ? ` (${item.product_size})` : ""}</span>
+            <span class="data-value">${item.quantity} ${item.unit || "Stück"} à €${item.unit_price?.toFixed(2) || "0.00"} = €${item.total_price?.toFixed(2) || "0.00"}</span>
+          </div>`,
+          )
+          .join("")
+      : ""
+
+  const pickupLinkSection = vars.pickupToken
+    ? `
+    <div style="text-align: center; margin: 30px 0; padding: 20px; background: #fef3c7; border-radius: 8px;">
+      <p style="margin: 0 0 15px 0; font-size: 16px; font-weight: bold; color: #000;">
+        🎫 Ihre Bestellung online anzeigen
+      </p>
+      <a href="https://suedfruechte-hohenlohe.de/pos/pickup?token=${vars.pickupToken}" 
+         style="display: inline-block; background: #d4af37; color: #000; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+        Ihre Bestellung anzeigen
+      </a>
+      <p style="font-size: 13px; color: #666; margin: 12px 0 0 0;">
+        Dieser Link ist 45 Tage gültig und führt zu Ihren Bestelldetails mit QR-Code für die Abholung.
+      </p>
+    </div>
+  `
     : ""
 
   const bankDetailsSection =
@@ -83,7 +127,6 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
       </div>
       `
           : ""
-        // </CHANGE>
       }
     </div>
   `
@@ -111,8 +154,16 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
       <p><strong>${copy.orderConfirmation.orderNumber}</strong> {{orderId}}</p>
       <p><strong>${copy.orderConfirmation.totalAmount}</strong> €{{orderTotal}}</p>
       <p><strong>${copy.orderConfirmation.paymentMethod}</strong> ${paymentMethodDisplay}</p>
-      {{#if pickupDate}}<p><strong>${vars.deliveryMethod === "delivery" ? "Voraussichtlicher Liefertermin:" : copy.orderConfirmation.pickupDate}</strong> {{pickupDate}}</p>{{/if}}
+      ${
+        vars.hasCitrusFruits && vars.pickupDate
+          ? `<p><strong>🍊 Liefertermin Südfrüchte:</strong> {{pickupDate}}</p>`
+          : vars.pickupDate
+            ? `<p><strong>${vars.deliveryMethod === "delivery" ? "Voraussichtlicher Liefertermin:" : copy.orderConfirmation.pickupDate}</strong> {{pickupDate}}</p>`
+            : ""
+      }
     </div>
+    
+    ${pickupLinkSection}
     
     ${itemsList ? `<div class="data-section"><h3>${copy.orderConfirmation.itemsHeading}</h3>${itemsList}</div>` : ""}
     

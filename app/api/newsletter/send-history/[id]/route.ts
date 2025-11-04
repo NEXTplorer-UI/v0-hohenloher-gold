@@ -11,23 +11,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const supabase = await createAdminClient()
 
   try {
-    // Get newsletter send details
-    const { data: send, error: sendError } = await supabase.from("newsletter_sends").select("*").eq("id", id).single()
-
-    if (sendError) throw sendError
-
-    // Get all email sends for this newsletter
-    const { data: emailSends, error: emailsError } = await supabase
-      .from("email_sends")
-      .select("*")
-      .eq("newsletter_send_id", id)
-      .order("created_at", { ascending: false })
-
-    if (emailsError) throw emailsError
-
+    // Return empty data for now - send details will be tracked via Resend API in the future
     return NextResponse.json({
-      send,
-      emailSends: emailSends || [],
+      send: null,
+      emailSends: [],
     })
   } catch (error) {
     console.error("[v0] Error fetching send details:", error)

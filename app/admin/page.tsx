@@ -320,6 +320,8 @@ function CustomerSegments() {
 function AdminDashboardContent() {
   const { state, dispatch, updateActivity, handleLogout } = useAdmin()
   const router = useRouter()
+  const [activeTab, setActiveTab] = useState("overview")
+  const [isRegeneratingQR, setIsRegeneratingQR] = useState(false)
 
   const supabase = useMemo(() => createClient(), [])
 
@@ -394,77 +396,110 @@ function AdminDashboardContent() {
           <Button
             variant="ghost"
             className="justify-start"
-            onClick={() => dispatch({ type: "SET_MOBILE_SHEET", payload: false })}
+            onClick={() => {
+              setActiveTab("overview")
+              dispatch({ type: "SET_MOBILE_SHEET", payload: false })
+            }}
           >
             Übersicht
           </Button>
           <Button
             variant="ghost"
             className="justify-start"
-            onClick={() => dispatch({ type: "SET_MOBILE_SHEET", payload: false })}
+            onClick={() => {
+              setActiveTab("customers")
+              dispatch({ type: "SET_MOBILE_SHEET", payload: false })
+            }}
           >
             Kunden
           </Button>
           <Button
             variant="ghost"
             className="justify-start"
-            onClick={() => dispatch({ type: "SET_MOBILE_SHEET", payload: false })}
+            onClick={() => {
+              setActiveTab("orders")
+              dispatch({ type: "SET_MOBILE_SHEET", payload: false })
+            }}
           >
             Bestellungen
           </Button>
           <Button
             variant="ghost"
             className="justify-start"
-            onClick={() => dispatch({ type: "SET_MOBILE_SHEET", payload: false })}
+            onClick={() => {
+              setActiveTab("products")
+              dispatch({ type: "SET_MOBILE_SHEET", payload: false })
+            }}
           >
             Produkte
           </Button>
           <Button
             variant="ghost"
             className="justify-start"
-            onClick={() => dispatch({ type: "SET_MOBILE_SHEET", payload: false })}
+            onClick={() => {
+              setActiveTab("inventory")
+              dispatch({ type: "SET_MOBILE_SHEET", payload: false })
+            }}
           >
             Lager
           </Button>
           <Button
             variant="ghost"
             className="justify-start"
-            onClick={() => dispatch({ type: "SET_MOBILE_SHEET", payload: false })}
+            onClick={() => {
+              setActiveTab("pickup")
+              dispatch({ type: "SET_MOBILE_SHEET", payload: false })
+            }}
           >
             Abholorte
           </Button>
           <Button
             variant="ghost"
             className="justify-start"
-            onClick={() => dispatch({ type: "SET_MOBILE_SHEET", payload: false })}
+            onClick={() => {
+              setActiveTab("delivery")
+              dispatch({ type: "SET_MOBILE_SHEET", payload: false })
+            }}
           >
             Liefertermine
           </Button>
           <Button
             variant="ghost"
             className="justify-start"
-            onClick={() => dispatch({ type: "SET_MOBILE_SHEET", payload: false })}
+            onClick={() => {
+              setActiveTab("supplier")
+              dispatch({ type: "SET_MOBILE_SHEET", payload: false })
+            }}
           >
             Großhändler
           </Button>
           <Button
             variant="ghost"
             className="justify-start"
-            onClick={() => dispatch({ type: "SET_MOBILE_SHEET", payload: false })}
+            onClick={() => {
+              setActiveTab("emails")
+              dispatch({ type: "SET_MOBILE_SHEET", payload: false })
+            }}
           >
             E-Mails
           </Button>
           <Button
             variant="ghost"
             className="justify-start"
-            onClick={() => dispatch({ type: "SET_MOBILE_SHEET", payload: false })}
+            onClick={() => {
+              setActiveTab("content")
+              dispatch({ type: "SET_MOBILE_SHEET", payload: false })
+            }}
           >
             Content
           </Button>
           <Button
             variant="ghost"
             className="justify-start"
-            onClick={() => dispatch({ type: "SET_MOBILE_SHEET", payload: false })}
+            onClick={() => {
+              setActiveTab("settings")
+              dispatch({ type: "SET_MOBILE_SHEET", payload: false })
+            }}
           >
             Einstellungen
           </Button>
@@ -472,6 +507,41 @@ function AdminDashboardContent() {
       </SheetContent>
     </Sheet>
   )
+
+  const handleRegenerateQRCodes = async () => {
+    if (!confirm("QR-Codes für alle Bestellungen ohne gültigen QR-Code nachgenerieren?")) {
+      return
+    }
+
+    setIsRegeneratingQR(true)
+    try {
+      const response = await fetch("/api/admin/regenerate-qr-codes", {
+        method: "POST",
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Regenerierung fehlgeschlagen")
+      }
+
+      alert(
+        `QR-Code Regenerierung abgeschlossen:\n\n` +
+          `Gesamt: ${data.total}\n` +
+          `Erfolgreich: ${data.success}\n` +
+          `Fehler: ${data.errors}` +
+          (data.errorDetails ? `\n\nFehlerdetails:\n${data.errorDetails.join("\n")}` : ""),
+      )
+
+      // Refresh the page to show updated QR codes
+      window.location.reload()
+    } catch (error: any) {
+      console.error("[v0] QR regeneration error:", error)
+      alert(`Fehler bei der QR-Code Regenerierung: ${error.message}`)
+    } finally {
+      setIsRegeneratingQR(false)
+    }
+  }
 
   if (state.loading) {
     return (
@@ -513,7 +583,7 @@ function AdminDashboardContent() {
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-4 md:space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
         <div className="flex items-center justify-between md:justify-start">
           <MobileTabNavigation />
           <TabsList className="hidden md:grid w-full grid-cols-5 lg:grid-cols-11 gap-1">
@@ -580,39 +650,15 @@ function AdminDashboardContent() {
         </TabsContent>
 
         <TabsContent value="emails" className="space-y-4 md:space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>E-Mail Verwaltung</CardTitle>
-              <CardDescription>Newsletter versenden und Email-Templates verwalten</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="newsletter" className="space-y-4">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="newsletter">Newsletter versenden</TabsTrigger>
-                  <TabsTrigger value="preview">Email-Vorschau</TabsTrigger>
-                  <TabsTrigger value="templates">E-Mail Vorlagen</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="newsletter" className="space-y-4">
-                  <Suspense fallback={<LoadingSpinner />}>
-                    <NewsletterSystem />
-                  </Suspense>
-                </TabsContent>
-
-                <TabsContent value="preview" className="space-y-4">
-                  <Suspense fallback={<LoadingSpinner />}>
-                    <EmailPreviewSystem />
-                  </Suspense>
-                </TabsContent>
-
-                <TabsContent value="templates" className="space-y-4">
-                  <Suspense fallback={<LoadingSpinner />}>
-                    <EmailTemplatesViewer />
-                  </Suspense>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+          <Suspense fallback={<LoadingSpinner />}>
+            <NewsletterSystem />
+          </Suspense>
+          <Suspense fallback={<LoadingSpinner />}>
+            <EmailPreviewSystem />
+          </Suspense>
+          <Suspense fallback={<LoadingSpinner />}>
+            <EmailTemplatesViewer />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="content" className="space-y-4 md:space-y-6">
@@ -653,6 +699,39 @@ function AdminDashboardContent() {
                   </select>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg md:text-xl">QR-Code Verwaltung</CardTitle>
+              <CardDescription className="text-sm">QR-Codes für Bestellungen nachgenerieren</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Generiert QR-Codes für alle Bestellungen, die noch keinen haben oder deren QR-Code abgelaufen ist.
+                  Maximal 100 Bestellungen pro Durchlauf.
+                </p>
+                <Button
+                  onClick={handleRegenerateQRCodes}
+                  disabled={isRegeneratingQR}
+                  variant="outline"
+                  className="w-full bg-transparent"
+                >
+                  {isRegeneratingQR ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      QR-Codes werden generiert...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      QR-Codes nachgenerieren
+                    </>
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

@@ -29,7 +29,7 @@ const NEXT_PICKUP_DATE = "15. Januar 2025"
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 const downloadCalendarEvent = () => {
-  const eventDate = new Date(NEXT_PICKUP_DATE.split(".").reverse().join("-"))
+  const eventDate = new Date(NEXT_PICKUP_DATE.split(".").reverse().join("-") + "T00:00:00")
   const startDate = eventDate.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z"
   const endDate =
     new Date(eventDate.getTime() + 2 * 60 * 60 * 1000).toISOString().replace(/[-:]/g, "").split(".")[0] + "Z"
@@ -65,7 +65,7 @@ END:VCALENDAR`
 const downloadSeasonCalendar = (schedules: any[]) => {
   const events = schedules
     .map((delivery) => {
-      const eventDate = new Date(delivery.date.split(".").reverse().join("-"))
+      const eventDate = new Date(delivery.date.split(".").reverse().join("-") + "T00:00:00")
       const startDate = eventDate.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z"
       const endDate =
         new Date(eventDate.getTime() + 2 * 60 * 60 * 1000).toISOString().replace(/[-:]/g, "").split(".")[0] + "Z"
@@ -565,7 +565,6 @@ export default function ShopPage() {
             >
               <span>🚗 Abholung</span>
               <span className="text-[10px] italic mt-0.5 text-background">bei Verteiler</span>
-              
             </button>
             <button
               onClick={() => setPricingMode("shipping")}
@@ -577,7 +576,6 @@ export default function ShopPage() {
             >
               <span>📦 Versand</span>
               <span className="text-[10px] italic mt-0.5 text-primary-foreground">nach Hause</span>
-              
             </button>
           </div>
         </div>
@@ -792,9 +790,8 @@ function ProductCard({
   if (!product.image_url && (!product.images || product.images.length === 0)) {
     console.log("[v0] Product without image:", {
       name: product.name,
-      image_url: product.image_url,
-      images: product.images,
-      fallbackUsed: imageUrl,
+      src: imageUrl,
+      error: null,
     })
   }
 

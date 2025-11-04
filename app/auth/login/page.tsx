@@ -20,6 +20,7 @@ export default function LoginPage() {
     password: "",
   })
   const [rememberUser, setRememberUser] = useState(false)
+  const [stayLoggedIn, setStayLoggedIn] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -34,10 +35,15 @@ export default function LoginPage() {
   useEffect(() => {
     const savedEmail = localStorage.getItem("hohenloher_admin_email")
     const savedRemember = localStorage.getItem("hohenloher_admin_remember") === "true"
+    const savedStayLoggedIn = localStorage.getItem("hohenloher_admin_stay_logged_in") === "true"
 
     if (savedEmail && savedRemember) {
       setFormData((prev) => ({ ...prev, email: savedEmail }))
       setRememberUser(true)
+    }
+
+    if (savedStayLoggedIn) {
+      setStayLoggedIn(true)
     }
   }, [])
 
@@ -89,6 +95,22 @@ export default function LoginPage() {
         } else {
           localStorage.removeItem("hohenloher_admin_email")
           localStorage.removeItem("hohenloher_admin_remember")
+        }
+
+        if (stayLoggedIn) {
+          localStorage.setItem("hohenloher_admin_stay_logged_in", "true")
+          const adminSettings = {
+            autoLogoutEnabled: false,
+            logoutTimer: 30,
+          }
+          localStorage.setItem("hohenloher-admin-settings", JSON.stringify(adminSettings))
+        } else {
+          localStorage.removeItem("hohenloher_admin_stay_logged_in")
+          const adminSettings = {
+            autoLogoutEnabled: true,
+            logoutTimer: 30,
+          }
+          localStorage.setItem("hohenloher-admin-settings", JSON.stringify(adminSettings))
         }
 
         await new Promise((resolve) => setTimeout(resolve, 1000))
@@ -156,6 +178,17 @@ export default function LoginPage() {
               />
               <Label htmlFor="remember" className="text-sm font-normal">
                 Benutzer merken
+              </Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="stayLoggedIn"
+                checked={stayLoggedIn}
+                onCheckedChange={(checked) => setStayLoggedIn(checked as boolean)}
+              />
+              <Label htmlFor="stayLoggedIn" className="text-sm font-normal">
+                Eingeloggt bleiben (7 Tage)
               </Label>
             </div>
 

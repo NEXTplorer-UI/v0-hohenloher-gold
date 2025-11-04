@@ -222,7 +222,7 @@ export default function DeliveryScheduleManagement() {
   }
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("de-DE", {
+    return new Date(dateString + "T00:00:00").toLocaleDateString("de-DE", {
       day: "2-digit",
       month: "long",
       year: "numeric",
@@ -230,7 +230,8 @@ export default function DeliveryScheduleManagement() {
   }
 
   const isDeadlinePassed = (deadline: string) => {
-    return new Date(deadline) < new Date()
+    const today = new Date().toISOString().split("T")[0]
+    return deadline < today
   }
 
   const formatTimeRange = (startTime: string | null, endTime: string | null) => {

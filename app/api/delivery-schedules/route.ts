@@ -23,8 +23,8 @@ export async function GET() {
 
     const transformedSchedules = schedules?.map((schedule: any) => {
       // Format dates for display
-      const deliveryDate = new Date(schedule.delivery_date)
-      const orderDeadline = new Date(schedule.order_deadline)
+      const deliveryDate = new Date(schedule.delivery_date + "T00:00:00")
+      const orderDeadline = new Date(schedule.order_deadline + "T00:00:00")
 
       // Determine type based on notes or default to "Hauptlieferung"
       let type = "Hauptlieferung"

@@ -52,6 +52,17 @@ export class EmailTemplates {
     paymentMethod: string,
     deliveryMethod?: string,
     pickupDate?: string,
+    orderItems?: Array<{
+      product_name: string
+      quantity: number
+      product_size?: string | null
+      unit_price: number
+      delivery_schedule?: {
+        delivery_date: string
+        pickup_time: string | null
+      } | null
+    }>,
+    pickupToken?: string,
   ): EmailTemplate {
     const paymentMethodText =
       paymentMethod === "transfer"
@@ -106,6 +117,92 @@ export class EmailTemplates {
     `
         : ""
 
+    const itemsBySchedule = orderItems?.reduce((acc: any, item) => {
+      const scheduleKey = item.delivery_schedule?.delivery_date || "no_schedule"
+      if (!acc[scheduleKey]) {
+        acc[scheduleKey] = {
+          delivery_date: item.delivery_schedule?.delivery_date,
+          pickup_time: item.delivery_schedule?.pickup_time,
+          items: [],
+        }
+      }
+      acc[scheduleKey].items.push(item)
+      return acc
+    }, {})
+
+    const orderItemsSection =
+      orderItems && orderItems.length > 0
+        ? `
+      <div style="background: white; padding: 15px; border-radius: 8px; margin: 20px 0;">
+        <h3 style="color: #a16207; margin-top: 0;">Bestellte Artikel:</h3>
+        ${
+          itemsBySchedule
+            ? Object.entries(itemsBySchedule)
+                .map(
+                  ([key, group]: [string, any]) => `
+          ${
+            group.delivery_date
+              ? `
+            <div style="background: #f0fdf4; border-left: 4px solid #16a34a; padding: 12px; margin: 15px 0 10px 0; border-radius: 4px;">
+              <strong style="color: #16a34a;">📅 Lieferung: ${new Date(group.delivery_date).toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" })}</strong>
+              ${group.pickup_time ? `<br><span style="font-size: 14px; color: #15803d;">Abholzeit: ${group.pickup_time} Uhr</span>` : ""}
+            </div>
+          `
+              : ""
+          }
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
+            <thead>
+              <tr style="border-bottom: 2px solid #e5e7eb;">
+                <th style="text-align: left; padding: 8px;">Artikel</th>
+                <th style="text-align: center; padding: 8px;">Menge</th>
+                <th style="text-align: right; padding: 8px;">Preis</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${group.items
+                .map(
+                  (item: any) => `
+                <tr style="border-bottom: 1px solid #f3f4f6;">
+                  <td style="padding: 8px;">
+                    ${item.product_name}
+                    ${item.product_size ? `<br><span style="font-size: 12px; color: #6b7280;">${item.product_size}</span>` : ""}
+                  </td>
+                  <td style="text-align: center; padding: 8px;">${item.quantity}x</td>
+                  <td style="text-align: right; padding: 8px;">€${(item.unit_price * item.quantity).toFixed(2)}</td>
+                </tr>
+              `,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        `,
+                )
+                .join("")
+            : ""
+        }
+      </div>
+    `
+        : ""
+
+    const pickupLinkSection = pickupToken
+      ? `
+      <div style="background: #f0fdf4; border: 2px solid #86efac; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+        <h3 style="color: #16a34a; margin-top: 0;">🎫 Ihre Bestellung anzeigen</h3>
+        <p style="margin: 10px 0; color: #15803d;">
+          Klicken Sie auf den Button unten, um Ihre Bestelldetails und den QR-Code für die Abholung anzuzeigen.
+        </p>
+        <a href="${process.env.NEXT_PUBLIC_SITE_URL || "https://suedfruechte-hohenlohe.de"}/pos/pickup?token=${pickupToken}" 
+           style="display: inline-block; background: #16a34a; color: white; padding: 14px 28px; 
+                  text-decoration: none; border-radius: 8px; font-weight: bold; margin: 10px 0;">
+          Ihre Bestellung anzeigen
+        </a>
+        <p style="margin: 10px 0 0 0; font-size: 12px; color: #6b7280;">
+          Dieser Link ist 45 Tage gültig und kann bei der Abholung vorgezeigt werden.
+        </p>
+      </div>
+    `
+      : ""
+
     return {
       subject: `Bestellbestätigung ${orderId} - Hohenloher Gold`,
       html: `
@@ -128,6 +225,8 @@ export class EmailTemplates {
               ${pickupDate ? `<p><strong>Abholtermin:</strong> ${pickupDate}</p>` : ""}
             </div>
             
+            ${pickupLinkSection}
+            ${orderItemsSection}
             ${bankDetailsSection}
             ${shippingNotice}
             

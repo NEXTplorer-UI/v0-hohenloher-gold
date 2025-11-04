@@ -118,14 +118,33 @@ async function determineDeliveryDate(
     return { deliveryDate: null, scheduleId: null }
   }
 
+  console.log("[v0] [determineDeliveryDate] Checking for Südfrüchte delivery schedules...")
+
+  const today = new Date().toISOString().split("T")[0]
+
   const { data: futureSchedules, error } = await supabase
     .from("delivery_schedules")
     .select("*")
-    .gte("delivery_date", new Date().toISOString().split("T")[0])
+    .gte("delivery_date", today)
     .order("delivery_date", { ascending: true })
 
+  console.log("[v0] [determineDeliveryDate] Today's date for comparison:", today)
+  console.log("[v0] [determineDeliveryDate] Future schedules found:", futureSchedules?.length || 0)
+
+  if (futureSchedules && futureSchedules.length > 0) {
+    console.log(
+      "[v0] [determineDeliveryDate] Schedule details:",
+      futureSchedules.map((s) => ({
+        id: s.id,
+        delivery_date: s.delivery_date,
+        order_deadline: s.order_deadline,
+        status: s.status,
+      })),
+    )
+  }
+
   if (error || !futureSchedules || futureSchedules.length === 0) {
-    console.log("[/api/orders] No future delivery schedules found")
+    console.log("[v0] [determineDeliveryDate] No future delivery schedules found")
     return {
       deliveryDate: null,
       scheduleId: null,
@@ -134,11 +153,22 @@ async function determineDeliveryDate(
     }
   }
 
-  const today = new Date().toISOString().split("T")[0]
   const availableSchedule = futureSchedules.find((schedule) => schedule.order_deadline >= today)
 
+  console.log(
+    "[v0] [determineDeliveryDate] Selected schedule:",
+    availableSchedule
+      ? {
+          id: availableSchedule.id,
+          delivery_date: availableSchedule.delivery_date,
+          order_deadline: availableSchedule.order_deadline,
+          reason: availableSchedule.order_deadline >= today ? "Order deadline not passed" : "Unknown",
+        }
+      : "NONE - All deadlines passed",
+  )
+
   if (!availableSchedule) {
-    console.log("[/api/orders] All order deadlines have passed, no available delivery schedule")
+    console.log("[v0] [determineDeliveryDate] All order deadlines have passed, no available delivery schedule")
     return {
       deliveryDate: null,
       scheduleId: null,
@@ -147,7 +177,8 @@ async function determineDeliveryDate(
   }
 
   const isNextDelivery = futureSchedules[0].id !== availableSchedule.id
-  const deliveryDateFormatted = new Date(availableSchedule.delivery_date).toLocaleDateString("de-DE", {
+
+  const deliveryDateFormatted = new Date(availableSchedule.delivery_date + "T00:00:00").toLocaleDateString("de-DE", {
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -157,10 +188,12 @@ async function determineDeliveryDate(
     ? `Der Bestellschluss für die aktuelle Lieferung ist vorbei. Ihre Südfrüchte-Bestellung wird der nächsten Lieferung am ${deliveryDateFormatted} zugeordnet.`
     : `Ihre Südfrüchte-Bestellung wird am ${deliveryDateFormatted} geliefert.`
 
-  console.log("[/api/orders] Assigned to delivery schedule:", {
+  console.log("[v0] [determineDeliveryDate] Final decision:", {
     scheduleId: availableSchedule.id,
     deliveryDate: availableSchedule.delivery_date,
+    formattedDate: deliveryDateFormatted,
     isNextDelivery,
+    message,
   })
 
   return {
@@ -199,7 +232,6 @@ export async function POST(request: NextRequest) {
 
     const supabase = getServiceClient()
 
-    // Check for duplicate orders within the last 10 seconds with same email and total
     const tenSecondsAgo = new Date(Date.now() - 10000).toISOString()
     const { data: recentOrders, error: duplicateCheckError } = await supabase
       .from("orders")
@@ -225,7 +257,6 @@ export async function POST(request: NextRequest) {
         orderData.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0) +
         (orderData.deliveryMethod === "delivery" ? 4.9 : 0)
 
-      // If there's an order with same total within last 10 seconds, it's likely a duplicate
       if (Math.abs(recentOrder.total - orderTotal) < 0.01) {
         console.warn("[/api/orders] Duplicate order detected, returning existing order:", recentOrder.order_number)
         return NextResponse.json(
@@ -287,7 +318,7 @@ export async function POST(request: NextRequest) {
       total: total,
       delivery_method: orderData.deliveryMethod,
       pickup_location: orderData.pickupLocation || null,
-      pickup_location_id: pickupLocationId, // Now uses robust lookup
+      pickup_location_id: pickupLocationId,
       payment_method: orderData.paymentMethod,
       payment_status: orderData.paymentMethod === "sumup" ? "paid" : "pending",
       status: "confirmed",
@@ -295,7 +326,7 @@ export async function POST(request: NextRequest) {
       pickup_reminders: orderData.emailReminder || false,
       email_notifications: orderData.emailUpdates || false,
       pickup_date: deliveryDate,
-      is_test: orderData.isTest || false, // Add test flag
+      is_test: orderData.isTest || false,
       created_at: orderTime.toISOString(),
     }
 
@@ -316,27 +347,27 @@ export async function POST(request: NextRequest) {
 
     const { data: products, error: productsError } = await supabase
       .from("products")
-      .select("id, name")
+      .select("id, name, unit")
       .in("name", productNames)
 
     if (productsError) {
       console.error("[/api/orders] Error fetching products:", productsError)
     }
 
-    const productMap = new Map(products?.map((p) => [p.name, p.id]) || [])
+    const productMap = new Map(products?.map((p) => [p.name, { id: p.id, unit: p.unit }]) || [])
     console.log("[/api/orders] Product map created with", productMap.size, "entries")
 
     const orderItems = orderData.items.map((item: any) => {
-      const productId = productMap.get(item.name)
-      if (!productId) {
+      const productInfo = productMap.get(item.name)
+      if (!productInfo) {
         console.warn(`[/api/orders] ⚠️ No product_id found for item: "${item.name}"`)
       }
       return {
         order_id: savedOrder.id,
-        product_id: productId || null,
+        product_id: productInfo?.id || null,
         product_name: item.name,
         product_category: item.category || "Unbekannt",
-        product_size: item.size || null,
+        product_size: item.size || productInfo?.unit || null,
         quantity: item.quantity,
         unit_price: item.price,
         expected_delivery_date: deliveryDate,
@@ -399,11 +430,36 @@ export async function POST(request: NextRequest) {
       itemCount: itemsResult.length,
     })
 
+    try {
+      const adminEmail = process.env.SUMUP_PAY_TO_EMAIL || "kontakt@suedfruechte-hohenlohe.de"
+      console.log("[/api/orders] Sending admin notification to:", adminEmail)
+
+      fetch(`${request.nextUrl.origin}/api/admin/order-notification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: savedOrder.id,
+          orderNumber: savedOrder.order_number,
+          customerEmail: orderData.email,
+          customerName: `${orderData.firstName || ""} ${orderData.lastName || ""}`.trim(),
+          total: savedOrder.total,
+          deliveryMethod: savedOrder.delivery_method,
+          pickupLocation: savedOrder.pickup_location,
+          paymentMethod: savedOrder.payment_method,
+          items: itemsResult,
+          adminEmail: adminEmail,
+        }),
+      }).catch((err) => {
+        console.error("[/api/orders] Failed to send admin notification:", err)
+      })
+    } catch (notificationError) {
+      console.error("[/api/orders] Error sending admin notification:", notificationError)
+    }
+
     if (savedOrder.payment_status === "paid") {
       try {
         console.log("[/api/orders] Generating invoice for paid order:", savedOrder.order_number)
 
-        // Generate invoice in background (don't block order response)
         fetch(`${request.nextUrl.origin}/api/generate-invoice`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -423,7 +479,6 @@ export async function POST(request: NextRequest) {
         })
       } catch (invoiceError) {
         console.error("[/api/orders] Error triggering invoice generation:", invoiceError)
-        // Don't fail the order if invoice generation fails
       }
     }
 

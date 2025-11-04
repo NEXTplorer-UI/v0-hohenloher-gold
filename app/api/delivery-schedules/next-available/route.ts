@@ -71,8 +71,8 @@ export async function GET() {
       })
     }
 
-    const deliveryDate = new Date(nextSchedule.delivery_date)
-    const orderDeadline = new Date(nextSchedule.order_deadline)
+    const deliveryDate = new Date(nextSchedule.delivery_date + "T00:00:00")
+    const orderDeadline = new Date(nextSchedule.order_deadline + "T00:00:00")
     const daysUntilDeadline = Math.ceil((orderDeadline.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
 
     console.log(`[v0] [API] Next delivery: ${deliveryDate.toLocaleDateString("de-DE")}`)

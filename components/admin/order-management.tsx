@@ -6,11 +6,25 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Download, Mail, Search, Filter, Loader2, ChevronDown, ChevronUp, MapPin, Users } from "lucide-react"
+import {
+  Download,
+  Mail,
+  Search,
+  Filter,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  MapPin,
+  Users,
+  Plus,
+  X,
+  RefreshCw,
+} from "lucide-react"
 import { mapDBToUIStatus, getEmailTemplateForStatus } from "@/lib/order-status-mapping"
 import type { EmailTemplateId } from "@/lib/email/build"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 
 interface OrderItem {
   id: string
@@ -19,6 +33,7 @@ interface OrderItem {
   unit_price: number
   total_price: number
   product_id?: number
+  product_size?: string | null // Added product_size field
   weight?: number
 }
 
@@ -35,6 +50,8 @@ interface Order {
   notes: string | null
   admin_notes: string | null // Added admin_notes field
   created_at: string
+  pickup_token?: string // Added pickup_token field
+  qr_code_url?: string | null // Added qr_code_url field
   customer: {
     first_name: string
     last_name: string
@@ -42,6 +59,7 @@ interface Order {
     phone: string | null
   }
   order_items: OrderItem[]
+  hellocash_invoice_id?: string | null // Added hellocash_invoice_id field
 }
 
 function parseBulkOrderNames(notes: string | null): string[] {
@@ -78,6 +96,7 @@ const OrderItem = memo(
     onNotify,
     onStatusChange,
     onAdminNotesChange,
+    onSyncStatus, // Added onSyncStatus prop
     isSelected,
     onSelectionChange,
   }: {
@@ -85,6 +104,7 @@ const OrderItem = memo(
     onNotify: (orderId: string, templateId?: EmailTemplateId) => void
     onStatusChange: (orderId: string, status?: string, paymentStatus?: string) => void
     onAdminNotesChange: (orderId: string, adminNotes: string) => void
+    onSyncStatus: (orderId: string) => Promise<void> // Added onSyncStatus prop
     isSelected: boolean
     onSelectionChange: (orderId: string, selected: boolean) => void
   }) => {
@@ -93,6 +113,7 @@ const OrderItem = memo(
     const [showAdminNotes, setShowAdminNotes] = useState(false)
     const [adminNotes, setAdminNotes] = useState(order.admin_notes || "")
     const [isSavingNotes, setIsSavingNotes] = useState(false)
+    const [isSyncing, setIsSyncing] = useState(false) // Added isSyncing state
     const customerName = `${order.customer.first_name} ${order.customer.last_name}`
     const orderDate = new Date(order.created_at).toLocaleDateString("de-DE")
     const items = order.order_items.map((item) => `${item.product_name} (${item.quantity}x)`).join(", ")
@@ -100,12 +121,26 @@ const OrderItem = memo(
     const bulkOrderNames = useMemo(() => parseBulkOrderNames(order.notes), [order.notes])
     const isBulkOrder = bulkOrderNames.length > 0
 
+    const pickupUrl = order.pickup_token
+      ? `${typeof window !== "undefined" ? window.location.origin : ""}/pos/pickup?token=${order.pickup_token}`
+      : null
+
     const handleSaveAdminNotes = async () => {
       setIsSavingNotes(true)
       try {
         await onAdminNotesChange(order.id, adminNotes)
       } finally {
         setIsSavingNotes(false)
+      }
+    }
+
+    // Added handleSyncStatus function
+    const handleSyncStatus = async () => {
+      setIsSyncing(true)
+      try {
+        await onSyncStatus(order.id)
+      } finally {
+        setIsSyncing(false)
       }
     }
 
@@ -248,7 +283,7 @@ const OrderItem = memo(
                     className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
                   >
                     {showItems ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-                    {order.order_items.length} Artikel anzeigen ({totalWeight.toFixed(2)} kg)
+                    {order.order_items.length} Artikel anzeigen
                   </Button>
                   {showItems && (
                     <div className="mt-2 pl-4 border-l-2 border-muted space-y-1">
@@ -257,7 +292,7 @@ const OrderItem = memo(
                           <span>
                             {item.product_id ? `#${item.product_id} - ` : ""}
                             {item.product_name} ({item.quantity}x)
-                            {item.weight ? ` • ${(item.weight * item.quantity).toFixed(2)} kg` : ""}
+                            {item.product_size ? ` • ${item.product_size}` : ""}
                           </span>
                           <span>€{item.total_price.toFixed(2)}</span>
                         </div>
@@ -299,6 +334,46 @@ const OrderItem = memo(
             </div>
             <div className="flex flex-col items-end gap-2">
               <span className="font-bold">€{order.total.toFixed(2)}</span>
+
+              {order.qr_code_url && (
+                <div className="mb-2">
+                  <img
+                    src={order.qr_code_url || "/placeholder.svg"}
+                    alt="QR Code"
+                    className="w-20 h-20 border rounded"
+                    title="QR-Code für Abholung"
+                  />
+                </div>
+              )}
+
+              {pickupUrl && (
+                <Button size="sm" variant="outline" onClick={() => window.open(pickupUrl, "_blank")} className="w-full">
+                  🎫 Bestellung anzeigen
+                </Button>
+              )}
+
+              {order.hellocash_invoice_id && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSyncStatus}
+                  disabled={isSyncing}
+                  className="w-full bg-transparent"
+                >
+                  {isSyncing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Synchronisiere...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Status aktualisieren
+                    </>
+                  )}
+                </Button>
+              )}
+
               <div className="flex gap-2">
                 <Select value={uiStatus} onValueChange={(value) => onStatusChange(order.id, value, undefined)}>
                   <SelectTrigger className="w-32">
@@ -353,7 +428,26 @@ function OrderManagement() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [commentFilter, setCommentFilter] = useState("all")
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
+  const [showManualOrderForm, setShowManualOrderForm] = useState(false)
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false)
+  const [customers, setCustomers] = useState<
+    Array<{ id: string; email: string; first_name: string; last_name: string }>
+  >([])
+  const [products, setProducts] = useState<Array<{ id: number; name: string; price: number; unit: string }>>([])
+  const [pickupLocations, setPickupLocations] = useState<Array<{ id: string; name: string }>>([])
+  const [manualOrderForm, setManualOrderForm] = useState({
+    customerId: "",
+    customerEmail: "",
+    deliveryMethod: "pickup",
+    pickupLocationId: "",
+    paymentMethod: "invoice",
+    paymentStatus: "pending",
+    status: "confirmed",
+    notes: "",
+    items: [{ productId: "", quantity: 1, price: 0 }],
+  })
   const { toast } = useToast()
 
   const fetchOrders = useCallback(async () => {
@@ -406,6 +500,203 @@ function OrderManagement() {
     fetchOrders()
   }, [fetchOrders])
 
+  const fetchFormData = useCallback(async () => {
+    try {
+      const [customersRes, productsRes, locationsRes] = await Promise.all([
+        fetch("/api/admin/customers"),
+        fetch("/api/products"),
+        fetch("/api/pickup-locations"),
+      ])
+
+      if (customersRes.ok) {
+        const customersData = await customersRes.json()
+        setCustomers(customersData)
+      }
+
+      if (productsRes.ok) {
+        const productsData = await productsRes.json()
+        setProducts(productsData)
+      }
+
+      if (locationsRes.ok) {
+        const locationsData = await locationsRes.json()
+        setPickupLocations(locationsData)
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching form data:", error)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (showManualOrderForm && customers.length === 0) {
+      fetchFormData()
+    }
+  }, [showManualOrderForm, customers.length, fetchFormData])
+
+  const handleCreateManualOrder = useCallback(async () => {
+    try {
+      setIsCreatingOrder(true)
+
+      if (!manualOrderForm.customerId) {
+        toast({
+          title: "Fehler",
+          description: "Bitte wählen Sie einen Kunden aus",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (manualOrderForm.items.length === 0 || !manualOrderForm.items[0].productId) {
+        toast({
+          title: "Fehler",
+          description: "Bitte fügen Sie mindestens ein Produkt hinzu",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (manualOrderForm.deliveryMethod === "pickup" && !manualOrderForm.pickupLocationId) {
+        toast({
+          title: "Fehler",
+          description: "Bitte wählen Sie einen Abholort aus",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const customer = customers.find((c) => c.id === manualOrderForm.customerId)
+      if (!customer) {
+        toast({
+          title: "Fehler",
+          description: "Kunde nicht gefunden",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const orderItems = manualOrderForm.items
+        .filter((item) => item.productId)
+        .map((item) => {
+          const product = products.find((p) => p.id.toString() === item.productId)
+          return {
+            name: product?.name || "Unbekanntes Produkt",
+            quantity: item.quantity,
+            price: item.price || product?.price || 0,
+            category: "Manuell erfasst",
+          }
+        })
+
+      const pickupLocation = pickupLocations.find((loc) => loc.id === manualOrderForm.pickupLocationId)
+
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: customer.email,
+          firstName: customer.first_name,
+          lastName: customer.last_name,
+          deliveryMethod: manualOrderForm.deliveryMethod,
+          pickupLocation: pickupLocation?.name || null,
+          pickupLocationId: manualOrderForm.pickupLocationId || null,
+          paymentMethod: manualOrderForm.paymentMethod,
+          notes: manualOrderForm.notes || null,
+          items: orderItems,
+          emailReminder: false,
+          emailUpdates: false,
+          isTest: false,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Fehler beim Erstellen der Bestellung")
+      }
+
+      const result = await response.json()
+
+      if (manualOrderForm.status !== "confirmed" || manualOrderForm.paymentStatus !== "pending") {
+        await fetch("/api/admin/update-order-status", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            orderId: result.data.order.id,
+            status: manualOrderForm.status,
+            paymentStatus: manualOrderForm.paymentStatus,
+          }),
+        })
+      }
+
+      toast({
+        title: "Bestellung erstellt",
+        description: `Bestellung ${result.data.order.order_number} wurde erfolgreich erstellt`,
+      })
+
+      setManualOrderForm({
+        customerId: "",
+        customerEmail: "",
+        deliveryMethod: "pickup",
+        pickupLocationId: "",
+        paymentMethod: "invoice",
+        paymentStatus: "pending",
+        status: "confirmed",
+        notes: "",
+        items: [{ productId: "", quantity: 1, price: 0 }],
+      })
+      setShowManualOrderForm(false)
+
+      await fetchOrders()
+    } catch (error) {
+      console.error("[v0] Error creating manual order:", error)
+      toast({
+        title: "Fehler",
+        description: error instanceof Error ? error.message : "Bestellung konnte nicht erstellt werden",
+        variant: "destructive",
+      })
+    } finally {
+      setIsCreatingOrder(false)
+    }
+  }, [manualOrderForm, customers, products, pickupLocations, toast, fetchOrders])
+
+  const addOrderItem = useCallback(() => {
+    setManualOrderForm((prev) => ({
+      ...prev,
+      items: [...prev.items, { productId: "", quantity: 1, price: 0 }],
+    }))
+  }, [])
+
+  const removeOrderItem = useCallback((index: number) => {
+    setManualOrderForm((prev) => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index),
+    }))
+  }, [])
+
+  const updateOrderItem = useCallback(
+    (index: number, field: string, value: any) => {
+      setManualOrderForm((prev) => ({
+        ...prev,
+        items: prev.items.map((item, i) => {
+          if (i === index) {
+            const updated = { ...item, [field]: value }
+            if (field === "productId" && value) {
+              const product = products.find((p) => p.id.toString() === value)
+              if (product) {
+                updated.price = product.price
+              }
+            }
+            return updated
+          }
+          return item
+        }),
+      }))
+    },
+    [products],
+  )
+
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       const customerName = `${order.customer.first_name} ${order.customer.last_name}`.toLowerCase()
@@ -414,9 +705,13 @@ function OrderManagement() {
         order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
         order.customer.email.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesStatus = statusFilter === "all" || order.status === statusFilter
-      return matchesSearch && matchesStatus
+      const matchesComment =
+        commentFilter === "all" ||
+        (commentFilter === "with" && order.admin_notes && order.admin_notes.trim() !== "") ||
+        (commentFilter === "without" && (!order.admin_notes || order.admin_notes.trim() === ""))
+      return matchesSearch && matchesStatus && matchesComment
     })
-  }, [orders, searchTerm, statusFilter])
+  }, [orders, searchTerm, statusFilter, commentFilter])
 
   const exportOrders = useCallback(
     async (orderIds?: string[]) => {
@@ -637,6 +932,58 @@ function OrderManagement() {
     [toast],
   )
 
+  // Added handleSyncStatus function
+  const handleSyncStatus = useCallback(
+    async (orderId: string) => {
+      try {
+        console.log(`[v0] Syncing helloCash status for order ${orderId}`)
+
+        const response = await fetch("/api/pos/hellocash/sync-status", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ orderId }),
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          console.log(`[v0] Sync result:`, result)
+
+          // Reload orders to show updated status
+          await fetchOrders()
+
+          if (result.newStatus !== result.previousStatus) {
+            toast({
+              title: "Status aktualisiert",
+              description: `Bestellung wurde von helloCash synchronisiert: ${result.helloCashStatus}`,
+            })
+          } else {
+            toast({
+              title: "Bereits aktuell",
+              description: "Keine Änderungen von helloCash",
+            })
+          }
+        } else {
+          const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+          toast({
+            title: "Fehler",
+            description: errorData.error || "Status konnte nicht synchronisiert werden",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error(`[v0] Error syncing status:`, error)
+        toast({
+          title: "Fehler",
+          description: error instanceof Error ? error.message : "Unbekannter Fehler",
+          variant: "destructive",
+        })
+      }
+    },
+    [fetchOrders, toast],
+  )
+
   const handleOrderSelection = useCallback((orderId: string, selected: boolean) => {
     setSelectedOrderIds((prev) => {
       const newSet = new Set(prev)
@@ -714,6 +1061,266 @@ function OrderManagement() {
           <CardDescription>Übersicht und Verwaltung aller Kundenbestellungen</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-6">
+            <Button
+              onClick={() => setShowManualOrderForm(!showManualOrderForm)}
+              variant={showManualOrderForm ? "secondary" : "default"}
+              className="w-full sm:w-auto"
+            >
+              {showManualOrderForm ? (
+                <>
+                  <ChevronUp className="h-4 w-4 mr-2" />
+                  Formular schließen
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Manuelle Bestellung erfassen
+                </>
+              )}
+            </Button>
+
+            {showManualOrderForm && (
+              <Card className="mt-4 border-gold/20">
+                <CardHeader>
+                  <CardTitle className="text-lg">Neue Bestellung manuell erfassen</CardTitle>
+                  <CardDescription>Erfassen Sie eine Bestellung für einen bestehenden Kunden</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Customer Selection */}
+                    <div className="space-y-2">
+                      <Label htmlFor="customer">Kunde *</Label>
+                      <Select
+                        value={manualOrderForm.customerId}
+                        onValueChange={(value) => {
+                          const customer = customers.find((c) => c.id === value)
+                          setManualOrderForm((prev) => ({
+                            ...prev,
+                            customerId: value,
+                            customerEmail: customer?.email || "",
+                          }))
+                        }}
+                      >
+                        <SelectTrigger id="customer">
+                          <SelectValue placeholder="Kunde auswählen..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {customers.map((customer) => (
+                            <SelectItem key={customer.id} value={customer.id}>
+                              {customer.first_name} {customer.last_name} ({customer.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Delivery Method */}
+                    <div className="space-y-2">
+                      <Label htmlFor="deliveryMethod">Liefermethode *</Label>
+                      <Select
+                        value={manualOrderForm.deliveryMethod}
+                        onValueChange={(value) => setManualOrderForm((prev) => ({ ...prev, deliveryMethod: value }))}
+                      >
+                        <SelectTrigger id="deliveryMethod">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pickup">Abholung</SelectItem>
+                          <SelectItem value="delivery">Lieferung</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Pickup Location (only if pickup) */}
+                    {manualOrderForm.deliveryMethod === "pickup" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="pickupLocation">Abholort *</Label>
+                        <Select
+                          value={manualOrderForm.pickupLocationId}
+                          onValueChange={(value) =>
+                            setManualOrderForm((prev) => ({ ...prev, pickupLocationId: value }))
+                          }
+                        >
+                          <SelectTrigger id="pickupLocation">
+                            <SelectValue placeholder="Abholort auswählen..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {pickupLocations.map((location) => (
+                              <SelectItem key={location.id} value={location.id}>
+                                {location.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* Payment Method */}
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentMethod">Zahlungsmethode *</Label>
+                      <Select
+                        value={manualOrderForm.paymentMethod}
+                        onValueChange={(value) => setManualOrderForm((prev) => ({ ...prev, paymentMethod: value }))}
+                      >
+                        <SelectTrigger id="paymentMethod">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="invoice">Rechnung</SelectItem>
+                          <SelectItem value="prepayment">Vorkasse</SelectItem>
+                          <SelectItem value="sumup">SumUp (Karte)</SelectItem>
+                          <SelectItem value="cash">Barzahlung</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Payment Status */}
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentStatus">Zahlungsstatus *</Label>
+                      <Select
+                        value={manualOrderForm.paymentStatus}
+                        onValueChange={(value) => setManualOrderForm((prev) => ({ ...prev, paymentStatus: value }))}
+                      >
+                        <SelectTrigger id="paymentStatus">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Ausstehend</SelectItem>
+                          <SelectItem value="paid">Bezahlt</SelectItem>
+                          <SelectItem value="failed">Fehlgeschlagen</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Order Status */}
+                    <div className="space-y-2">
+                      <Label htmlFor="orderStatus">Bestellstatus *</Label>
+                      <Select
+                        value={manualOrderForm.status}
+                        onValueChange={(value) => setManualOrderForm((prev) => ({ ...prev, status: value }))}
+                      >
+                        <SelectTrigger id="orderStatus">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Ausstehend</SelectItem>
+                          <SelectItem value="confirmed">Bestätigt</SelectItem>
+                          <SelectItem value="ready">Bereit</SelectItem>
+                          <SelectItem value="picked_up">Abgeholt</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Order Items */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Bestellpositionen *</Label>
+                      <Button type="button" variant="outline" size="sm" onClick={addOrderItem}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Position hinzufügen
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {manualOrderForm.items.map((item, index) => (
+                        <div key={index} className="flex gap-2 items-end">
+                          <div className="flex-1 space-y-2">
+                            <Select
+                              value={item.productId}
+                              onValueChange={(value) => updateOrderItem(index, "productId", value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Produkt auswählen..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {products.map((product) => (
+                                  <SelectItem key={product.id} value={product.id.toString()}>
+                                    {product.name} - €{product.price.toFixed(2)}/{product.unit}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="w-24 space-y-2">
+                            <Input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => updateOrderItem(index, "quantity", Number.parseInt(e.target.value) || 1)}
+                              placeholder="Menge"
+                            />
+                          </div>
+                          <div className="w-28 space-y-2">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={item.price}
+                              onChange={(e) => updateOrderItem(index, "price", Number.parseFloat(e.target.value) || 0)}
+                              placeholder="Preis"
+                            />
+                          </div>
+                          {manualOrderForm.items.length > 1 && (
+                            <Button type="button" variant="ghost" size="icon" onClick={() => removeOrderItem(index)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">Notizen (optional)</Label>
+                    <textarea
+                      id="notes"
+                      value={manualOrderForm.notes}
+                      onChange={(e) => setManualOrderForm((prev) => ({ ...prev, notes: e.target.value }))}
+                      placeholder="Zusätzliche Informationen zur Bestellung..."
+                      className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y"
+                    />
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 justify-end pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowManualOrderForm(false)
+                        setManualOrderForm({
+                          customerId: "",
+                          customerEmail: "",
+                          deliveryMethod: "pickup",
+                          pickupLocationId: "",
+                          paymentMethod: "invoice",
+                          paymentStatus: "pending",
+                          status: "confirmed",
+                          notes: "",
+                          items: [{ productId: "", quantity: 1, price: 0 }],
+                        })
+                      }}
+                    >
+                      Abbrechen
+                    </Button>
+                    <Button onClick={handleCreateManualOrder} disabled={isCreatingOrder}>
+                      {isCreatingOrder ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Wird erstellt...
+                        </>
+                      ) : (
+                        "Bestellung erstellen"
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="flex-1">
               <div className="relative">
@@ -738,6 +1345,17 @@ function OrderManagement() {
                 <SelectItem value="ready">Bereit</SelectItem>
                 <SelectItem value="picked_up">Abgeholt</SelectItem>
                 <SelectItem value="cancelled">Storniert</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={commentFilter} onValueChange={setCommentFilter}>
+              <SelectTrigger className="w-full sm:w-48">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Kommentar filtern" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alle Kommentare</SelectItem>
+                <SelectItem value="with">Mit Kommentar</SelectItem>
+                <SelectItem value="without">Ohne Kommentar</SelectItem>
               </SelectContent>
             </Select>
             {selectedOrderIds.size > 0 ? (
@@ -792,6 +1410,7 @@ function OrderManagement() {
                     onNotify={handleNotify}
                     onStatusChange={handleStatusChange}
                     onAdminNotesChange={handleAdminNotesChange}
+                    onSyncStatus={handleSyncStatus} // Pass handleSyncStatus here
                     isSelected={selectedOrderIds.has(order.id)}
                     onSelectionChange={handleOrderSelection}
                   />

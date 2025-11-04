@@ -5,6 +5,7 @@ import { Menu, X } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
 import { CartHeaderIndicator } from "@/components/cart-header-indicator"
+import { UserAccountDropdown } from "@/components/user-account-dropdown"
 
 export function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -12,8 +13,26 @@ export function Header() {
   return (
     <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <Link href="/" className="flex items-center justify-center space-x-1 -ml-16">
+        <div className="flex justify-between items-center h-16 md:justify-between">
+          {/* Mobile: Logo absolute left, Text centered, Icons right */}
+          <div className="md:hidden absolute left-4">
+            <Link href="/">
+              <img
+                src="/hohenloher-gold-logo.png"
+                alt="Hohenloher Gold Logo"
+                className="w-45 h-45 rounded-full object-contain"
+              />
+            </Link>
+          </div>
+
+          <div className="md:hidden flex-1 flex justify-center">
+            <Link href="/" className="font-serif font-bold text-xl text-foreground text-center">
+              Südfrüchte Hohenlohe
+            </Link>
+          </div>
+
+          {/* Desktop: Logo + Text together on left */}
+          <Link href="/" className="hidden md:flex items-center justify-center space-x-1 -ml-16">
             <img
               src="/hohenloher-gold-logo.png"
               alt="Hohenloher Gold Logo"
@@ -44,10 +63,14 @@ export function Header() {
               Kontakt
             </Link>
 
-            <CartHeaderIndicator />
+            <div className="flex items-center space-x-2">
+              <UserAccountDropdown />
+              <CartHeaderIndicator />
+            </div>
           </div>
 
           <div className="md:hidden flex items-center space-x-2 -mr-4">
+            <UserAccountDropdown />
             <CartHeaderIndicator />
             <Button variant="ghost" size="sm" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">
               {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}

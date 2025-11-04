@@ -252,14 +252,16 @@ export default function ProductManagement() {
       }
 
       const attributes: any = {}
-      if (formData.available_from) {
-        attributes.available_from = formData.available_from
+      if (formData.available_from && formData.available_from.trim()) {
+        attributes.available_from = formData.available_from.trim()
       }
+      // If attributes is empty, send null to clear the field in database
+      const attributesValue = Object.keys(attributes).length > 0 ? attributes : null
 
       const payload = {
         ...formData,
         category_id: categoryId,
-        attributes: Object.keys(attributes).length > 0 ? attributes : null,
+        attributes: attributesValue,
       }
 
       console.log("[v0] Sending request to:", url)
