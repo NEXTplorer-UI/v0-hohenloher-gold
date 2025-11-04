@@ -48,6 +48,17 @@ export async function GET(req: Request) {
 
     console.log("[v0] [admin/orders] Fetched", data?.length || 0, "orders")
 
+    const withQR = (data ?? []).filter((row: any) => row.qr_code_url)
+    const withoutQR = (data ?? []).filter((row: any) => !row.qr_code_url)
+    console.log("[v0] [admin/orders] Orders with qr_code_url in raw data:", withQR.length)
+    console.log("[v0] [admin/orders] Orders without qr_code_url in raw data:", withoutQR.length)
+    if (withQR.length > 0) {
+      console.log("[v0] [admin/orders] Sample order with QR:", {
+        order_number: withQR[0].order_number,
+        qr_code_url: withQR[0].qr_code_url,
+      })
+    }
+
     const shaped = (data ?? []).map((row: any) => ({
       id: row.id,
       order_number: row.order_number,

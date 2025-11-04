@@ -6,9 +6,16 @@ export const dynamic = "force-dynamic"
 
 // GET - Fetch all pickup locations (admin)
 export async function GET(request: NextRequest) {
-  const authResult = await requireAdmin(request)
-  if (authResult instanceof NextResponse) {
-    return authResult
+  try {
+    await requireAdmin(request)
+  } catch (error: any) {
+    if (error.name === "AuthenticationError") {
+      return NextResponse.json({ error: error.message }, { status: 401 })
+    }
+    if (error.name === "AuthorizationError") {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
+    throw error
   }
 
   try {
@@ -33,9 +40,16 @@ export async function GET(request: NextRequest) {
 
 // POST - Create new pickup location
 export async function POST(request: NextRequest) {
-  const authResult = await requireAdmin(request)
-  if (authResult instanceof NextResponse) {
-    return authResult
+  try {
+    await requireAdmin(request)
+  } catch (error: any) {
+    if (error.name === "AuthenticationError") {
+      return NextResponse.json({ error: error.message }, { status: 401 })
+    }
+    if (error.name === "AuthorizationError") {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
+    throw error
   }
 
   try {

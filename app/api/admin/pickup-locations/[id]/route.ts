@@ -6,9 +6,16 @@ export const dynamic = "force-dynamic"
 
 // GET - Fetch single pickup location
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const authResult = await requireAdmin(request)
-  if (authResult instanceof NextResponse) {
-    return authResult
+  try {
+    await requireAdmin(request)
+  } catch (error: any) {
+    if (error.name === "AuthenticationError") {
+      return NextResponse.json({ error: error.message }, { status: 401 })
+    }
+    if (error.name === "AuthorizationError") {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
+    throw error
   }
 
   try {
@@ -30,9 +37,16 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
 // PUT - Update pickup location
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
-  const authResult = await requireAdmin(request)
-  if (authResult instanceof NextResponse) {
-    return authResult
+  try {
+    await requireAdmin(request)
+  } catch (error: any) {
+    if (error.name === "AuthenticationError") {
+      return NextResponse.json({ error: error.message }, { status: 401 })
+    }
+    if (error.name === "AuthorizationError") {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
+    throw error
   }
 
   try {
@@ -72,9 +86,16 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
 // DELETE - Delete pickup location
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  const authResult = await requireAdmin(request)
-  if (authResult instanceof NextResponse) {
-    return authResult
+  try {
+    await requireAdmin(request)
+  } catch (error: any) {
+    if (error.name === "AuthenticationError") {
+      return NextResponse.json({ error: error.message }, { status: 401 })
+    }
+    if (error.name === "AuthorizationError") {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
+    throw error
   }
 
   try {

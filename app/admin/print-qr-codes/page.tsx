@@ -31,6 +31,29 @@ export default function PrintQRCodesPage() {
 
         const data = await response.json()
 
+        console.log("[v0] [print-qr] Total orders fetched:", data.length)
+        console.log("[v0] [print-qr] Sample order:", data[0])
+        console.log("[v0] [print-qr] Orders with qr_code_url:", data.filter((o: Order) => o.qr_code_url).length)
+        console.log("[v0] [print-qr] Orders without qr_code_url:", data.filter((o: Order) => !o.qr_code_url).length)
+
+        // Log a few examples of qr_code_url values
+        const withQR = data.filter((o: Order) => o.qr_code_url).slice(0, 3)
+        const withoutQR = data.filter((o: Order) => !o.qr_code_url).slice(0, 3)
+        console.log(
+          "[v0] [print-qr] Sample orders WITH QR:",
+          withQR.map((o: Order) => ({
+            order_number: o.order_number,
+            qr_code_url: o.qr_code_url,
+          })),
+        )
+        console.log(
+          "[v0] [print-qr] Sample orders WITHOUT QR:",
+          withoutQR.map((o: Order) => ({
+            order_number: o.order_number,
+            qr_code_url: o.qr_code_url,
+          })),
+        )
+
         const ordersWithQR = data
           .filter((order: Order) => order.qr_code_url)
           .sort((a: Order, b: Order) => {
@@ -39,8 +62,10 @@ export default function PrintQRCodesPage() {
             return nameA.localeCompare(nameB, "de")
           })
 
+        console.log("[v0] [print-qr] Final filtered orders:", ordersWithQR.length)
         setOrders(ordersWithQR)
       } catch (err) {
+        console.error("[v0] [print-qr] Error:", err)
         setError(err instanceof Error ? err.message : "Unknown error")
       } finally {
         setLoading(false)
