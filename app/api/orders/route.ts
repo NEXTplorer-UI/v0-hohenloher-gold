@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { createMovementsFromOrder } from "@/lib/inventory/movement-service"
+import { randomUUID } from "crypto"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -309,6 +310,9 @@ export async function POST(request: NextRequest) {
 
     const pickupLocationId = await findPickupLocationId(supabase, orderData)
 
+    const pickupToken = randomUUID()
+    console.log("[/api/orders] Generated pickup token:", pickupToken)
+
     const orderRecord = {
       customer_id: customer.id,
       user_id: customer.user_id,
@@ -328,6 +332,7 @@ export async function POST(request: NextRequest) {
       pickup_date: deliveryDate,
       is_test: orderData.isTest || false,
       created_at: orderTime.toISOString(),
+      pickup_token: pickupToken,
     }
 
     const { data: orderResult, error: orderError } = await supabase.from("orders").insert(orderRecord).select()
@@ -528,6 +533,7 @@ export async function POST(request: NextRequest) {
           order: savedOrder,
           items: itemsResult,
           message: message,
+          pickupToken: pickupToken,
         },
       },
       { status: 200, headers: { "content-type": "application/json" } },

@@ -127,6 +127,16 @@ function OrderConfirmationContent() {
         const response = await fetch(`/api/orders/${orderNumber}`)
         if (response.ok) {
           const data = await response.json()
+
+          console.log("[v0] Order confirmation: Full order data:", data.order)
+          console.log("[v0] Order confirmation: Pickup date debug:", {
+            pickup_date: data.order.pickup_date,
+            pickup_date_type: typeof data.order.pickup_date,
+            pickup_location: data.order.pickup_location,
+            pickup_location_id: data.order.pickup_location_id,
+            delivery_method: data.order.delivery_method,
+          })
+
           setOrderDetails(data.order)
 
           // Format order time in German format
@@ -255,6 +265,14 @@ function OrderConfirmationContent() {
                             })
                           : "Wird noch bekannt gegeben"}
                       </p>
+                      {orderDetails?.pickup_location && (
+                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-sm font-medium text-blue-900 flex items-center gap-2">
+                            <MapPin className="w-4 h-4" />
+                            Abholort: {orderDetails.pickup_location}
+                          </p>
+                        </div>
+                      )}
                       {orderDetails?.delivery_comment && (
                         <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                           <p className="text-sm text-yellow-800">{orderDetails.delivery_comment}</p>

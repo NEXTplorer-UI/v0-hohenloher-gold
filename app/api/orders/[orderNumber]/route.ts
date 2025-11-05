@@ -47,11 +47,13 @@ export async function GET(request: NextRequest, { params }: { params: { orderNum
 
     const deliverySchedule = order.order_items?.[0]?.delivery_schedule
 
-    console.log("[v0] API: Order details fetched successfully:", {
+    console.log("[v0] API: Order pickup date debug:", {
       orderNumber: order.order_number,
-      orderTime: order.order_time,
-      itemCount: order.order_items?.length || 0,
-      deliverySchedule: deliverySchedule,
+      pickup_date_from_order: order.pickup_date,
+      pickup_date_type: typeof order.pickup_date,
+      delivery_schedule_date: deliverySchedule?.delivery_date,
+      pickup_location: order.pickup_location,
+      pickup_location_id: order.pickup_location_id,
     })
 
     return NextResponse.json({

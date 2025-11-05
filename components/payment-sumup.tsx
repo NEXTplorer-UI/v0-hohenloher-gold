@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -25,6 +25,9 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
   const [adblockDetected, setAdblockDetected] = useState(false)
   const [loadTimeout, setLoadTimeout] = useState(false)
 
+  const originalConsoleError = useRef<typeof console.error>()
+  const originalConsoleWarn = useRef<typeof console.warn>()
+
   useEffect(() => {
     console.log("[v0] [SumUp Widget] Initializing with checkoutId:", checkoutId)
 
@@ -33,6 +36,40 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
       setError("Keine Checkout-ID vorhanden")
       setIsLoading(false)
       return
+    }
+
+    originalConsoleError.current = console.error
+    originalConsoleWarn.current = console.warn
+
+    console.error = (...args: any[]) => {
+      const message = args[0]?.toString() || ""
+
+      // Suppress SumUp internal monitoring errors (CORS, pythia-json)
+      if (
+        message.includes("pythia-json") ||
+        message.includes("sumup.com") ||
+        message.includes("CORS policy") ||
+        message.includes("Access to fetch")
+      ) {
+        return // Silently ignore these errors
+      }
+
+      originalConsoleError.current?.apply(console, args)
+    }
+
+    console.warn = (...args: any[]) => {
+      const message = args[0]?.toString() || ""
+
+      // Suppress Optimizely warnings from SumUp SDK
+      if (
+        message.includes("OPTIMIZELY") ||
+        message.includes("eventBatchSize") ||
+        message.includes("eventFlushInterval")
+      ) {
+        return // Silently ignore these warnings
+      }
+
+      originalConsoleWarn.current?.apply(console, args)
     }
 
     const loadingTimeout = setTimeout(() => {
@@ -136,6 +173,14 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
     return () => {
       clearTimeout(loadingTimeout)
       console.log("[v0] [SumUp Widget] Cleaning up")
+
+      if (originalConsoleError.current) {
+        console.error = originalConsoleError.current
+      }
+      if (originalConsoleWarn.current) {
+        console.warn = originalConsoleWarn.current
+      }
+
       if (script.parentNode) {
         script.parentNode.removeChild(script)
       }

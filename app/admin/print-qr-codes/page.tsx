@@ -22,6 +22,13 @@ export default function PrintQRCodesPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [diagnostics, setDiagnostics] = useState<{
+    totalFetched: number
+    withQR: number
+    withoutQR: number
+    sampleWithQR: any[]
+    sampleWithoutQR: any[]
+  } | null>(null)
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -33,34 +40,34 @@ export default function PrintQRCodesPage() {
 
         console.log("[v0] [print-qr] Total orders fetched:", data.length)
         console.log("[v0] [print-qr] Sample order:", data[0])
-        console.log("[v0] [print-qr] Orders with qr_code_url:", data.filter((o: Order) => o.qr_code_url).length)
-        console.log("[v0] [print-qr] Orders without qr_code_url:", data.filter((o: Order) => !o.qr_code_url).length)
 
-        // Log a few examples of qr_code_url values
-        const withQR = data.filter((o: Order) => o.qr_code_url).slice(0, 3)
-        const withoutQR = data.filter((o: Order) => !o.qr_code_url).slice(0, 3)
-        console.log(
-          "[v0] [print-qr] Sample orders WITH QR:",
-          withQR.map((o: Order) => ({
+        const withQR = data.filter((o: Order) => o.qr_code_url)
+        const withoutQR = data.filter((o: Order) => !o.qr_code_url)
+
+        console.log("[v0] [print-qr] Orders with qr_code_url:", withQR.length)
+        console.log("[v0] [print-qr] Orders without qr_code_url:", withoutQR.length)
+
+        setDiagnostics({
+          totalFetched: data.length,
+          withQR: withQR.length,
+          withoutQR: withoutQR.length,
+          sampleWithQR: withQR.slice(0, 3).map((o: Order) => ({
             order_number: o.order_number,
             qr_code_url: o.qr_code_url,
+            qr_url_type: typeof o.qr_code_url,
           })),
-        )
-        console.log(
-          "[v0] [print-qr] Sample orders WITHOUT QR:",
-          withoutQR.map((o: Order) => ({
+          sampleWithoutQR: withoutQR.slice(0, 3).map((o: Order) => ({
             order_number: o.order_number,
             qr_code_url: o.qr_code_url,
+            qr_url_type: typeof o.qr_code_url,
           })),
-        )
+        })
 
-        const ordersWithQR = data
-          .filter((order: Order) => order.qr_code_url)
-          .sort((a: Order, b: Order) => {
-            const nameA = `${a.customer.last_name} ${a.customer.first_name}`.toLowerCase()
-            const nameB = `${b.customer.last_name} ${b.customer.first_name}`.toLowerCase()
-            return nameA.localeCompare(nameB, "de")
-          })
+        const ordersWithQR = withQR.sort((a: Order, b: Order) => {
+          const nameA = `${a.customer.last_name} ${a.customer.first_name}`.toLowerCase()
+          const nameB = `${b.customer.last_name} ${b.customer.first_name}`.toLowerCase()
+          return nameA.localeCompare(nameB, "de")
+        })
 
         console.log("[v0] [print-qr] Final filtered orders:", ordersWithQR.length)
         setOrders(ordersWithQR)
@@ -104,6 +111,45 @@ export default function PrintQRCodesPage() {
 
   return (
     <div className="container mx-auto p-6">
+      {diagnostics && (
+        <div className="no-print mb-6">
+          <Card className="border-blue-200 bg-blue-50">
+            <CardHeader>
+              <CardTitle className="text-sm">Diagnose-Informationen</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm space-y-2">
+              <p>
+                <strong>Gesamt abgerufene Bestellungen:</strong> {diagnostics.totalFetched}
+              </p>
+              <p>
+                <strong>Bestellungen MIT QR-Code:</strong> {diagnostics.withQR}
+              </p>
+              <p>
+                <strong>Bestellungen OHNE QR-Code:</strong> {diagnostics.withoutQR}
+              </p>
+
+              {diagnostics.sampleWithQR.length > 0 && (
+                <div className="mt-4">
+                  <p className="font-semibold">Beispiele MIT QR-Code:</p>
+                  <pre className="text-xs bg-white p-2 rounded mt-1 overflow-auto">
+                    {JSON.stringify(diagnostics.sampleWithQR, null, 2)}
+                  </pre>
+                </div>
+              )}
+
+              {diagnostics.sampleWithoutQR.length > 0 && (
+                <div className="mt-4">
+                  <p className="font-semibold">Beispiele OHNE QR-Code:</p>
+                  <pre className="text-xs bg-white p-2 rounded mt-1 overflow-auto">
+                    {JSON.stringify(diagnostics.sampleWithoutQR, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <div className="no-print mb-6">
         <Card>
           <CardHeader>

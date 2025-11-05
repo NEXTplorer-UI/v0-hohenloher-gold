@@ -159,6 +159,7 @@ function OrderProcessingContent() {
       updateStep("order", "loading")
       let createdOrderNumber = ""
       let orderTime = ""
+      let pickupToken = "" // Add pickupToken variable
       try {
         const orderResult = await retryWithBackoff(
           async () => {
@@ -185,6 +186,7 @@ function OrderProcessingContent() {
 
         createdOrderNumber = orderResult.data.order.order_number
         orderTime = orderResult.data.order.order_time
+        pickupToken = orderResult.data.pickupToken // Extract pickupToken from response
         setOrderNumber(createdOrderNumber)
         updateStep("order", "success")
       } catch (error) {
@@ -210,6 +212,7 @@ function OrderProcessingContent() {
                 deliveryMethod: orderData.emailData.deliveryMethod,
                 orderItems: orderData.emailData.orderItems,
                 order_time: orderTime,
+                pickupToken: pickupToken, // Pass pickupToken to email
               }),
             })
 

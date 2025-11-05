@@ -769,6 +769,7 @@ export default function CheckoutPage() {
           ...sumupOrderData,
           orderNumber: orderParsed.data.order.order_number,
           orderTime: orderParsed.data.order.order_time,
+          pickupToken: orderParsed.data.pickupToken, // Add pickupToken from API response
         }
 
         const emailResult = await sendOrderConfirmationEmail(updatedSumUpOrderData)
@@ -777,15 +778,8 @@ export default function CheckoutPage() {
         }
 
         dispatch({ type: "CLEAR_CART" })
-        const params = new URLSearchParams({
-          orderNumber: orderParsed.data.order.order_number,
-          deliveryMethod: updatedSumUpOrderData.deliveryMethod,
-          paymentMethod: "sumup",
-          total: updatedSumUpOrderData.total,
-          customerName: updatedSumUpOrderData.customerName,
-        })
 
-        window.location.href = `/order-confirmation?${params.toString()}`
+        window.location.href = `/order-processing?checkoutId=${sumupCheckoutId}&source=sumup`
       } else {
         console.error("[v0] [Checkout] Failed to save SumUp order to database:", orderParsed.error)
         // Fallback to just redirecting if saving fails, but still send confirmation
@@ -795,15 +789,8 @@ export default function CheckoutPage() {
         }
 
         dispatch({ type: "CLEAR_CART" })
-        const params = new URLSearchParams({
-          orderNumber: sumupOrderData.orderNumber,
-          deliveryMethod: sumupOrderData.deliveryMethod,
-          paymentMethod: "sumup",
-          total: sumupOrderData.total,
-          customerName: sumupOrderData.customerName,
-        })
 
-        window.location.href = `/order-confirmation?${params.toString()}`
+        window.location.href = `/order-processing?checkoutId=${sumupCheckoutId}&source=sumup`
       }
     }
   }
@@ -924,8 +911,9 @@ export default function CheckoutPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-center">Zahlung abschließen</CardTitle>
-                <p className="text-center text-muted-foreground">
-                  Bestellung {sumupOrderData.orderNumber} - €{sumupOrderData.total}
+                <p className="text-center text-muted-foreground">Gesamtbetrag: €{sumupOrderData.total.toFixed(2)}</p>
+                <p className="text-xs text-center text-muted-foreground mt-2">
+                  Ihre Bestellnummer erhalten Sie nach erfolgreicher Zahlung
                 </p>
               </CardHeader>
               <CardContent>
