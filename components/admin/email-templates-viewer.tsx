@@ -79,7 +79,7 @@ export default function EmailTemplatesViewer() {
                             </p>
                             <p style="margin: 5px 0; font-size: 13px; line-height: 1.8; color: #e2e8f0;">
                                 <a href="mailto:kontakt@suedfruechte-hohenlohe.de" style="color: #d4af37; text-decoration: none;">kontakt@suedfruechte-hohenlohe.de</a> | 
-                                Tel: <a href="tel:+4915735703864" style="color: #d4af37; text-decoration: none;">0157 357 038 64</a>
+                                Tel: 0157 357 038 64
                             </p>
                         </td>
                     </tr>
@@ -151,7 +151,7 @@ export default function EmailTemplatesViewer() {
                             </p>
                             <p style="margin: 5px 0; font-size: 13px; line-height: 1.8; color: #e2e8f0;">
                                 <a href="mailto:kontakt@suedfruechte-hohenlohe.de" style="color: #d4af37; text-decoration: none;">kontakt@suedfruechte-hohenlohe.de</a> | 
-                                Tel: <a href="tel:+4915735703864" style="color: #d4af37; text-decoration: none;">0157 357 038 64</a>
+                                Tel: 0157 357 038 64
                             </p>
                         </td>
                     </tr>

@@ -226,7 +226,7 @@ export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions
         <p>Weststraße 28 | 74629 Pfedelbach</p>
         <p>
           <a href="mailto:kontakt@suedfruechte-hohenlohe.de">kontakt@suedfruechte-hohenlohe.de</a> | 
-          Tel: <a href="tel:+4915735703864">0157 357 038 64</a>
+          Tel: 0157 357 038 64
         </p>
         ${unsubscribeLink}
       </div>

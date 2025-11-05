@@ -1524,19 +1524,40 @@ export default function CheckoutPage() {
 
                     {pickupLocation === "warehouse" && (
                       <div className="p-3 bg-card border rounded-lg">
-                        {allPickupLocations.length > 0 && allPickupLocations[0] ? ( // Use renamed state
-                          <p className="text-sm text-muted-foreground">
-                            <strong>Adresse:</strong> {allPickupLocations[0].address} {/* Use renamed state */}
-                            <br />
-                            <strong>Kontakt:</strong> {allPickupLocations[0].contact_phone}
-                          </p>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">
-                            <strong>Adresse:</strong> Weststraße 28, 74653 Pfedelbach
-                            <br />
-                            <strong>Kontakt:</strong> 0157 357 038 64
-                          </p>
-                        )}
+                        {(() => {
+                          // Try to find warehouse location from pickupLocations
+                          const warehouseLocation = pickupLocations.find(
+                            (loc) =>
+                              loc.name?.toLowerCase().includes("zentrallager") ||
+                              loc.name?.toLowerCase().includes("pfedelbach") ||
+                              loc.city?.toLowerCase().includes("pfedelbach"),
+                          )
+
+                          // Check if we have a valid address (not just "." or empty)
+                          const hasValidAddress =
+                            warehouseLocation?.address &&
+                            warehouseLocation.address.trim() !== "." &&
+                            warehouseLocation.address.trim().length > 1
+
+                          if (hasValidAddress) {
+                            return (
+                              <p className="text-sm text-muted-foreground">
+                                <strong>Adresse:</strong> {warehouseLocation.address}
+                                <br />
+                                <strong>Kontakt:</strong> {warehouseLocation.contact_phone || "0157 357 038 64"}
+                              </p>
+                            )
+                          } else {
+                            // Fallback to hardcoded address
+                            return (
+                              <p className="text-sm text-muted-foreground">
+                                <strong>Adresse:</strong> Weststraße 28, 74653 Pfedelbach
+                                <br />
+                                <strong>Kontakt:</strong> 0157 357 038 64
+                              </p>
+                            )
+                          }
+                        })()}
                       </div>
                     )}
                   </div>
@@ -1751,7 +1772,7 @@ export default function CheckoutPage() {
                             <CreditCard className="w-4 h-4 text-primary" />
                             <div>
                               <div className="font-medium text-sm">Online bezahlen</div>
-                              <div className="text-xs text-muted-foreground">Kreditkarte, Debitkarte, PayPa</div>
+                              <div className="text-xs text-muted-foreground">Kreditkarte, Debitkarte, </div>
                             </div>
                           </div>
                         </Label>

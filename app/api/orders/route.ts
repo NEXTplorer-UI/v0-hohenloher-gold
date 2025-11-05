@@ -305,8 +305,20 @@ export async function POST(request: NextRequest) {
     const shippingCost = orderData.deliveryMethod === "delivery" ? 4.9 : 0
     const total = subtotal + shippingCost
 
-    const { deliveryDate, scheduleId, message } = await determineDeliveryDate(orderData.items, supabase)
-    console.log("[/api/orders] Determined delivery date:", deliveryDate, "Schedule ID:", scheduleId)
+    let deliveryDate = orderData.deliveryDate || null
+    let scheduleId = orderData.deliveryScheduleId || null
+    let message = ""
+
+    // Only calculate delivery date if not provided
+    if (!deliveryDate) {
+      const deliveryInfo = await determineDeliveryDate(orderData.items, supabase)
+      deliveryDate = deliveryInfo.deliveryDate
+      scheduleId = deliveryInfo.scheduleId
+      message = deliveryInfo.message || ""
+      console.log("[/api/orders] Calculated delivery date:", deliveryDate, "Schedule ID:", scheduleId)
+    } else {
+      console.log("[/api/orders] Using passed delivery date:", deliveryDate, "Schedule ID:", scheduleId)
+    }
 
     const pickupLocationId = await findPickupLocationId(supabase, orderData)
 
@@ -329,7 +341,7 @@ export async function POST(request: NextRequest) {
       notes: orderData.notes || null,
       pickup_reminders: orderData.emailReminder || false,
       email_notifications: orderData.emailUpdates || false,
-      pickup_date: deliveryDate,
+      pickup_date: deliveryDate, // Now uses passed date or calculated date
       is_test: orderData.isTest || false,
       created_at: orderTime.toISOString(),
       pickup_token: pickupToken,

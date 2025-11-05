@@ -19,16 +19,16 @@ export default function AdminLayout({
               </Link>
               <nav className="hidden md:flex items-center gap-6">
                 <Link href="/admin" className="text-sm hover:text-primary transition-colors">
-                  Übersicht
-                </Link>
-                <Link href="/admin/orders" className="text-sm hover:text-primary transition-colors">
-                  Bestellungen
-                </Link>
-                <Link href="/admin/customers" className="text-sm hover:text-primary transition-colors">
-                  Kunden
+                  Dashboard
                 </Link>
                 <Link href="/admin/test-data" className="text-sm hover:text-primary transition-colors">
                   Test-Daten
+                </Link>
+                <Link href="/admin/error-logs" className="text-sm hover:text-primary transition-colors">
+                  Fehler-Logs
+                </Link>
+                <Link href="/admin/print-qr-codes" className="text-sm hover:text-primary transition-colors">
+                  QR-Codes drucken
                 </Link>
               </nav>
             </div>
