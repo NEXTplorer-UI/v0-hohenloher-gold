@@ -212,7 +212,11 @@ function OrderProcessingContent() {
                 deliveryMethod: orderData.emailData.deliveryMethod,
                 orderItems: orderData.emailData.orderItems,
                 order_time: orderTime,
-                pickupToken: pickupToken, // Pass pickupToken to email
+                pickupToken: pickupToken,
+                pickupDate: orderData.orderData.deliveryDate,
+                pickupLocation: orderData.orderData.pickupLocation,
+                pickupStartTime: orderData.orderData.pickupStartTime,
+                pickupEndTime: orderData.orderData.pickupEndTime,
               }),
             })
 

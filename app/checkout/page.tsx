@@ -499,7 +499,7 @@ export default function CheckoutPage() {
             state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price, item.category) * item.quantity, 0) +
             (deliveryMethod === "delivery" ? 4.9 : 0)
 
-          let finalPickupLocation = "Zentrallager Pfedelbach"
+          let finalPickupLocation = "Zentrallager Baumerlenbach"
           let finalPickupLocationId = null
 
           if (deliveryMethod === "delivery") {
@@ -507,15 +507,19 @@ export default function CheckoutPage() {
             finalPickupLocationId = null
           } else if (deliveryMethod === "pickup") {
             if (pickupLocation === "warehouse") {
-              const warehouseLocation = allPickupLocations.find(
-                (loc) => loc.name.includes("Zentrallager") || loc.name.includes("Pfedelbach"),
+              const warehouseLocation = pickupLocations.find(
+                (loc) =>
+                  loc.name?.toLowerCase().includes("zentrallager") ||
+                  loc.name?.toLowerCase().includes("baumerlenbach") ||
+                  loc.city?.toLowerCase().includes("baumerlenbach"),
               )
               if (warehouseLocation) {
                 finalPickupLocation = warehouseLocation.name
                 finalPickupLocationId = warehouseLocation.id
-              } else if (allPickupLocations[0]) {
-                finalPickupLocation = allPickupLocations[0].name
-                finalPickupLocationId = allPickupLocations[0].id
+              } else {
+                // Fallback to hardcoded Baumerlenbach address
+                finalPickupLocation = "Zentrallager Baumerlenbach"
+                finalPickupLocationId = null
               }
             } else if (pickupLocation === "station") {
               if (selectedLocation?.id === "custom") {
@@ -590,7 +594,7 @@ export default function CheckoutPage() {
         state.items.reduce((sum, item) => sum + safeCalculatePrice(item.price, item.category) * item.quantity, 0) +
         (deliveryMethod === "delivery" ? 4.9 : 0)
 
-      let finalPickupLocation = "Zentrallager Pfedelbach"
+      let finalPickupLocation = "Zentrallager Baumerlenbach"
       let finalPickupLocationId = null
 
       if (deliveryMethod === "delivery") {
@@ -598,15 +602,19 @@ export default function CheckoutPage() {
         finalPickupLocationId = null
       } else if (deliveryMethod === "pickup") {
         if (pickupLocation === "warehouse") {
-          const warehouseLocation = allPickupLocations.find(
-            (loc) => loc.name.includes("Zentrallager") || loc.name.includes("Pfedelbach"),
+          const warehouseLocation = pickupLocations.find(
+            (loc) =>
+              loc.name?.toLowerCase().includes("zentrallager") ||
+              loc.name?.toLowerCase().includes("baumerlenbach") ||
+              loc.city?.toLowerCase().includes("baumerlenbach"),
           )
           if (warehouseLocation) {
             finalPickupLocation = warehouseLocation.name
             finalPickupLocationId = warehouseLocation.id
-          } else if (allPickupLocations[0]) {
-            finalPickupLocation = allPickupLocations[0].name
-            finalPickupLocationId = allPickupLocations[0].id
+          } else {
+            // Fallback to hardcoded Baumerlenbach address
+            finalPickupLocation = "Zentrallager Baumerlenbach"
+            finalPickupLocationId = null
           }
         } else if (pickupLocation === "station") {
           if (selectedLocation?.id === "custom") {
@@ -1525,12 +1533,11 @@ export default function CheckoutPage() {
                     {pickupLocation === "warehouse" && (
                       <div className="p-3 bg-card border rounded-lg">
                         {(() => {
-                          // Try to find warehouse location from pickupLocations
                           const warehouseLocation = pickupLocations.find(
                             (loc) =>
                               loc.name?.toLowerCase().includes("zentrallager") ||
-                              loc.name?.toLowerCase().includes("pfedelbach") ||
-                              loc.city?.toLowerCase().includes("pfedelbach"),
+                              loc.name?.toLowerCase().includes("baumerlenbach") ||
+                              loc.city?.toLowerCase().includes("baumerlenbach"),
                           )
 
                           // Check if we have a valid address (not just "." or empty)
@@ -1548,10 +1555,11 @@ export default function CheckoutPage() {
                               </p>
                             )
                           } else {
-                            // Fallback to hardcoded address
                             return (
                               <p className="text-sm text-muted-foreground">
-                                <strong>Adresse:</strong> Weststraße 28, 74653 Pfedelbach
+                                <strong>Zentrallager Südfrüchte Hohenlohe</strong>
+                                <br />
+                                <strong>Adresse:</strong> Gartenbühlstraße 33 / Setze, 74613 Öhringen
                                 <br />
                                 <strong>Kontakt:</strong> 0157 357 038 64
                               </p>

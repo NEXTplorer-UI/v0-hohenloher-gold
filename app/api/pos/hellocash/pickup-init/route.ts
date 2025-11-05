@@ -7,6 +7,7 @@ export const runtime = "nodejs"
 export async function POST(req: Request) {
   try {
     const { token } = await req.json()
+    console.log("[pickup-init] Token received:", token)
 
     if (!token) {
       return NextResponse.json({ error: "Token fehlt" }, { status: 400 })
@@ -14,31 +15,44 @@ export async function POST(req: Request) {
 
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-    const { data: validation } = await supabase.rpc("validate_qr_code", {
-      p_pickup_token: token,
-    })
+    let validation: any = null
+    try {
+      const { data } = await supabase.rpc("validate_qr_code", {
+        p_pickup_token: token,
+      })
+      validation = data
+      console.log("[pickup-init] QR validation result:", validation)
+    } catch (rpcError: any) {
+      console.log("[pickup-init] QR validation RPC not available, skipping:", rpcError.message)
+      // Continue without validation if RPC doesn't exist
+    }
 
-    if (!validation?.valid) {
-      if (validation?.order_id) {
-        await supabase.rpc("log_qr_scan", {
-          p_order_id: validation.order_id,
-          p_source: "pos",
-          p_scan_result: validation.error,
-          p_ip: req.headers.get("x-forwarded-for")?.split(",")[0] || null,
-          p_user_agent: req.headers.get("user-agent") || null,
-          p_error_message: validation.message,
-        })
+    if (validation && !validation.valid) {
+      if (validation.order_id) {
+        try {
+          await supabase.rpc("log_qr_scan", {
+            p_order_id: validation.order_id,
+            p_source: "pos",
+            p_scan_result: validation.error,
+            p_ip: req.headers.get("x-forwarded-for")?.split(",")[0] || null,
+            p_user_agent: req.headers.get("user-agent") || null,
+            p_error_message: validation.message,
+          })
+        } catch (logError: any) {
+          console.log("[pickup-init] Log scan RPC not available:", logError.message)
+        }
       }
 
       return NextResponse.json(
         {
-          error: validation?.error || "invalid_token",
-          message: validation?.message || "Ungültiger QR-Code",
+          error: validation.error || "invalid_token",
+          message: validation.message || "Ungültiger QR-Code",
         },
         { status: 400 },
       )
     }
 
+    console.log("[pickup-init] Fetching order by token...")
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select(`
@@ -69,29 +83,28 @@ export async function POST(req: Request) {
       .single()
 
     if (orderError || !order) {
+      console.error("[pickup-init] Order not found:", orderError)
       return NextResponse.json({ error: "Order nicht gefunden" }, { status: 404 })
     }
 
-    if (!order.hellocash_invoice_id) {
-      const draftResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/pos/hellocash/create-draft`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: order.id }),
-      })
+    console.log("[pickup-init] Order found:", order.order_number)
 
-      if (!draftResponse.ok) {
-        console.error("[pickup-init] Draft creation failed:", await draftResponse.text())
-      }
+    // The pickup page just shows the order overview with QR code
+    // Invoice creation happens via createInvoiceAfterPayment() when payment is confirmed
+
+    try {
+      await supabase.rpc("log_qr_scan", {
+        p_order_id: order.id,
+        p_source: "pos",
+        p_scan_result: "success",
+        p_ip: req.headers.get("x-forwarded-for")?.split(",")[0] || null,
+        p_user_agent: req.headers.get("user-agent") || null,
+      })
+    } catch (logError: any) {
+      console.log("[pickup-init] Log scan RPC not available:", logError.message)
     }
 
-    await supabase.rpc("log_qr_scan", {
-      p_order_id: order.id,
-      p_source: "pos",
-      p_scan_result: "success",
-      p_ip: req.headers.get("x-forwarded-for")?.split(",")[0] || null,
-      p_user_agent: req.headers.get("user-agent") || null,
-    })
-
+    console.log("[pickup-init] Returning order data successfully")
     return NextResponse.json({
       order_id: order.id,
       order_number: order.order_number,

@@ -451,6 +451,25 @@ export async function POST(request: NextRequest) {
       const adminEmail = process.env.SUMUP_PAY_TO_EMAIL || "kontakt@suedfruechte-hohenlohe.de"
       console.log("[/api/orders] Sending admin notification to:", adminEmail)
 
+      let customerName = `${orderData.firstName || ""} ${orderData.lastName || ""}`.trim()
+
+      if (!customerName) {
+        console.log("[/api/orders] Customer name not in orderData, fetching from database...")
+        const { data: customerData, error: customerNameError } = await supabase
+          .from("customers")
+          .select("first_name, last_name")
+          .eq("id", customer.id)
+          .single()
+
+        if (!customerNameError && customerData) {
+          customerName = `${customerData.first_name || ""} ${customerData.last_name || ""}`.trim()
+          console.log("[/api/orders] Fetched customer name from database:", customerName)
+        } else {
+          console.warn("[/api/orders] Could not fetch customer name, using email:", orderData.email)
+          customerName = orderData.email
+        }
+      }
+
       fetch(`${request.nextUrl.origin}/api/admin/order-notification`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -458,7 +477,7 @@ export async function POST(request: NextRequest) {
           orderId: savedOrder.id,
           orderNumber: savedOrder.order_number,
           customerEmail: orderData.email,
-          customerName: `${orderData.firstName || ""} ${orderData.lastName || ""}`.trim(),
+          customerName: customerName,
           total: savedOrder.total,
           deliveryMethod: savedOrder.delivery_method,
           pickupLocation: savedOrder.pickup_location,

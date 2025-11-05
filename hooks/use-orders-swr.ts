@@ -18,6 +18,14 @@ interface UseOrdersOptions {
   autoRefresh?: boolean
 }
 
+const fetcher = (url: string) =>
+  fetch(url).then((res) => {
+    if (!res.ok) {
+      throw new Error(`Failed to fetch orders: ${res.statusText}`)
+    }
+    return res.json()
+  })
+
 export function useOrdersSWR(options: UseOrdersOptions = {}) {
   const params = new URLSearchParams()
   if (options.status) params.append("status", options.status)
@@ -26,7 +34,7 @@ export function useOrdersSWR(options: UseOrdersOptions = {}) {
   const queryString = params.toString()
   const url = `/api/admin/orders${queryString ? `?${queryString}` : ""}`
 
-  const { data, error, isLoading, mutate } = useSWR<Order[]>(url, {
+  const { data, error, isLoading, mutate } = useSWR<Order[]>(url, fetcher, {
     refreshInterval: options.autoRefresh ? 30000 : 0, // Auto-refresh every 30s if enabled
     revalidateOnMount: true,
   })
