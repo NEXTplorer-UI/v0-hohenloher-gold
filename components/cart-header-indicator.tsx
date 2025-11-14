@@ -8,22 +8,24 @@ import Link from "next/link"
 import { useCart } from "@/contexts/cart-context"
 import { usePricing } from "@/components/pricing-context"
 import { useState, useRef } from "react"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 export function CartHeaderIndicator() {
   const { state, dispatch } = useCart()
   const { pricingMode, calculatePrice } = usePricing()
   const [isHovered, setIsHovered] = useState(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isMobile = useIsMobile()
 
-  // Don't show if cart is empty
-  if (!state.items || state.itemCount === 0) {
-    return null
-  }
+  const itemCount = state.itemCount || 0
+  const hasItems = itemCount > 0
 
-  const subtotal = state.items.reduce((sum, item) => {
-    const itemPrice = calculatePrice(item.price, item.category)
-    return sum + itemPrice * item.quantity
-  }, 0)
+  const subtotal = hasItems
+    ? state.items.reduce((sum, item) => {
+        const itemPrice = calculatePrice(item.price, item.category)
+        return sum + itemPrice * item.quantity
+      }, 0)
+    : 0
 
   const shippingCost = pricingMode === "shipping" ? 4.9 : 0
   const total = subtotal + shippingCost
@@ -40,7 +42,9 @@ export function CartHeaderIndicator() {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)
     }
-    setIsHovered(true)
+    if (hasItems) {
+      setIsHovered(true)
+    }
   }
 
   const handleMouseLeave = () => {
@@ -49,20 +53,47 @@ export function CartHeaderIndicator() {
     }, 150)
   }
 
+  const handleCheckoutClick = () => {
+    setIsHovered(false)
+  }
+
+  if (isMobile) {
+    return (
+      <div className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+        <Link href="/checkout">
+          <Button variant="ghost" size="sm" className="relative p-2" aria-label={`Warenkorb (${itemCount} Artikel)`}>
+            <ShoppingCart className="text-gold w-8 h-8" strokeWidth={1.5} />
+            <Badge
+              variant="default"
+              className="absolute -top-0.5 -right-0.5 h-5 min-w-[1.25rem] px-1.5 flex items-center justify-center bg-gold text-gold-foreground font-semibold text-xs border-2 border-background"
+            >
+              {itemCount}
+            </Badge>
+          </Button>
+        </Link>
+      </div>
+    )
+  }
+
   return (
     <div className="relative" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
       <Link href="/checkout">
-        <Button variant="outline" size="sm" className="relative bg-transparent">
-          <ShoppingCart className="w-4 h-4 mr-2" />
-          <span className="hidden sm:inline">Warenkorb</span>
-          <Badge variant="secondary" className="ml-2 px-2 py-1 text-xs">
-            {state.itemCount}
+        <div
+          className="relative p-1.5 hover:bg-gold/10 transition-colors rounded-md cursor-pointer inline-flex items-center justify-center"
+          aria-label={`Warenkorb (${itemCount} Artikel)`}
+        >
+          <ShoppingCart className="text-gold w-8 h-8" strokeWidth={1.5} />
+          <Badge
+            variant="default"
+            className="absolute -top-0.5 -right-0.5 h-5 min-w-[1.25rem] px-1.5 flex items-center justify-center bg-gold text-gold-foreground font-semibold text-xs border-2 border-background"
+          >
+            {itemCount}
           </Badge>
-        </Button>
+        </div>
       </Link>
 
-      {/* Hover Dropdown */}
-      {isHovered && (
+      {/* Hover Dropdown - only show if cart has items */}
+      {isHovered && hasItems && (
         <Card
           className="absolute right-0 top-full mt-2 w-96 z-50 shadow-lg border"
           onMouseEnter={handleMouseEnter}
@@ -71,12 +102,12 @@ export function CartHeaderIndicator() {
           <CardContent className="p-4">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-sm">Warenkorb ({state.itemCount} Artikel)</h3>
+                <h3 className="font-semibold text-sm">Warenkorb ({itemCount} Artikel)</h3>
                 <span className="text-sm font-medium">{total.toFixed(2).replace(".", ",")} €</span>
               </div>
 
               <div className="space-y-2 max-h-48 overflow-y-auto">
-                {(state.items || []).slice(0, 3).map((item) => {
+                {(state.items || []).map((item) => {
                   const itemPrice = calculatePrice(item.price, item.category)
                   return (
                     <div
@@ -133,12 +164,6 @@ export function CartHeaderIndicator() {
                     </div>
                   )
                 })}
-
-                {state.items && state.items.length > 3 && (
-                  <p className="text-xs text-muted-foreground text-center py-1">
-                    ... und {state.items.length - 3} weitere Artikel
-                  </p>
-                )}
               </div>
 
               <div className="space-y-1 pt-2 border-t text-sm">
@@ -170,7 +195,7 @@ export function CartHeaderIndicator() {
                     Weiter einkaufen
                   </Button>
                 </Link>
-                <Link href="/checkout" className="flex-1">
+                <Link href="/checkout" className="flex-1" onClick={handleCheckoutClick}>
                   <Button size="sm" className="w-full">
                     Zur Kasse
                     <ArrowRight className="w-3 h-3 ml-1" />

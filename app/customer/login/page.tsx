@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { getBrowserClient } from "@/lib/supabase/browser"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,7 +24,7 @@ export default function CustomerLoginPage() {
   const [resendSuccess, setResendSuccess] = useState("")
   const [resendError, setResendError] = useState("")
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = getBrowserClient()
 
   useEffect(() => {
     const savedEmail = localStorage.getItem("hohenloher_customer_email")

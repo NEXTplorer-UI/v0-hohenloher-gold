@@ -12,6 +12,7 @@ export async function GET() {
       .from("pickup_locations")
       .select("*")
       .eq("is_active", true)
+      .order("distributor_id", { ascending: true, nullsFirst: true })
       .order("name", { ascending: true })
 
     if (error) {

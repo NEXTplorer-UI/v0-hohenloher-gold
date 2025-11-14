@@ -73,11 +73,23 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { first_name, last_name, phone, street, house_number, postal_code, city, country, email } = body
+    const { first_name, last_name, phone, street, house_number, postal_code, city, country } = body
 
-    if (!first_name || !last_name || !email) {
-      return NextResponse.json({ error: "Vorname, Nachname und E-Mail sind erforderlich" }, { status: 400 })
+    if (!first_name || !last_name) {
+      return NextResponse.json({ error: "Vorname und Nachname sind erforderlich" }, { status: 400 })
     }
+
+    console.log("[v0] [/api/customer/profile] Updating profile for user:", user.id)
+    console.log("[v0] [/api/customer/profile] Update data:", {
+      first_name,
+      last_name,
+      phone,
+      street,
+      house_number,
+      postal_code,
+      city,
+      country,
+    })
 
     const { data: updatedCustomer, error: updateError } = await supabase
       .from("customers")
@@ -100,6 +112,8 @@ export async function PATCH(request: NextRequest) {
       console.error("[/api/customer/profile] Update error:", updateError)
       return NextResponse.json({ error: "Fehler beim Aktualisieren des Profils" }, { status: 500 })
     }
+
+    console.log("[v0] [/api/customer/profile] Profile updated successfully")
 
     return NextResponse.json({
       success: true,

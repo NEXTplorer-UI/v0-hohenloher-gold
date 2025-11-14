@@ -35,8 +35,14 @@ export interface ExtendedCustomer {
   days_since_last_order?: number | null
   favorite_products?: FavoriteProduct[]
 
+  customer_segment?: string
+  preferred_products?: string[]
+  total_orders?: number // Alias for order_count, used in some contexts
+
   // bestehende optionale Felder
   favorite_categories?: string[]
   reminder_notifications?: boolean
   referral_source?: string
+
+  tags?: string[]
 }

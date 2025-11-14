@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { getAdminClient } from "@/lib/supabase/admin"
 import { syncInvoiceStatus } from "@/lib/hellocash/sync-invoice-status"
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -15,7 +15,7 @@ export async function GET(req: Request) {
 
     console.log("[cron] Starting helloCash invoice sync...")
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const supabase = getAdminClient()
 
     // Find orders that need syncing:
     // - payment_status = 'pending'

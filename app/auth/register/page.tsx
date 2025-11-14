@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useCallback } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { getBrowserClient } from "@/lib/supabase/browser"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft } from "lucide-react"
@@ -22,7 +22,7 @@ export default function RegisterPage() {
   })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState("")
-  const supabase = createClient()
+  const supabase = getBrowserClient()
 
   const { validateField, validateForm, getFieldError, hasFieldError, markFieldTouched } = useFormValidation({
     schema: registrationSchema,

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Removed problematic @custom-variant rule that was causing RTL CSS syntax errors */
+@custom-variant dark (&:is(.dark *));
 
 :root {
   /* Updated color tokens for improved header design with green palette */
@@ -189,5 +189,14 @@
   }
   .hover\:bg-card-hover:hover {
     background-color: var(--color-card-hover);
+  }
+
+  /* Adding scrollbar-hide utility for horizontal scrolling categories */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 }

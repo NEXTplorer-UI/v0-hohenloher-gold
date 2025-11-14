@@ -1,14 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
-  if (!url || !key) {
-    throw new Error("Supabase ENV fehlt (URL/Service-Role-Key)")
-  }
-  return createClient(url, key, { auth: { persistSession: false } })
-}
+import { getAdminClient } from "@/lib/supabase/admin"
 
 function normalizeStatusForUI(dbStatus: string) {
   // DB uses: pending, confirmed, ready, completed, cancelled
@@ -31,35 +22,29 @@ export async function GET(req: Request) {
     const offset = Number(searchParams.get("offset") ?? 0)
 
     console.log("[v0] [admin/orders] Creating admin client...")
-    const supabase = createAdminClient()
+    const supabase = getAdminClient()
 
-    console.log("[v0] [admin/orders] Fetching orders directly from database...")
+    console.log("[v0] [admin/orders] Fetching orders with direct query...")
 
     // Build the query
     let query = supabase
       .from("orders")
       .select(`
-        id,
-        order_number,
-        customer_id,
-        status,
-        total,
-        delivery_method,
-        pickup_location,
-        payment_method,
-        payment_status,
-        notes,
-        created_at,
-        qr_code_url,
-        customers:customer_id (
-          first_name,
-          last_name,
-          email,
-          phone
+        *,
+        customer:customers(first_name, last_name, email, phone),
+        order_items(
+          id,
+          product_id,
+          quantity,
+          unit_price,
+          total_price,
+          product_name,
+          product_category,
+          product_size,
+          product:products(name, unit, image_url)
         )
       `)
       .order("created_at", { ascending: false })
-      .range(offset, offset + limit - 1)
 
     // Apply status filter
     if (status && status !== "all") {
@@ -67,55 +52,70 @@ export async function GET(req: Request) {
       query = query.eq("status", dbStatus)
     }
 
-    // Apply search filter
-    if (q) {
-      query = query.or(
-        `order_number.ilike.%${q}%,customers.first_name.ilike.%${q}%,customers.last_name.ilike.%${q}%,customers.email.ilike.%${q}%`,
-      )
-    }
+    // Apply search filter (search in order_number, customer name, email)
+    if (q && q.trim() !== "") {
+      // For search, we need to use a more complex approach since we can't directly search joined tables
+      // We'll fetch all and filter in memory for now (can be optimized with RPC later if needed)
+      const { data: allOrders, error: fetchError } = await query.range(0, 1000)
 
-    const { data: ordersData, error: ordersError } = await query
-
-    if (ordersError) {
-      console.error("[v0] [admin/orders] Orders fetch error:", ordersError)
-      return NextResponse.json({ error: "Database error", details: ordersError.message }, { status: 500 })
-    }
-
-    console.log("[v0] [admin/orders] Fetched", ordersData?.length || 0, "orders")
-
-    // Fetch order items for each order
-    const orderIds = (ordersData ?? []).map((o: any) => o.id)
-    const { data: itemsData, error: itemsError } = await supabase
-      .from("order_items")
-      .select("*")
-      .in("order_id", orderIds)
-
-    if (itemsError) {
-      console.error("[v0] [admin/orders] Order items fetch error:", itemsError)
-    }
-
-    // Group items by order_id
-    const itemsByOrderId = (itemsData ?? []).reduce((acc: any, item: any) => {
-      if (!acc[item.order_id]) {
-        acc[item.order_id] = []
+      if (fetchError) {
+        console.error("[v0] [admin/orders] Query error:", fetchError)
+        return NextResponse.json({ error: "Database error", details: fetchError.message }, { status: 500 })
       }
-      acc[item.order_id].push({
-        id: item.id,
-        product_id: item.product_id,
-        product_name: item.product_name,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total_price: item.total_price,
+
+      // Filter by search query
+      const searchLower = q.toLowerCase()
+      const filtered = (allOrders ?? []).filter((order: any) => {
+        const orderNumber = order.order_number?.toLowerCase() || ""
+        const firstName = order.customer?.first_name?.toLowerCase() || ""
+        const lastName = order.customer?.last_name?.toLowerCase() || ""
+        const email = order.customer?.email?.toLowerCase() || ""
+
+        return (
+          orderNumber.includes(searchLower) ||
+          firstName.includes(searchLower) ||
+          lastName.includes(searchLower) ||
+          email.includes(searchLower)
+        )
       })
-      return acc
-    }, {})
 
-    const withQR = (ordersData ?? []).filter((row: any) => row.qr_code_url)
-    const withoutQR = (ordersData ?? []).filter((row: any) => !row.qr_code_url)
-    console.log("[v0] [admin/orders] Orders with qr_code_url:", withQR.length)
-    console.log("[v0] [admin/orders] Orders without qr_code_url:", withoutQR.length)
+      // Apply pagination
+      const paginated = filtered.slice(offset, offset + limit)
 
-    const shaped = (ordersData ?? []).map((row: any) => ({
+      console.log("[v0] [admin/orders] Fetched", paginated.length, "orders (filtered from", allOrders?.length, ")")
+
+      const shaped = paginated.map((row: any) => ({
+        id: row.id,
+        order_number: row.order_number,
+        customer_id: row.customer_id,
+        status: normalizeStatusForUI(row.status),
+        total: Number(row.total),
+        delivery_method: row.delivery_method,
+        pickup_location: row.pickup_location,
+        payment_method: row.payment_method,
+        payment_status: row.payment_status,
+        notes: row.notes,
+        created_at: row.created_at,
+        qr_code_url: row.qr_code_url,
+        customer: row.customer ?? { first_name: "", last_name: "", email: "", phone: null },
+        order_items: Array.isArray(row.order_items) ? row.order_items : [],
+      }))
+
+      console.log("[v0] [admin/orders] Successfully shaped orders")
+      return NextResponse.json(shaped, { status: 200 })
+    }
+
+    // No search query - apply pagination directly
+    const { data, error } = await query.range(offset, offset + limit - 1)
+
+    if (error) {
+      console.error("[v0] [admin/orders] Query error:", error)
+      return NextResponse.json({ error: "Database error", details: error.message }, { status: 500 })
+    }
+
+    console.log("[v0] [admin/orders] Fetched", data?.length || 0, "orders")
+
+    const shaped = (data ?? []).map((row: any) => ({
       id: row.id,
       order_number: row.order_number,
       customer_id: row.customer_id,
@@ -128,8 +128,8 @@ export async function GET(req: Request) {
       notes: row.notes,
       created_at: row.created_at,
       qr_code_url: row.qr_code_url,
-      customer: row.customers ?? { first_name: "", last_name: "", email: "", phone: null },
-      order_items: itemsByOrderId[row.id] ?? [],
+      customer: row.customer ?? { first_name: "", last_name: "", email: "", phone: null },
+      order_items: Array.isArray(row.order_items) ? row.order_items : [],
     }))
 
     console.log("[v0] [admin/orders] Successfully shaped orders")

@@ -1,14 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
-  if (!url || !key) {
-    throw new Error("Supabase ENV fehlt (URL/Service-Role-Key)")
-  }
-  return createClient(url, key, { auth: { persistSession: false } })
-}
+import { getAdminClient } from "@/lib/supabase/admin"
 
 export const dynamic = "force-dynamic"
 
@@ -22,7 +13,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`[v0] Updating admin notes for order ${orderId}`)
 
-    const supabase = createAdminClient()
+    const supabase = getAdminClient()
 
     const { data: order, error } = await supabase
       .from("orders")

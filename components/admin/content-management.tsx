@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -18,7 +18,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { FileText, Edit, Save, Plus, Star, Trash2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { getBrowserClient } from "@/lib/supabase/browser"
 import { useArticlesSWR } from "@/hooks/use-articles-swr"
 
 interface Article {
@@ -68,7 +68,7 @@ export default function ContentManagementSystem() {
     author: "",
   })
 
-  const supabase = useMemo(() => createClient(), [])
+  const supabase = getBrowserClient()
 
   const uploadImage = async (file: File): Promise<string | null> => {
     try {

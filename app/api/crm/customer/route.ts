@@ -1,34 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { getAdminClient } from "@/lib/supabase/admin"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-
-function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!url || !serviceKey) {
-    throw new Error("Missing Supabase environment variables for admin client")
-  }
-
-  return createClient(url, serviceKey, {
-    auth: { persistSession: false },
-  })
-}
-
-function getServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!url || !serviceKey) {
-    throw new Error("Missing Supabase environment variables")
-  }
-
-  return createClient(url, serviceKey, {
-    auth: { persistSession: false },
-  })
-}
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -48,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     console.log("[/api/crm/customer] Saving customer to CRM:", customerData.email)
 
-    const supabase = createAdminClient()
+    const supabase = getAdminClient()
 
     const emailNormalized = customerData.email.toLowerCase().trim()
 
@@ -162,8 +136,21 @@ export async function PUT(req: Request) {
 
     console.log("[v0] [/api/crm/customer PUT] Updating customer:", id)
 
-    const supabase = createAdminClient()
-    const { error } = await supabase.from("customers").update(payload).eq("id", id)
+    const supabase = getAdminClient()
+
+    const updatedPayload = { ...payload }
+
+    if ("newsletter_subscribed" in payload) {
+      if (payload.newsletter_subscribed === false) {
+        // User unsubscribed - set timestamp
+        updatedPayload.newsletter_unsubscribed_at = new Date().toISOString()
+      } else if (payload.newsletter_subscribed === true) {
+        // User subscribed - clear timestamp
+        updatedPayload.newsletter_unsubscribed_at = null
+      }
+    }
+
+    const { data, error } = await supabase.from("customers").update(updatedPayload).eq("id", id).select().single()
 
     if (error) {
       console.error("[v0] [/api/crm/customer PUT] Database error:", error)
@@ -171,7 +158,7 @@ export async function PUT(req: Request) {
     }
 
     console.log("[v0] [/api/crm/customer PUT] Customer updated successfully")
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, data })
   } catch (e) {
     console.error("[v0] [/api/crm/customer PUT] Unexpected error:", e)
     return NextResponse.json(
@@ -196,7 +183,7 @@ export async function DELETE(req: Request) {
 
     console.log("[v0] [/api/crm/customer DELETE] Deleting customer:", id)
 
-    const supabase = createAdminClient()
+    const supabase = getAdminClient()
     const { error } = await supabase.from("customers").delete().eq("id", id)
 
     if (error) {

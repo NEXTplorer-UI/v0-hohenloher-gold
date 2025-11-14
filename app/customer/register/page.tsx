@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { getBrowserClient } from "@/lib/supabase/browser"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,7 +28,7 @@ export default function CustomerRegisterPage() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = getBrowserClient()
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target

@@ -1,14 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
-  if (!url || !key) {
-    throw new Error("Supabase ENV fehlt (URL/Service-Role-Key)")
-  }
-  return createClient(url, key, { auth: { persistSession: false } })
-}
+import { getAdminClient } from "@/lib/supabase/admin"
 
 function parseBulkOrderNames(notes: string | null): string[] {
   if (!notes) return []
@@ -43,7 +34,7 @@ export async function GET(request: NextRequest) {
   try {
     console.log("[v0] Starting orders export...")
 
-    const supabase = createAdminClient()
+    const supabase = getAdminClient()
 
     const { searchParams } = new URL(request.url)
     const idsParam = searchParams.get("ids")

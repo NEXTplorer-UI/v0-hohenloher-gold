@@ -49,6 +49,15 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Database error", details: error.message }, { status: 500 })
     }
 
+    if (data && data.length > 0) {
+      console.log("[v0] [/api/crm/customers] First customer from RPC:", {
+        email: data[0].email,
+        newsletter_subscribed: data[0].newsletter_subscribed,
+        marketing_consent: data[0].marketing_consent,
+        reminder_notifications: data[0].reminder_notifications,
+      })
+    }
+
     const authUsersMap = new Map<string, { email_confirmed_at: string | null }>()
     try {
       const { data: authData, error: authError } = await supabase.auth.admin.listUsers()

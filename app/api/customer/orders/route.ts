@@ -33,21 +33,67 @@ export async function GET(request: NextRequest) {
       error: authError,
     } = await supabase.auth.getUser()
 
+    console.log("[v0] [/api/customer/orders] Auth check - user:", user?.email || "none")
+
     if (authError || !user) {
+      console.log("[v0] [/api/customer/orders] Not authenticated")
       return NextResponse.json({ error: "Nicht authentifiziert" }, { status: 401 })
     }
 
-    // Get customer record for this user
-    const { data: customer, error: customerError } = await supabase
-      .from("customers")
-      .select("id, email")
-      .eq("user_id", user.id)
-      .single()
+    let customer = null
 
-    if (customerError || !customer) {
-      console.error("[/api/customer/orders] Customer not found for user:", user.id)
-      return NextResponse.json({ error: "Kundendaten nicht gefunden" }, { status: 404 })
+    // First try: Find by user_id
+    const { data: customerByUserId, error: userIdError } = await supabase
+      .from("customers")
+      .select("id, email, user_id")
+      .eq("user_id", user.id)
+      .maybeSingle()
+
+    console.log("[v0] [/api/customer/orders] Customer lookup by user_id:", customerByUserId ? "found" : "not found")
+
+    if (customerByUserId) {
+      customer = customerByUserId
+    } else {
+      // Second try: Find by email and link to user_id
+      console.log("[v0] [/api/customer/orders] Trying to find customer by email:", user.email)
+
+      const { data: customerByEmail, error: emailError } = await supabase
+        .from("customers")
+        .select("id, email, user_id")
+        .eq("email", user.email)
+        .maybeSingle()
+
+      if (customerByEmail) {
+        console.log("[v0] [/api/customer/orders] Found customer by email, linking user_id")
+
+        // Link this customer to the user_id
+        const { data: updatedCustomer, error: updateError } = await supabase
+          .from("customers")
+          .update({ user_id: user.id, account_status: "has_account" })
+          .eq("id", customerByEmail.id)
+          .select("id, email, user_id")
+          .single()
+
+        if (updateError) {
+          console.error("[v0] [/api/customer/orders] Error linking customer:", updateError)
+        } else {
+          console.log("[v0] [/api/customer/orders] Successfully linked customer to user_id")
+          customer = updatedCustomer
+        }
+      }
     }
+
+    // If still no customer found, return empty orders instead of error
+    if (!customer) {
+      console.log("[v0] [/api/customer/orders] No customer found for user:", user.id, "email:", user.email)
+      return NextResponse.json({
+        success: true,
+        data: [],
+        message: "Noch keine Bestellungen vorhanden",
+      })
+    }
+
+    console.log("[v0] [/api/customer/orders] Customer found:", customer.email, "ID:", customer.id)
 
     // Fetch orders for this customer
     const { data: orders, error: ordersError } = await supabase
@@ -75,12 +121,23 @@ export async function GET(request: NextRequest) {
       .order("order_time", { ascending: false })
 
     if (ordersError) {
-      console.error("[/api/customer/orders] Error fetching orders:", ordersError)
+      console.error("[v0] [/api/customer/orders] Error fetching orders:", ordersError)
       return NextResponse.json({ error: "Fehler beim Laden der Bestellungen" }, { status: 500 })
     }
 
+    console.log("[v0] [/api/customer/orders] Found ${orders.length} orders")
+
     // Fetch order items for all orders
     const orderIds = orders.map((o) => o.id)
+
+    if (orderIds.length === 0) {
+      console.log("[v0] [/api/customer/orders] No orders found, returning empty array")
+      return NextResponse.json({
+        success: true,
+        data: [],
+      })
+    }
+
     const { data: orderItems, error: itemsError } = await supabase
       .from("order_items")
       .select(
@@ -98,7 +155,7 @@ export async function GET(request: NextRequest) {
       .in("order_id", orderIds)
 
     if (itemsError) {
-      console.error("[/api/customer/orders] Error fetching order items:", itemsError)
+      console.error("[v0] [/api/customer/orders] Error fetching order items:", itemsError)
       // Continue without items rather than failing completely
     }
 
@@ -111,20 +168,21 @@ export async function GET(request: NextRequest) {
       itemsByOrder.get(item.order_id).push(item)
     })
 
-    // Combine orders with their items
     const ordersWithItems = orders.map((order) => ({
       ...order,
       items: itemsByOrder.get(order.id) || [],
     }))
 
-    console.log(`[/api/customer/orders] Found ${ordersWithItems.length} orders for customer ${customer.email}`)
+    console.log(
+      `[v0] [/api/customer/orders] Returning ${ordersWithItems.length} orders (including cancelled) for customer ${customer.email}`,
+    )
 
     return NextResponse.json({
       success: true,
       data: ordersWithItems,
     })
   } catch (error: any) {
-    console.error("[/api/customer/orders] Unexpected error:", error)
+    console.error("[v0] [/api/customer/orders] Unexpected error:", error)
     return NextResponse.json({ error: "Serverfehler beim Laden der Bestellungen" }, { status: 500 })
   }
 }

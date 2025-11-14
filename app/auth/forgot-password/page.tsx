@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ArrowLeft, Mail } from "lucide-react"
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/client"
+import { getBrowserClient } from "@/lib/supabase/browser"
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
@@ -18,7 +18,7 @@ export default function ForgotPasswordPage() {
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
 
-  const supabase = createClient()
+  const supabase = getBrowserClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

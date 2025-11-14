@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar, Plus, Edit, Trash2, Check, X, AlertCircle, Clock, RefreshCw } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
+import { getBrowserClient } from "@/lib/supabase/browser"
 import { useDeliverySchedulesSWR } from "@/hooks/use-delivery-schedules-swr"
 
 interface DeliverySchedule {
@@ -50,7 +50,7 @@ export default function DeliveryScheduleManagement() {
     notes: "",
   })
 
-  const supabase = createClient()
+  const supabase = getBrowserClient()
 
   const loadCategories = async () => {
     try {

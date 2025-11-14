@@ -34,6 +34,7 @@ export default function ContactPage() {
   const [complaintLoading, setComplaintLoading] = useState(false)
   const [complaintSuccess, setComplaintSuccess] = useState(false)
   const [complaintError, setComplaintError] = useState("")
+  const [showComplaintForm, setShowComplaintForm] = useState(false)
 
   const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -140,9 +141,17 @@ export default function ContactPage() {
                 <br />
                 Unsere Südfrüchte sind frische, natürliche Ware. Trotz sorgfältiger Kontrollen kann es vorkommen, dass
                 einzelne Früchte verderben. Bei übermäßig viel verdorbener Ware nutzen Sie bitte unser{" "}
-                <a href="#complaint-form" className="text-amber-900 underline hover:text-amber-700">
+                <button
+                  onClick={() => {
+                    setShowComplaintForm(true)
+                    setTimeout(() => {
+                      document.getElementById("complaint-form")?.scrollIntoView({ behavior: "smooth" })
+                    }, 100)
+                  }}
+                  className="text-amber-900 underline hover:text-amber-700"
+                >
                   Reklamationsformular
-                </a>
+                </button>
                 .<br />
                 <strong>Reklamationen müssen spätestens 3 Tage nach Erhalt der Ware eingereicht werden.</strong>
               </p>
@@ -334,126 +343,145 @@ export default function ContactPage() {
               </p>
             </div>
 
-            <Card className="p-8 border-red-200">
-              {complaintSuccess && (
-                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-green-900">Reklamation erfolgreich eingereicht!</p>
-                    <p className="text-sm text-green-700">
-                      Wir haben Ihre Reklamation erhalten und werden uns innerhalb von 2-3 Werktagen bei Ihnen melden.
+            {!showComplaintForm ? (
+              <div className="text-center">
+                <Button size="lg" onClick={() => setShowComplaintForm(true)} className="bg-red-600 hover:bg-red-700">
+                  Reklamieren
+                </Button>
+              </div>
+            ) : (
+              <Card className="p-8 border-red-200">
+                {complaintSuccess && (
+                  <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-green-900">Reklamation erfolgreich eingereicht!</p>
+                      <p className="text-sm text-green-700">
+                        Wir haben Ihre Reklamation erhalten und werden uns innerhalb von 2-3 Werktagen bei Ihnen melden.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {complaintError && (
+                  <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-red-900">Fehler beim Einreichen</p>
+                      <p className="text-sm text-red-700">{complaintError}</p>
+                    </div>
+                  </div>
+                )}
+
+                <form className="space-y-6" onSubmit={handleComplaintSubmit}>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="complaintFirstName">Vorname *</Label>
+                      <Input
+                        id="complaintFirstName"
+                        placeholder="Ihr Vorname"
+                        value={complaintForm.firstName}
+                        onChange={(e) => setComplaintForm({ ...complaintForm, firstName: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="complaintLastName">Nachname *</Label>
+                      <Input
+                        id="complaintLastName"
+                        placeholder="Ihr Nachname"
+                        value={complaintForm.lastName}
+                        onChange={(e) => setComplaintForm({ ...complaintForm, lastName: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="complaintEmail">E-Mail-Adresse *</Label>
+                    <Input
+                      id="complaintEmail"
+                      type="email"
+                      placeholder="ihre.email@beispiel.de"
+                      value={complaintForm.email}
+                      onChange={(e) => setComplaintForm({ ...complaintForm, email: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="orderNumber">Bestellnummer *</Label>
+                    <Input
+                      id="orderNumber"
+                      placeholder="z.B. HG-2025-001234"
+                      value={complaintForm.orderNumber}
+                      onChange={(e) => setComplaintForm({ ...complaintForm, orderNumber: e.target.value })}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Alternativ können Sie sich anmelden, um aus Ihrer Bestellhistorie zu wählen
                     </p>
                   </div>
-                </div>
-              )}
 
-              {complaintError && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-red-900">Fehler beim Einreichen</p>
-                    <p className="text-sm text-red-700">{complaintError}</p>
-                  </div>
-                </div>
-              )}
-
-              <form className="space-y-6" onSubmit={handleComplaintSubmit}>
-                <div className="grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="complaintFirstName">Vorname *</Label>
-                    <Input
-                      id="complaintFirstName"
-                      placeholder="Ihr Vorname"
-                      value={complaintForm.firstName}
-                      onChange={(e) => setComplaintForm({ ...complaintForm, firstName: e.target.value })}
+                    <Label htmlFor="complaintDescription">Beschreibung der Reklamation *</Label>
+                    <Textarea
+                      id="complaintDescription"
+                      placeholder="Beschreiben Sie bitte, welche Produkte betroffen sind und in welchem Zustand sie waren..."
+                      className="min-h-[100px]"
+                      value={complaintForm.description}
+                      onChange={(e) => setComplaintForm({ ...complaintForm, description: e.target.value })}
                       required
                     />
                   </div>
+
                   <div className="space-y-2">
-                    <Label htmlFor="complaintLastName">Nachname *</Label>
+                    <Label htmlFor="complaintImage">Foto der betroffenen Ware * (erforderlich)</Label>
                     <Input
-                      id="complaintLastName"
-                      placeholder="Ihr Nachname"
-                      value={complaintForm.lastName}
-                      onChange={(e) => setComplaintForm({ ...complaintForm, lastName: e.target.value })}
+                      id="complaintImage"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setComplaintForm({ ...complaintForm, image: e.target.files?.[0] || null })}
                       required
+                      className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Bitte fügen Sie ein deutliches Foto der verdorbenen Ware bei. Ohne Foto kann die Reklamation nicht
+                      bearbeitet werden.
+                    </p>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="complaintEmail">E-Mail-Adresse *</Label>
-                  <Input
-                    id="complaintEmail"
-                    type="email"
-                    placeholder="ihre.email@beispiel.de"
-                    value={complaintForm.email}
-                    onChange={(e) => setComplaintForm({ ...complaintForm, email: e.target.value })}
-                    required
-                  />
-                </div>
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-sm text-red-800">
+                      <strong>Wichtiger Hinweis:</strong>
+                      <br />
+                      Reklamationen können nur mit einem Foto der betroffenen Ware bearbeitet werden und müssen
+                      spätestens 3 Tage nach Erhalt eingereicht werden.
+                    </p>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="orderNumber">Bestellnummer *</Label>
-                  <Input
-                    id="orderNumber"
-                    placeholder="z.B. HG-2025-001234"
-                    value={complaintForm.orderNumber}
-                    onChange={(e) => setComplaintForm({ ...complaintForm, orderNumber: e.target.value })}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Alternativ können Sie sich anmelden, um aus Ihrer Bestellhistorie zu wählen
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="complaintDescription">Beschreibung der Reklamation *</Label>
-                  <Textarea
-                    id="complaintDescription"
-                    placeholder="Beschreiben Sie bitte, welche Produkte betroffen sind und in welchem Zustand sie waren..."
-                    className="min-h-[100px]"
-                    value={complaintForm.description}
-                    onChange={(e) => setComplaintForm({ ...complaintForm, description: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="complaintImage">Foto der betroffenen Ware * (erforderlich)</Label>
-                  <Input
-                    id="complaintImage"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setComplaintForm({ ...complaintForm, image: e.target.files?.[0] || null })}
-                    required
-                    className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Bitte fügen Sie ein deutliches Foto der verdorbenen Ware bei. Ohne Foto kann die Reklamation nicht
-                    bearbeitet werden.
-                  </p>
-                </div>
-
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <p className="text-sm text-red-800">
-                    <strong>Wichtiger Hinweis:</strong>
-                    <br />
-                    Reklamationen können nur mit einem Foto der betroffenen Ware bearbeitet werden und müssen spätestens
-                    3 Tage nach Erhalt eingereicht werden.
-                  </p>
-                </div>
-
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="w-full bg-red-600 hover:bg-red-700"
-                  disabled={complaintLoading}
-                >
-                  {complaintLoading ? "Wird eingereicht..." : "Reklamation einreichen"}
-                </Button>
-              </form>
-            </Card>
+                  <div className="flex gap-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      className="flex-1 bg-transparent"
+                      onClick={() => setShowComplaintForm(false)}
+                    >
+                      Abbrechen
+                    </Button>
+                    <Button
+                      type="submit"
+                      size="lg"
+                      className="flex-1 bg-red-600 hover:bg-red-700"
+                      disabled={complaintLoading}
+                    >
+                      {complaintLoading ? "Wird eingereicht..." : "Reklamation einreichen"}
+                    </Button>
+                  </div>
+                </form>
+              </Card>
+            )}
           </div>
         </div>
       </section>

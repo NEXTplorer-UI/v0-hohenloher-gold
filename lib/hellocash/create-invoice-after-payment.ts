@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js"
+import { getAdminClient } from "@/lib/supabase/admin"
 
 interface HelloCashItem {
   name: string
@@ -15,19 +15,39 @@ interface CreateInvoiceResult {
 }
 
 /**
+ * Maps database payment method to HelloCash payment method
+ */
+function mapPaymentMethodToHelloCash(paymentMethod: string): string {
+  const mapping: Record<string, string> = {
+    cash: "Bar",
+    card: "EC-Karte",
+    bank_transfer: "Rechnung",
+    sumup: "SumUp",
+    paypal: "PayPal",
+    coupon: "Gutschein",
+  }
+
+  return mapping[paymentMethod] || "Bar" // Default to Bar if unknown
+}
+
+/**
  * Creates a helloCash invoice after payment confirmation
  * This function should be called from all payment confirmation points:
  * - mark-paid (QR code payment)
  * - update-order-status (manual admin marking)
  * - sumup webhook (SumUp payment)
  */
-export async function createInvoiceAfterPayment(orderId: string): Promise<CreateInvoiceResult> {
+export async function createInvoiceAfterPayment(
+  orderId: string,
+  manualPaymentMethod?: string,
+  testMode?: boolean, // Added testMode parameter
+): Promise<CreateInvoiceResult> {
   try {
     console.log("[v0] [create-invoice-after-payment] Creating invoice for order:", orderId)
+    console.log("[v0] [create-invoice-after-payment] Test mode:", testMode ? "ENABLED" : "DISABLED")
 
-    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const supabase = getAdminClient()
 
-    // 1. Fetch order with items
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select("*, order_items(*)")
@@ -38,7 +58,7 @@ export async function createInvoiceAfterPayment(orderId: string): Promise<Create
       throw new Error("Order not found: " + orderError?.message)
     }
 
-    // 2. Check if invoice already exists
+    // Check if invoice already exists
     if (order.hellocash_invoice_id) {
       console.log("[v0] [create-invoice-after-payment] Invoice already exists:", order.hellocash_invoice_number)
       return {
@@ -76,7 +96,7 @@ export async function createInvoiceAfterPayment(orderId: string): Promise<Create
       }
     }
 
-    // 3. Prepare helloCash invoice items
+    // Prepare helloCash invoice items
     const items = order.order_items.map((item: any) => ({
       item_name: item.product_name,
       item_quantity: item.quantity.toFixed(3),
@@ -88,23 +108,43 @@ export async function createInvoiceAfterPayment(orderId: string): Promise<Create
 
     console.log("[v0] [create-invoice-after-payment] Prepared items:", items.length)
 
+    const paymentMethod = manualPaymentMethod || order.payment_method || "cash"
+    const helloCashPaymentMethod = mapPaymentMethodToHelloCash(paymentMethod)
+
+    console.log(`[v0] [create-invoice-after-payment] Payment method: ${paymentMethod} → ${helloCashPaymentMethod}`)
+
     const invoicePayload: any = {
-      invoice_reference: order.order_number, // Order number as reference
-      invoice_text: `Bestellung: ${order.order_number}`,
-      invoice_paymentMethod: order.payment_method || "cash",
+      invoice_text: `Bestellnummer: ${order.order_number}`,
+      invoice_paymentMethod: helloCashPaymentMethod, // Use mapped payment method
       invoice_type: "json",
       items,
     }
 
-    if (customerData) {
-      const fullName = `${customerData.first_name || ""} ${customerData.last_name || ""}`.trim()
-      const fullAddress =
-        customerData.street && customerData.house_number
-          ? `${customerData.street} ${customerData.house_number}`.trim()
-          : customerData.address || ""
+    if (testMode) {
+      invoicePayload.invoice_testMode = true
+      console.log("[v0] [create-invoice-after-payment] Test mode enabled - creating TEST invoice")
+    }
 
-      if (fullName) {
-        invoicePayload.customer_name = fullName
+    if (order.order_time) {
+      invoicePayload.invoice_date = order.order_time
+    }
+
+    if (order.pickup_date) {
+      invoicePayload.invoice_dueDate = order.pickup_date
+    }
+
+    if (order.notes) {
+      invoicePayload.invoice_notes = order.notes
+    }
+
+    if (customerData) {
+      invoicePayload.customer_id = "0" // HelloCash expects this for guest customers
+
+      if (customerData.first_name) {
+        invoicePayload.customer_firstName = customerData.first_name
+      }
+      if (customerData.last_name) {
+        invoicePayload.customer_surName = customerData.last_name
       }
       if (customerData.email) {
         invoicePayload.customer_email = customerData.email
@@ -112,11 +152,14 @@ export async function createInvoiceAfterPayment(orderId: string): Promise<Create
       if (customerData.phone) {
         invoicePayload.customer_phoneNumber = customerData.phone
       }
-      if (fullAddress) {
-        invoicePayload.customer_address = fullAddress
+      if (customerData.street) {
+        invoicePayload.customer_street = customerData.street
+      }
+      if (customerData.house_number) {
+        invoicePayload.customer_houseNumber = customerData.house_number
       }
       if (customerData.postal_code) {
-        invoicePayload.customer_zip = customerData.postal_code
+        invoicePayload.customer_postalCode = customerData.postal_code
       }
       if (customerData.city) {
         invoicePayload.customer_city = customerData.city
@@ -125,7 +168,10 @@ export async function createInvoiceAfterPayment(orderId: string): Promise<Create
         invoicePayload.customer_country = customerData.country
       }
 
-      console.log("[v0] [create-invoice-after-payment] Customer data added to invoice:", fullName)
+      console.log(
+        "[v0] [create-invoice-after-payment] Customer data added to invoice:",
+        `${customerData.first_name} ${customerData.last_name}`,
+      )
     } else {
       console.log("[v0] [create-invoice-after-payment] No customer data available for this order")
     }
@@ -171,7 +217,6 @@ export async function createInvoiceAfterPayment(orderId: string): Promise<Create
     console.log("[v0] [create-invoice-after-payment] Invoice ID:", invoiceData.invoice_id)
     console.log("[v0] [create-invoice-after-payment] Invoice Number:", invoiceData.invoice_number)
 
-    // 5. Update order with invoice info
     const { error: updateError } = await supabase
       .from("orders")
       .update({
@@ -196,9 +241,8 @@ export async function createInvoiceAfterPayment(orderId: string): Promise<Create
   } catch (err: any) {
     console.error("[v0] [create-invoice-after-payment] Error:", err.message)
 
-    // Save error to database
     try {
-      const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+      const supabase = getAdminClient()
       await supabase
         .from("orders")
         .update({

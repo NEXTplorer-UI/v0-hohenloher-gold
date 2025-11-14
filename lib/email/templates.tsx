@@ -184,33 +184,6 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
   return renderTemplate(template, vars)
 }
 
-// Rechnung Content
-export function invoiceContent(vars: TemplateVars, customCopy?: EmailCopyType): string {
-  const copy = customCopy || emailCopy
-
-  const template = `
-    <h2>${copy.invoice.greeting}</h2>
-    <p>${copy.invoice.intro}</p>
-    <p>${copy.invoice.body}</p>
-    
-    <div class="info-box">
-      <h3>${copy.invoice.infoHeading}</h3>
-      <ul>
-        <li>${copy.invoice.info1}</li>
-        <li>${copy.invoice.info2}</li>
-        <li>${copy.invoice.info3}</li>
-      </ul>
-    </div>
-    
-    <p>${copy.invoice.outro}</p>
-    
-    <p>${copy.invoice.closing}<br>
-    ${copy.invoice.signature}</p>
-  `
-
-  return renderTemplate(template, vars)
-}
-
 // Abholtermin-Erinnerung Content
 export function pickupReminderContent(vars: TemplateVars, customCopy?: EmailCopyType): string {
   const copy = customCopy || emailCopy
@@ -487,28 +460,6 @@ export function readyForPickupContent(vars: TemplateVars, customCopy?: EmailCopy
     
     <p>${copy.readyForPickup.closing}<br>
     ${copy.readyForPickup.signature}</p>
-  `
-
-  return renderTemplate(template, vars)
-}
-
-// Bestellung abgeholt
-export function orderPickedUpContent(vars: TemplateVars, customCopy?: EmailCopyType): string {
-  const copy = customCopy || emailCopy
-
-  const template = `
-    <h2>${copy.orderPickedUp.greeting}</h2>
-    <p>${copy.orderPickedUp.intro}</p>
-    <p>${copy.orderPickedUp.body}</p>
-    
-    <div class="info-box">
-      <p style="margin: 0;">${copy.orderPickedUp.feedback}</p>
-    </div>
-    
-    <p>${copy.orderPickedUp.outro}</p>
-    
-    <p>${copy.orderPickedUp.closing}<br>
-    ${copy.orderPickedUp.signature}</p>
   `
 
   return renderTemplate(template, vars)

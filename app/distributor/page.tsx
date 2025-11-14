@@ -1,5 +1,8 @@
 "use client"
 
+import type React from "react"
+import { useMemo } from "react"
+
 import { Separator } from "@/components/ui/separator"
 
 import { Button } from "@/components/ui/button"
@@ -8,10 +11,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Search, MapPin, Users, Phone, Mail, ArrowRight, Heart, ChevronDown, Clock } from "lucide-react"
+import { Search, MapPin, Users, Phone, Mail, ArrowRight, Heart, ChevronDown, Clock, Loader2 } from 'lucide-react'
 import { useState, useEffect } from "react"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
 import { useNearbyPickups } from "@/lib/hooks/use-nearby-pickups"
+import { toast } from "sonner"
 
 export default function DistributorPage() {
   const [searchPlz, setSearchPlz] = useState("")
@@ -19,6 +23,19 @@ export default function DistributorPage() {
   const [personalMessageLength, setPersonalMessageLength] = useState(0)
   const [newsletter, setNewsletter] = useState(false)
   const [selectedStation, setSelectedStation] = useState<any>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    plz: "",
+    city: "",
+    businessType: "",
+    motivation: "",
+    availability: "",
+    personalMessage: "",
+  })
 
   const {
     locations: searchResults,
@@ -28,8 +45,14 @@ export default function DistributorPage() {
     userPlz: searchPlz,
     radiusKm: 30,
     maxPlzDelta: 300,
-    take: 5,
+    take: 3, // Limit results to best 3 matches
   })
+
+  const hasCloseMatches = useMemo(() => {
+    if (!searchPlz || searchPlz.length < 2 || searchResults.length === 0) return false
+    const searchPrefix = searchPlz.substring(0, 2)
+    return searchResults.some((location) => location.postal_code?.substring(0, 2) === searchPrefix)
+  }, [searchPlz, searchResults])
 
   useEffect(() => {
     if (allLocations.length > 0 && !selectedStation) {
@@ -47,46 +70,87 @@ export default function DistributorPage() {
 
   const sortedLocations = [...allLocations].sort((a, b) => a.postal_code.localeCompare(b.postal_code))
 
-  const handleBecomeDistributor = async () => {
-    const formData = {
-      firstName: (document.getElementById("firstName") as HTMLInputElement)?.value,
-      lastName: (document.getElementById("lastName") as HTMLInputElement)?.value,
-      email: (document.getElementById("email") as HTMLInputElement)?.value,
-      phone: (document.getElementById("phone") as HTMLInputElement)?.value,
-      plz: (document.getElementById("plz") as HTMLInputElement)?.value,
-      city: (document.getElementById("city") as HTMLInputElement)?.value,
-      businessType: (document.getElementById("businessType") as HTMLInputElement)?.value,
-      motivation: (document.getElementById("motivation") as HTMLTextAreaElement)?.value,
-      availability: (document.getElementById("availability") as HTMLTextAreaElement)?.value,
-      personalMessage: (document.getElementById("personalMessage") as HTMLTextAreaElement)?.value,
-      newsletter,
+  const handleBecomeDistributor = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    // Validate required fields
+    if (
+      !formData.firstName ||
+      !formData.lastName ||
+      !formData.email ||
+      !formData.phone ||
+      !formData.plz ||
+      !formData.city
+    ) {
+      toast.error("Bitte füllen Sie alle Pflichtfelder aus")
+      return
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formData.email)) {
+      toast.error("Bitte geben Sie eine gültige E-Mail-Adresse ein")
+      return
+    }
+
+    // Validate PLZ format (5 digits)
+    if (!/^\d{5}$/.test(formData.plz)) {
+      toast.error("PLZ muss 5 Ziffern haben")
+      return
+    }
+
+    setIsSubmitting(true)
+
     try {
+      console.log("[v0] Submitting distributor application:", formData)
+
       const response = await fetch("/api/distributor-application", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          newsletterSignup: newsletter,
+        }),
       })
 
       const result = await response.json()
+      console.log("[v0] Distributor application response:", result)
 
       if (result.success) {
-        alert(
+        toast.success(
           "Vielen Dank für Ihr Interesse! Ihre Anfrage wurde an unser Team gesendet. Wir werden uns in Kürze bei Ihnen melden.",
         )
         // Reset form
-        const form = document.querySelector("form")
-        if (form) form.reset()
+        setFormData({
+          firstName: "",
+          lastName: "",
+          email: "",
+          phone: "",
+          plz: "",
+          city: "",
+          businessType: "",
+          motivation: "",
+          availability: "",
+          personalMessage: "",
+        })
+        setNewsletter(false)
       } else {
-        alert("Es gab einen Fehler beim Versenden Ihrer Anfrage. Bitte versuchen Sie es später erneut.")
+        toast.error(
+          result.message || "Es gab einen Fehler beim Versenden Ihrer Anfrage. Bitte versuchen Sie es später erneut.",
+        )
       }
     } catch (error) {
-      console.error("Error submitting application:", error)
-      alert("Es gab einen Fehler beim Versenden Ihrer Anfrage. Bitte versuchen Sie es später erneut.")
+      console.error("[v0] Error submitting application:", error)
+      toast.error("Es gab einen Fehler beim Versenden Ihrer Anfrage. Bitte versuchen Sie es später erneut.")
+    } finally {
+      setIsSubmitting(false)
     }
+  }
+
+  const updateFormData = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
   return (
@@ -187,6 +251,31 @@ export default function DistributorPage() {
                             </div>
                           </Card>
                         ))}
+                        {!hasCloseMatches && (
+                          <Card className="border-primary/30 bg-primary/5">
+                            <CardContent className="p-6 text-center space-y-4">
+                              <MapPin className="w-12 h-12 text-primary mx-auto" />
+                              <div>
+                                <h4 className="font-semibold text-lg mb-2">Kein passender Abholort dabei?</h4>
+                                <p className="text-muted-foreground text-sm mb-4">
+                                  Helfen Sie uns, das Netzwerk in Ihrer Region auszubauen
+                                </p>
+                              </div>
+                              <Button
+                                variant="default"
+                                onClick={() => {
+                                  const formSection = document.querySelector("[data-form-section]")
+                                  if (formSection) {
+                                    formSection.scrollIntoView({ behavior: "smooth" })
+                                  }
+                                }}
+                              >
+                                <Users className="w-4 h-4 mr-2" />
+                                Selbst Verteiler werden
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        )}
                       </div>
                     ) : (
                       <div className="space-y-4">
@@ -465,95 +554,154 @@ export default function DistributorPage() {
                   Füllen Sie das Formular aus und wir melden uns bei Ihnen für ein persönliches Gespräch.
                 </p>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">Vorname *</Label>
-                    <Input id="firstName" placeholder="Max" />
+              <CardContent>
+                <form onSubmit={handleBecomeDistributor} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="firstName">Vorname *</Label>
+                      <Input
+                        id="firstName"
+                        placeholder="Max"
+                        value={formData.firstName}
+                        onChange={(e) => updateFormData("firstName", e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lastName">Nachname *</Label>
+                      <Input
+                        id="lastName"
+                        placeholder="Mustermann"
+                        value={formData.lastName}
+                        onChange={(e) => updateFormData("lastName", e.target.value)}
+                        required
+                      />
+                    </div>
                   </div>
+
                   <div className="space-y-2">
-                    <Label htmlFor="lastName">Nachname *</Label>
-                    <Input id="lastName" placeholder="Mustermann" />
+                    <Label htmlFor="email">E-Mail *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="max@example.com"
+                      value={formData.email}
+                      onChange={(e) => updateFormData("email", e.target.value)}
+                      required
+                    />
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="email">E-Mail *</Label>
-                  <Input id="email" type="email" placeholder="max@example.com" />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Telefon *</Label>
-                  <Input id="phone" placeholder="+49 123 456789" />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="plz">PLZ *</Label>
-                    <Input id="plz" placeholder="74653" />
+                    <Label htmlFor="phone">Telefon *</Label>
+                    <Input
+                      id="phone"
+                      placeholder="+49 123 456789"
+                      value={formData.phone}
+                      onChange={(e) => updateFormData("phone", e.target.value)}
+                      required
+                    />
                   </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="plz">PLZ *</Label>
+                      <Input
+                        id="plz"
+                        placeholder="74653"
+                        maxLength={5}
+                        value={formData.plz}
+                        onChange={(e) => updateFormData("plz", e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="city">Ort *</Label>
+                      <Input
+                        id="city"
+                        placeholder="Künzelsau"
+                        value={formData.city}
+                        onChange={(e) => updateFormData("city", e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
-                    <Label htmlFor="city">Ort *</Label>
-                    <Input id="city" placeholder="Künzelsau" />
+                    <Label htmlFor="businessType">Art des Standorts</Label>
+                    <Input
+                      id="businessType"
+                      placeholder="z.B. Hofladen, Bioladen, Privatperson"
+                      value={formData.businessType}
+                      onChange={(e) => updateFormData("businessType", e.target.value)}
+                    />
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="businessType">Art des Standorts</Label>
-                  <Input id="businessType" placeholder="z.B. Hofladen, Bioladen, Privatperson" />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="motivation">Warum möchten Sie Verteiler werden?</Label>
+                    <Textarea
+                      id="motivation"
+                      placeholder="Was motiviert Sie, Teil unseres Verteiler-Netzwerks zu werden?"
+                      value={formData.motivation}
+                      onChange={(e) => updateFormData("motivation", e.target.value)}
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="motivation">Warum möchten Sie Verteiler werden?</Label>
-                  <Textarea
-                    id="motivation"
-                    placeholder="Was motiviert Sie, Teil unseres Verteiler-Netzwerks zu werden?"
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="availability">Verfügbarkeit</Label>
+                    <Textarea
+                      id="availability"
+                      placeholder="Wann könnten Sie als Abholort zur Verfügung stehen? (z.B. Öffnungszeiten, bestimmte Wochentage)"
+                      value={formData.availability}
+                      onChange={(e) => updateFormData("availability", e.target.value)}
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="availability">Verfügbarkeit</Label>
-                  <Textarea
-                    id="availability"
-                    placeholder="Wann könnten Sie als Abholort zur Verfügung stehen? (z.B. Öffnungszeiten, bestimmte Wochentage)"
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="personalMessage">Persönliche Nachricht</Label>
+                    <Textarea
+                      id="personalMessage"
+                      placeholder="Möchten Sie uns noch etwas mitteilen? Hier ist Platz für Ihre persönliche Nachricht..."
+                      maxLength={2000}
+                      className="min-h-[120px]"
+                      value={formData.personalMessage}
+                      onChange={(e) => updateFormData("personalMessage", e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">{formData.personalMessage.length}/2000 Zeichen</p>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="personalMessage">Persönliche Nachricht</Label>
-                  <Textarea
-                    id="personalMessage"
-                    placeholder="Möchten Sie uns noch etwas mitteilen? Hier ist Platz für Ihre persönliche Nachricht..."
-                    maxLength={2000}
-                    className="min-h-[120px]"
-                    onChange={(e) => setPersonalMessageLength(e.target.value.length)}
-                  />
-                  <p className="text-xs text-muted-foreground">{personalMessageLength}/2000 Zeichen</p>
-                </div>
+                  <Separator />
 
-                <Separator />
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="newsletter"
+                      className="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-primary focus:ring-2"
+                      checked={newsletter}
+                      onChange={(e) => setNewsletter(e.target.checked)}
+                    />
+                    <Label htmlFor="newsletter" className="text-sm">
+                      Newsletter abonnieren (Bleiben Sie über neue Produkte und Aktionen informiert)
+                    </Label>
+                  </div>
 
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="newsletter"
-                    className="w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-primary focus:ring-2"
-                    checked={newsletter}
-                    onChange={() => setNewsletter(!newsletter)}
-                  />
-                  <Label htmlFor="newsletter" className="text-sm">
-                    Newsletter abonnieren (Bleiben Sie über neue Produkte und Aktionen informiert)
-                  </Label>
-                </div>
+                  <Button type="submit" className="w-full text-lg py-6" disabled={isSubmitting}>
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Wird gesendet...
+                      </>
+                    ) : (
+                      <>
+                        <ArrowRight className="w-5 h-5 mr-2" />
+                        Anfrage abschicken
+                      </>
+                    )}
+                  </Button>
 
-                <Button onClick={handleBecomeDistributor} className="w-full text-lg py-6">
-                  <ArrowRight className="w-5 h-5 mr-2" />
-                  Anfrage abschicken
-                </Button>
-
-                <p className="text-xs text-muted-foreground text-center">
-                  * Pflichtfelder. Mit dem Absenden stimmen Sie unserer Datenschutzerklärung zu.
-                </p>
+                  <p className="text-xs text-muted-foreground text-center">
+                    * Pflichtfelder. Mit dem Absenden stimmen Sie unserer Datenschutzerklärung zu.
+                  </p>
+                </form>
               </CardContent>
             </Card>
           </div>

@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js"
+import { getAdminClient } from "@/lib/supabase/admin"
 import { type NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/auth/api-auth"
 
@@ -11,21 +11,7 @@ export async function DELETE(request: NextRequest) {
   try {
     console.log("[v0] Server: Starting to delete all customers with service role key")
 
-    const supabaseUrl = process.env.SUPABASE_URL
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.log("[v0] Server: Missing Supabase credentials")
-      return NextResponse.json({ error: "Missing Supabase credentials" }, { status: 500 })
-    }
-
-    // Create Supabase client with service role key to bypass RLS
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    })
+    const supabase = getAdminClient()
 
     // Delete all customers
     const { error } = await supabase.from("customers").delete().neq("id", "00000000-0000-0000-0000-000000000000") // Delete all records

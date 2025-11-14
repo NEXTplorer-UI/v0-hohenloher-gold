@@ -67,7 +67,98 @@ function OrderProcessingContent() {
       console.log("[v0] Processing SumUp order for checkout:", checkoutId)
 
       updateStep("payment", "loading")
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      const isOptimistic = searchParams.get("optimistic") === "true"
+
+      if (isOptimistic) {
+        console.log("[v0] Optimistic loading - processing order in background")
+
+        // Payment Step als Success markieren
+        updateStep("payment", "success")
+
+        // Order Step starten
+        updateStep("order", "loading")
+
+        // Hole Order-Daten aus sessionStorage
+        const sumupOrderDataStr = typeof window !== "undefined" ? sessionStorage.getItem("sumupOrderData") : null
+
+        if (!sumupOrderDataStr) {
+          throw new Error("Bestelldaten nicht gefunden")
+        }
+
+        const orderDataWithCheckoutId = JSON.parse(sumupOrderDataStr)
+
+        // Speichere Bestellung im Hintergrund
+        const orderResponse = await fetch("/api/orders", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(orderDataWithCheckoutId),
+        })
+
+        const orderParsed = await orderResponse.json()
+
+        if (!orderResponse.ok) {
+          console.error("[v0] Failed to save SumUp order:", orderParsed.error)
+          updateStep("order", "error", "Bestellung konnte nicht gespeichert werden")
+          updateStep("email", "pending")
+          setHasErrors(true)
+
+          // Cleanup
+          sessionStorage.removeItem("sumupOrderData")
+          return
+        }
+
+        console.log("[v0] SumUp order saved successfully:", orderParsed)
+        setOrderNumber(orderParsed.data.order.order_number)
+        updateStep("order", "success")
+
+        // Email Step
+        updateStep("email", "loading")
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+        updateStep("email", "success")
+
+        // Cleanup
+        sessionStorage.removeItem("sumupOrderData")
+
+        setIsComplete(true)
+
+        setTimeout(() => {
+          router.push(`/order-confirmation?orderNumber=${orderParsed.data.order.order_number}`)
+        }, 2000)
+        return
+      }
+
+      const orderNumber = searchParams.get("orderNumber")
+      const hasError = searchParams.get("error")
+
+      if (orderNumber) {
+        console.log("[v0] Order already created:", orderNumber)
+        updateStep("payment", "success")
+        setOrderNumber(orderNumber)
+
+        updateStep("order", "success")
+
+        updateStep("email", "loading")
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+        updateStep("email", "success")
+
+        setIsComplete(true)
+
+        setTimeout(() => {
+          router.push(`/order-confirmation?orderNumber=${orderNumber}`)
+        }, 2000)
+        return
+      }
+
+      if (hasError) {
+        updateStep("payment", "success")
+        updateStep("order", "error", "Bestellung wurde gespeichert, aber einige Schritte sind fehlgeschlagen")
+        updateStep("email", "pending")
+        setHasErrors(true)
+        return
+      }
 
       let attempts = 0
       const maxAttempts = 10
@@ -93,12 +184,10 @@ function OrderProcessingContent() {
       updateStep("payment", "success")
       setOrderNumber(order.order_number)
 
-      updateStep("order", "loading")
-      await new Promise((resolve) => setTimeout(resolve, 500))
       updateStep("order", "success")
 
       updateStep("email", "loading")
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      await new Promise((resolve) => setTimeout(resolve, 1000))
       updateStep("email", "success")
 
       setIsComplete(true)
@@ -212,11 +301,7 @@ function OrderProcessingContent() {
                 deliveryMethod: orderData.emailData.deliveryMethod,
                 orderItems: orderData.emailData.orderItems,
                 order_time: orderTime,
-                pickupToken: pickupToken,
-                pickupDate: orderData.orderData.deliveryDate,
-                pickupLocation: orderData.orderData.pickupLocation,
-                pickupStartTime: orderData.orderData.pickupStartTime,
-                pickupEndTime: orderData.orderData.pickupEndTime,
+                pickupToken: pickupToken, // Pass pickupToken to email
               }),
             })
 

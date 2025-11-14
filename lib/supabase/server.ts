@@ -1,18 +1,24 @@
-import { createServerClient } from "@supabase/ssr"
-import { createClient as createSupabaseClient } from "@supabase/supabase-js"
+import { createServerClient as createSupabaseServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import { getAdminClient, createAdminClient } from "./admin"
 
 /**
  * Creates a Supabase client for server-side operations with user authentication.
  * Uses the anon key and respects Row Level Security (RLS).
+ *
+ * This client handles cookies for authentication and should be used for
+ * user-specific operations that respect RLS policies.
+ *
+ * @returns Promise resolving to a Supabase client with user context
  */
-export async function createClient() {
+export async function getServerClient(): Promise<SupabaseClient> {
   const cookieStore = await cookies()
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
+  return createSupabaseServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll()
@@ -22,8 +28,7 @@ export async function createClient() {
           cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
         } catch {
           // The "setAll" method was called from a Server Component.
-          // This can be ignored if you have middleware refreshing
-          // user sessions.
+          // This can be ignored if you have middleware refreshing user sessions.
         }
       },
     },
@@ -31,54 +36,22 @@ export async function createClient() {
 }
 
 /**
- * Creates a Supabase admin client for server-side operations that bypass RLS.
- * Uses the service role key for elevated permissions.
+ * @alias getServerClient
  */
-export function createAdminClient() {
-  console.log("[v0] [createAdminClient] Creating admin client...")
+export const createServerClient = getServerClient
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  console.log("[v0] [createAdminClient] Environment check:", {
-    hasUrl: !!supabaseUrl,
-    hasServiceKey: !!supabaseServiceKey,
-    urlSource: process.env.NEXT_PUBLIC_SUPABASE_URL ? "NEXT_PUBLIC_SUPABASE_URL" : "SUPABASE_URL",
-  })
-
-  if (!supabaseUrl || !supabaseServiceKey) {
-    console.error("[v0] [createAdminClient] Missing Supabase credentials:", {
-      hasUrl: !!supabaseUrl,
-      hasServiceKey: !!supabaseServiceKey,
-      envVars: {
-        NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-        SUPABASE_URL: !!process.env.SUPABASE_URL,
-        SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-      },
-    })
-    throw new Error(
-      "Missing Supabase credentials. Please ensure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.",
-    )
-  }
-
-  console.log("[v0] [createAdminClient] Admin client created successfully")
-
-  return createSupabaseClient(supabaseUrl, supabaseServiceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  })
-}
+/**
+ * @deprecated Use getServerClient() instead
+ */
+export const createClient = getServerClient
 
 /**
  * Checks if the current authenticated user has admin role.
  * Returns the user if admin, throws error if not authenticated or not admin.
  */
 export async function requireAdmin() {
-  const supabase = await createClient()
+  const supabase = await getServerClient()
 
-  // Check if user is authenticated
   const {
     data: { user },
     error: authError,
@@ -88,7 +61,6 @@ export async function requireAdmin() {
     throw new Error("Unauthorized: Not authenticated")
   }
 
-  // Check if user has admin role
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("role")
@@ -111,7 +83,7 @@ export async function requireAdmin() {
  * Returns the user if authenticated, throws error if not.
  */
 export async function requireAuth() {
-  const supabase = await createClient()
+  const supabase = await getServerClient()
 
   const {
     data: { user },
@@ -124,3 +96,5 @@ export async function requireAuth() {
 
   return user
 }
+
+export { getAdminClient, createAdminClient }

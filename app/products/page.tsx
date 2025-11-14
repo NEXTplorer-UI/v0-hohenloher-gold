@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsTrigger, TabsList } from "@/components/ui/tabs"
 import { Leaf, MapPin, Award, Truck, Sun } from "lucide-react"
 import Link from "next/link"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
@@ -44,7 +43,7 @@ const products = {
       featured: false,
     },
   ],
-  trockenfruechtе: [
+  trockenfruechte: [
     {
       id: 4,
       name: "Getrocknete Feigen",
@@ -129,7 +128,7 @@ const products = {
       unit: "500ml",
       image: "/sicilian-olive-oil.png",
       origin: "Sizilien",
-      category: "Öle",
+      category: "Olivenöl",
       inStock: true,
       featured: true,
     },
@@ -141,7 +140,7 @@ const products = {
       unit: "500ml",
       image: "/sunflower-seed-oil.png",
       origin: "Hohenlohe",
-      category: "Öle",
+      category: "Olivenöl",
       inStock: true,
       featured: false,
     },
@@ -153,7 +152,7 @@ const products = {
       unit: "500ml",
       image: "/rapeseed-oil.png",
       origin: "Hohenlohe",
-      category: "Öle",
+      category: "Olivenöl",
       inStock: true,
       featured: false,
     },
@@ -165,7 +164,7 @@ const products = {
       unit: "500ml",
       image: "/walnut-oil.png",
       origin: "Hohenlohe",
-      category: "Öle",
+      category: "Olivenöl",
       inStock: true,
       featured: false,
     },
@@ -174,7 +173,7 @@ const products = {
 
 const allProducts = [
   ...products.suedfruechteFrisch,
-  ...products.trockenfruechtе,
+  ...products.trockenfruechte,
   ...products.regional,
   ...products.oele,
 ]
@@ -192,280 +191,309 @@ export default function ProductsPage() {
 
             <div className="mt-8 pt-6 border-t border-border">
               <p className="text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                {"Manches Bio - manches unbehandelt.  Die Qualität zählt, nicht das Siegel."}
+                {"Manches Bio - manches unbehandelt. Die Qualität zählt, nicht das Siegel."}
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Product Categories */}
-      <section className="py-16">
+      <section className="py-16 bg-background">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <Tabs defaultValue="suedfruechtе" className="w-full">
-            <TabsList className="grid w-full grid-cols-1 md:grid-cols-3 gap-6 mb-12 h-auto bg-transparent p-0">
-              <TabsTrigger
-                value="suedfruechtе"
-                className="h-auto p-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-              >
-                <Card className="w-full transition-all duration-200 hover:shadow-lg data-[state=active]:ring-2 data-[state=active]:ring-primary">
-                  <div className="relative h-96 overflow-hidden rounded-t-lg">
-                    <img
-                      src="/images/design-mode/S%C3%BCdfrucht.jpg"
-                      alt="Frische Südfrüchte"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-70" />
-                    <div className="absolute bottom-2 left-2 text-white">
-                      <Sun className="w-5 h-5" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Südfrüchte */}
+            <div className="space-y-4">
+              <Link href="/shop?category=Südfrüchte#shop-filter" className="block group">
+                <div className="relative h-96 overflow-hidden rounded-lg">
+                  <img
+                    src="/images/design-mode/S%C3%BCdfrucht.jpg"
+                    alt="Frische Südfrüchte"
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-70 group-hover:opacity-90 transition-opacity" />
+                  <div className="absolute bottom-4 left-4 text-white">
+                    <Sun className="w-6 h-6 mb-2" />
+                    <h3 className="font-serif font-semibold text-2xl">Südfrüchte</h3>
+                    <p className="text-sm opacity-90">Frisch aus Sizilien</p>
+                  </div>
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="bg-white/90 text-primary px-6 py-3 rounded-lg font-semibold flex items-center space-x-2">
+                      <span>Zum Shop</span>
+                      <span>→</span>
                     </div>
                   </div>
-                  <CardContent className="p-4 text-center">
-                    <h3 className="font-serif font-semibold text-lg mb-1">Südfrüchte</h3>
-                    <p className="text-sm text-muted-foreground">Frisch aus Sizilien</p>
-                  </CardContent>
-                </Card>
-              </TabsTrigger>
-
-              <TabsTrigger
-                value="trocken"
-                className="h-auto p-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-              >
-                <Card className="w-full transition-all duration-200 hover:shadow-lg data-[state=active]:ring-2 data-[state=active]:ring-primary">
-                  <div className="relative h-96 overflow-hidden rounded-t-lg">
-                    <img
-                      src="/images/design-mode/fr%C3%BCchtemandala%20zentrum.jpg"
-                      alt="Trockenfrüchte"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-30" />
-                    <div className="absolute bottom-2 left-2 text-white">
-                      <Leaf className="w-5 h-5" />
-                    </div>
-                  </div>
-                  <CardContent className="p-4 text-center">
-                    <h3 className="font-serif font-semibold text-lg mb-1">Trockenfrüchte</h3>
-                    <p className="text-sm text-muted-foreground">Aus aller Welt</p>
-                  </CardContent>
-                </Card>
-              </TabsTrigger>
-
-              <TabsTrigger
-                value="oele"
-                className="h-auto p-0 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-              >
-                <Card className="w-full transition-all duration-200 hover:shadow-lg data-[state=active]:ring-2 data-[state=active]:ring-primary">
-                  <div className="relative h-96 overflow-hidden rounded-t-lg">
-                    <img
-                      src="/images/design-mode/Oliven%C3%B6l%20Glas.jpg"
-                      alt="Kaltgepresste Öle"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-70" />
-                    <div className="absolute bottom-2 left-2 text-white">
-                      <Award className="w-5 h-5" />
-                    </div>
-                  </div>
-                  <CardContent className="p-4 text-center">
-                    <h3 className="font-serif font-semibold text-lg mb-1">Öle</h3>
-                    <p className="text-sm text-muted-foreground">Kaltgepresst</p>
-                  </CardContent>
-                </Card>
-              </TabsTrigger>
-            </TabsList>
-
-            {/* Fresh Südfrüchte */}
-            <TabsContent value="suedfruechtе">
-              <div className="space-y-12">
-                <div className="text-center space-y-4">
-                  <h2 className="font-serif font-bold text-3xl text-foreground">Frische Südfrüchte aus Ribera</h2>
-                  <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-                    {""}
-                  </p>
                 </div>
-
-                <div className="grid md:grid-cols-2 gap-8">
-                  <Card className="p-6">
-                    <CardHeader className="pb-4">
-                      <div className="flex items-center space-x-3">
-                        <MapPin className="w-6 h-6 text-primary" />
-                        <CardTitle className="text-xl font-serif">Herkunft & Anbau</CardTitle>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-4">
-                      <p className="text-muted-foreground">
-                        Unsere Südfrüchte wachsen auf den fruchtbaren Böden Siziliens, wo das mediterrane Klima und die vulkanische Erde ideale Bedingungen für ausergewöhnlichen Geschmack schaffen.
-                      </p>
-                      <ul className="space-y-2 text-sm text-muted-foreground">
-                        <li>• Traditionelle Anbaumethoden</li>
-                        <li>•  Ernte zum optimalen Reifegrad</li>
-                        <li>• Direkte Partnerschaften</li>
-                        <li>• Transport innerhalb kürzester Zeit nach Ernte</li>
-                      </ul>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="p-6">
-                    <CardHeader className="pb-4">
-                      <div className="flex items-center space-x-3">
-                        <Award className="w-6 h-6 text-primary" />
-                        <CardTitle className="text-xl font-serif">Qualität & Frische</CardTitle>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-4">
-                      <p className="text-muted-foreground">
-                        Frischer gehts nur vom Baum.
-                      </p>
-                      <ul className="space-y-2 text-sm text-muted-foreground">
-                        <li>• Unbehandelte Schalen, essbar und aromatisch</li>
-                        <li>• Hoher Vitamin C-Gehalt </li>
-                        <li>• Keine Wachsbehandlung oder Konservierungsstoffe</li>
-                        <li>{""}</li>
-                      </ul>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </TabsContent>
+              </Link>
+              <a
+                href="#suedfruechte"
+                className="block text-center text-sm text-primary hover:text-primary/80 font-medium transition-colors"
+              >
+                Mehr erfahren ↓
+              </a>
+            </div>
 
             {/* Trockenfrüchte */}
-            <TabsContent value="trocken">
-              <div className="space-y-12">
-                <div className="text-center space-y-4">
-                  <h2 className="font-serif font-bold text-3xl text-foreground">Natürlich getrocknete Früchte</h2>
-                  <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-                    {""}
-                  </p>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-8">
-                  <Card className="p-6">
-                    <CardHeader className="pb-4">
-                      <div className="flex items-center space-x-3">
-                        <Sun className="w-6 h-6 text-primary" />
-                        <CardTitle className="text-xl font-serif">Traditionelle Trocknung</CardTitle>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-4">
-                      <p className="text-muted-foreground">
-                        Die jahrhundertealte Tradition der Sonnentrocknung bewahrt nicht nur die Nährstoffe, sondern
-                        intensiviert auch den natürlichen Geschmack der Früchte.
-                      </p>
-                      <ul className="space-y-2 text-sm text-muted-foreground">
-                              <li>• Erhaltung aller natürlichen Enzyme</li>
-                        <li>• Keine Schwefelung oder chemische Behandlung</li>
-                      </ul>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="p-6">
-                    <CardHeader className="pb-4">
-                      <div className="flex items-center space-x-3">
-                        <Award className="w-6 h-6 text-primary" />
-                        <CardTitle className="text-xl font-serif">Nährstoffe & Geschmack</CardTitle>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-4">
-                      <p className="text-muted-foreground">
-                        Durch die schonende Trocknung bleiben Vitamine, Mineralien und der intensive, natürliche Geschmack weitestgehenst erhalten.
-                      </p>
-                      <ul className="space-y-2 text-sm text-muted-foreground">
-                        <li>• Reich an Ballaststoffen und Antioxidantien</li>
-                        <li>• Konzentrierte natürliche Süße</li>
-                        <li>• Lange Haltbarkeit ohne Konservierungsstoffe</li>
-                        <li>• Idealer Energielieferant für Sportler</li>
-                      </ul>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="bg-card p-8 rounded-lg">
-                  <div className="flex items-center space-x-3 mb-4">
-                    <Leaf className="w-6 h-6 text-primary" />
-                    <h3 className="font-serif font-bold text-xl">Sortiment</h3>
+            <div className="space-y-4">
+              <Link href="/shop?category=Trockenfrüchte#shop-filter" className="block group">
+                <div className="relative h-96 overflow-hidden rounded-lg">
+                  <img
+                    src="/images/design-mode/fr%C3%BCchtemandala%20zentrum.jpg"
+                    alt="Trockenfrüchte"
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-30 group-hover:opacity-50 transition-opacity" />
+                  <div className="absolute bottom-4 left-4 text-white">
+                    <Leaf className="w-6 h-6 mb-2" />
+                    <h3 className="font-serif font-semibold text-2xl">Trockenfrüchte</h3>
+                    <p className="text-sm opacity-90">Aus aller Welt</p>
                   </div>
-                  <p className="text-muted-foreground leading-relaxed mb-4">
-                    Unser Trockenfrüchte-Sortiment umfasst klassische Spezialitäten aus aller Welt. Die Früchte werden zum optimalen reifegrad geerntet und auf die schonenste Art und Weise weiterverarbeitet.      
-                  </p>
-                  <p className="text-muted-foreground leading-relaxed">
-                    Perfekt als gesunder Snack, für Müsli und Joghurt oder zum Backen - unsere Trockenfrüchte bringen vielfalt in Ihre Küche.
-                  </p>
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="bg-white/90 text-primary px-6 py-3 rounded-lg font-semibold flex items-center space-x-2">
+                      <span>Zum Shop</span>
+                      <span>→</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </TabsContent>
+              </Link>
+              <a
+                href="#trockenfruechte"
+                className="block text-center text-sm text-primary hover:text-primary/80 font-medium transition-colors"
+              >
+                Mehr erfahren ↓
+              </a>
+            </div>
 
             {/* Öle */}
-            <TabsContent value="oele">
-              <div className="space-y-12">
-                <div className="text-center space-y-4">
-                  <h2 className="font-serif font-bold text-3xl text-foreground">Kaltgepresste Öle</h2>
-                  <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-                    Unsere Öle stammen ausschließlich aus der ersten Pressung und werden schonend verarbeitet.
-                  </p>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-8">
-                  <Card className="p-6">
-                    <CardHeader className="pb-4">
-                      <div className="flex items-center space-x-3">
-                        <Award className="w-6 h-6 text-primary" />
-                        <CardTitle className="text-xl font-serif">Olivenöl aus Sizilien</CardTitle>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-4">
-                      <p className="text-muted-foreground">
-                        Unser natives Olivenöl extra wird innerhalb von 24 Stunden nach der Ernte kalt gepresst.
-                      </p>
-                      <ul className="space-y-2 text-sm text-muted-foreground">
-                        <li>• Erste Kaltpressung unter 27°C</li>
-                        <li>• Fruchtiges Aroma mit leichter Schärfe</li>
-                        <li>• Reich an Polyphenolen und Vitamin E</li>
-                      </ul>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="p-6">
-                    <CardHeader className="pb-4">
-                      <div className="flex items-center space-x-3">
-                        <Leaf className="w-6 h-6 text-primary" />
-                        <CardTitle className="text-xl font-serif">Regionale Spezialitäten</CardTitle>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-4">
-                      <p className="text-muted-foreground">Ist noch in Arbeit :)</p>
-                      <ul className="space-y-2 text-sm text-muted-foreground">
-                        <li>• Walnussöl für Feinschmecker</li>
-                      </ul>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="bg-card p-8 rounded-lg">
-                  <div className="flex items-center space-x-3 mb-4">
-                    <Truck className="w-6 h-6 text-primary" />
-                    <h3 className="font-serif font-bold text-xl">Lagerung</h3>
+            <div className="space-y-4">
+              <Link href="/shop?category=Olivenöl#shop-filter" className="block group">
+                <div className="relative h-96 overflow-hidden rounded-lg">
+                  <img
+                    src="/images/design-mode/Oliven%C3%B6l%20Glas.jpg"
+                    alt="Kaltgepresste Öle"
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-70 group-hover:opacity-90 transition-opacity" />
+                  <div className="absolute bottom-4 left-4 text-white">
+                    <Award className="w-6 h-6 mb-2" />
+                    <h3 className="font-serif font-semibold text-2xl">Öle</h3>
+                    <p className="text-sm opacity-90">Kaltgepresst</p>
                   </div>
-                  <p className="text-muted-foreground leading-relaxed">
-                    Für die optimale Qualität empfehlen wir, die Öle kühl und dunkel zu lagern.
-                  </p>
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="bg-white/90 text-primary px-6 py-3 rounded-lg font-semibold flex items-center space-x-2">
+                      <span>Zum Shop</span>
+                      <span>→</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </TabsContent>
-          </Tabs>
+              </Link>
+              <a
+                href="#oele"
+                className="block text-center text-sm text-primary hover:text-primary/80 font-medium transition-colors"
+              >
+                Mehr erfahren ↓
+              </a>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Call to Action */}
-      <section className="py-20 bg-primary text-primary-foreground">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="max-w-2xl mx-auto space-y-6">
-            <h2 className="font-serif font-bold text-3xl lg:text-4xl">Bereit zum Einkaufen?</h2>
-            <p className="text-lg opacity-90">
-              Entdecken Sie unser komplettes Sortiment in unserem Online-Shop und bestellen Sie direkt.
-            </p>
-            <Button variant="secondary" size="lg" className="text-lg px-8" asChild>
-              <Link href="/shop">Zum Shop</Link>
-            </Button>
+      <section className="py-16 bg-muted/30">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 space-y-20">
+          {/* Südfrüchte Section */}
+          <div id="suedfruechte" className="scroll-mt-20">
+            <div className="text-center space-y-4 mb-12">
+              <div className="flex items-center justify-center space-x-3">
+                <Sun className="w-8 h-8 text-primary" />
+                <h2 className="font-serif font-bold text-3xl text-foreground">Frische Südfrüchte aus Ribera</h2>
+              </div>
+              <p className="text-lg text-muted-foreground max-w-3xl mx-auto">{""}</p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8 mb-8">
+              <Card className="p-6">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center space-x-3">
+                    <MapPin className="w-6 h-6 text-primary" />
+                    <CardTitle className="text-xl font-serif">Herkunft & Anbau</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-4">
+                  <p className="text-muted-foreground">
+                    Unsere Südfrüchte wachsen auf den fruchtbaren Böden Siziliens, wo das mediterrane Klima und die
+                    vulkanische Erde ideale Bedingungen für außergewöhnlichen Geschmack schaffen.
+                  </p>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li>• Traditionelle Anbaumethoden</li>
+                    <li>• Ernte zum optimalen Reifegrad</li>
+                    <li>• Direkte Partnerschaften</li>
+                    <li>• Transport innerhalb kürzester Zeit nach Ernte</li>
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card className="p-6">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center space-x-3">
+                    <Award className="w-6 h-6 text-primary" />
+                    <CardTitle className="text-xl font-serif">Qualität & Frische</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-4">
+                  <p className="text-muted-foreground">Frischer gehts nur vom Baum.</p>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li>• Unbehandelte Schalen, essbar und aromatisch</li>
+                    <li>• Hoher Vitamin C-Gehalt</li>
+                    <li>• Keine Wachsbehandlung oder Konservierungsstoffe</li>
+                    <li>{""}</li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="text-center">
+              <Button size="lg" asChild className="px-8">
+                <Link href="/shop?category=Südfrüchte#shop-filter">→ Südfrüchte im Shop</Link>
+              </Button>
+            </div>
+          </div>
+
+          {/* Trockenfrüchte Section */}
+          <div id="trockenfruechte" className="scroll-mt-20">
+            <div className="text-center space-y-4 mb-12">
+              <div className="flex items-center justify-center space-x-3">
+                <Leaf className="w-8 h-8 text-primary" />
+                <h2 className="font-serif font-bold text-3xl text-foreground">Natürlich getrocknete Früchte</h2>
+              </div>
+              <p className="text-lg text-muted-foreground max-w-3xl mx-auto">{""}</p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8 mb-8">
+              <Card className="p-6">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center space-x-3">
+                    <Sun className="w-6 h-6 text-primary" />
+                    <CardTitle className="text-xl font-serif">Traditionelle Trocknung</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-4">
+                  <p className="text-muted-foreground">
+                    Die jahrhundertealte Tradition der Sonnentrocknung bewahrt nicht nur die Nährstoffe, sondern
+                    intensiviert auch den natürlichen Geschmack der Früchte.
+                  </p>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li>• Erhaltung aller natürlichen Enzyme</li>
+                    <li>• Keine Schwefelung oder chemische Behandlung</li>
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card className="p-6">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center space-x-3">
+                    <Award className="w-6 h-6 text-primary" />
+                    <CardTitle className="text-xl font-serif">Nährstoffe & Geschmack</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-4">
+                  <p className="text-muted-foreground">
+                    Durch die schonende Trocknung bleiben Vitamine, Mineralien und der intensive, natürliche Geschmack
+                    weitestgehend erhalten.
+                  </p>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li>• Reich an Ballaststoffen und Antioxidantien</li>
+                    <li>• Konzentrierte natürliche Süße</li>
+                    <li>• Lange Haltbarkeit ohne Konservierungsstoffe</li>
+                    <li>• Idealer Energielieferant für Sportler</li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="bg-card p-8 rounded-lg mb-8">
+              <div className="flex items-center space-x-3 mb-4">
+                <Leaf className="w-6 h-6 text-primary" />
+                <h3 className="font-serif font-bold text-xl">Sortiment</h3>
+              </div>
+              <p className="text-muted-foreground leading-relaxed mb-4">
+                Unser Trockenfrüchte-Sortiment umfasst klassische Spezialitäten aus aller Welt. Die Früchte werden zum
+                optimalen Reifegrad geerntet und auf die schonendste Art und Weise weiterverarbeitet.
+              </p>
+              <p className="text-muted-foreground leading-relaxed">
+                Perfekt als gesunder Snack, für Müsli und Joghurt oder zum Backen - unsere Trockenfrüchte bringen
+                Vielfalt in Ihre Küche.
+              </p>
+            </div>
+
+            <div className="text-center">
+              <Button size="lg" asChild className="px-8">
+                <Link href="/shop?category=Trockenfrüchte#shop-filter">→ Trockenfrüchte im Shop</Link>
+              </Button>
+            </div>
+          </div>
+
+          {/* Öle Section */}
+          <div id="oele" className="scroll-mt-20">
+            <div className="text-center space-y-4 mb-12">
+              <div className="flex items-center justify-center space-x-3">
+                <Award className="w-8 h-8 text-primary" />
+                <h2 className="font-serif font-bold text-3xl text-foreground">Kaltgepresste Öle</h2>
+              </div>
+              <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
+                Unsere Öle stammen ausschließlich aus der ersten Pressung und werden schonend verarbeitet.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8 mb-8">
+              <Card className="p-6">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center space-x-3">
+                    <Award className="w-6 h-6 text-primary" />
+                    <CardTitle className="text-xl font-serif">Olivenöl aus Sizilien</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-4">
+                  <p className="text-muted-foreground">
+                    Unser natives Olivenöl extra wird innerhalb von 24 Stunden nach der Ernte kalt gepresst.
+                  </p>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li>• Erste Kaltpressung unter 27°C</li>
+                    <li>• Fruchtiges Aroma mit leichter Schärfe</li>
+                    <li>• Reich an Polyphenolen und Vitamin E</li>
+                  </ul>
+                </CardContent>
+              </Card>
+
+              <Card className="p-6">
+                <CardHeader className="pb-4">
+                  <div className="flex items-center space-x-3">
+                    <Leaf className="w-6 h-6 text-primary" />
+                    <CardTitle className="text-xl font-serif">Regionale Spezialitäten</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-4">
+                  <p className="text-muted-foreground">Ist noch in Arbeit :)</p>
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                    <li>• Walnussöl für Feinschmecker</li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="bg-card p-8 rounded-lg mb-8">
+              <div className="flex items-center space-x-3 mb-4">
+                <Truck className="w-6 h-6 text-primary" />
+                <h3 className="font-serif font-bold text-xl">Lagerung</h3>
+              </div>
+              <p className="text-muted-foreground leading-relaxed">
+                Für die optimale Qualität empfehlen wir, die Öle kühl und dunkel zu lagern.
+              </p>
+            </div>
+
+            <div className="text-center">
+              <Button size="lg" asChild className="px-8">
+                <Link href="/shop?category=Olivenöl#shop-filter">→ Öle im Shop</Link>
+              </Button>
+            </div>
           </div>
         </div>
       </section>

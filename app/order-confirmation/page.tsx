@@ -220,7 +220,9 @@ function OrderConfirmationContent() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Gesamtbetrag</p>
-                  <p className="font-medium text-sm sm:text-base">€{total}</p>
+                  <p className="font-medium text-sm sm:text-base">
+                    {orderDetails?.total ? `€${orderDetails.total.toFixed(2)}` : `€${total}`}
+                  </p>
                 </div>
               </div>
 
@@ -324,7 +326,23 @@ function OrderConfirmationContent() {
                 </div>
               )}
 
-              {paymentMethod === "transfer" && (
+              {paymentMethod === "sumup" && orderDetails?.payment_status === "paid" && (
+                <div className="border-t pt-4">
+                  <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 p-4 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                      <span className="font-medium text-green-800 dark:text-green-200 text-sm sm:text-base">
+                        Zahlung erfolgreich abgeschlossen
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-green-600 dark:text-green-400 mt-2">
+                      Ihre Zahlung wurde per SumUp verarbeitet und bestätigt.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {paymentMethod === "transfer" && orderDetails?.payment_status !== "paid" && (
                 <div className="border-t pt-4">
                   <p className="font-medium mb-3 text-sm sm:text-base">Bankverbindung für Überweisung</p>
                   <div className="bg-muted/50 p-3 sm:p-4 rounded-lg space-y-2">

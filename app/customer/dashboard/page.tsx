@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, Suspense } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Users,
   Bell,
+  QrCode,
 } from "lucide-react"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { ProfileEditModal } from "@/components/customer/profile-edit-modal"
@@ -33,9 +34,11 @@ interface CustomerProfile {
   first_name: string
   last_name: string
   phone?: string
-  address?: string
-  city?: string
+  street?: string
+  house_number?: string
   postal_code?: string
+  city?: string
+  country?: string
   newsletter_subscribed?: boolean
   reminder_notifications?: boolean
   marketing_consent?: boolean
@@ -57,6 +60,8 @@ interface Order {
   notes?: string
   items: OrderItem[]
   hellocash_invoice_number?: string
+  pickup_token?: string
+  qr_code_expires_at?: string
 }
 
 interface OrderItem {
@@ -80,8 +85,8 @@ function DashboardContent({ user }: { user: any }) {
   const [reminderNotifications, setReminderNotifications] = useState(false)
   const [marketingConsent, setMarketingConsent] = useState(false)
   const [isSavingPreferences, setIsSavingPreferences] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
 
   const {
     data: ordersData,
@@ -102,20 +107,20 @@ function DashboardContent({ user }: { user: any }) {
 
   const loadCustomerData = async (userId: string) => {
     try {
-      const { data: profileData, error: profileError } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("user_id", userId)
-        .single()
+      const response = await fetch(`/api/customer/profile`)
 
-      if (profileError) {
-        console.log("[v0] Profile error:", profileError)
-      } else {
-        setProfile(profileData)
-        setNewsletterSubscribed(profileData.newsletter_subscribed || false)
-        setReminderNotifications(profileData.reminder_notifications || false)
-        setMarketingConsent(profileData.marketing_consent || false)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Fehler beim Laden der Daten")
       }
+
+      const result = await response.json()
+      const profileData = result.data
+
+      setProfile(profileData)
+      setNewsletterSubscribed(profileData.newsletter_subscribed || false)
+      setReminderNotifications(profileData.reminder_notifications || false)
+      setMarketingConsent(profileData.marketing_consent || false)
     } catch (error) {
       console.error("[v0] Error loading customer data:", error)
     }
@@ -123,7 +128,14 @@ function DashboardContent({ user }: { user: any }) {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut()
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+      })
+
+      if (!response.ok) {
+        throw new Error("Logout fehlgeschlagen")
+      }
+
       router.push("/")
     } catch (error) {
       console.error("[v0] Logout error:", error)
@@ -178,11 +190,7 @@ function DashboardContent({ user }: { user: any }) {
   }
 
   const handleDeleteAccount = async () => {
-    if (
-      !confirm(
-        "Sind Sie sicher, dass Sie Ihren Account löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
-      )
-    ) {
+    if (!showDeleteConfirm) {
       return
     }
 
@@ -203,6 +211,7 @@ function DashboardContent({ user }: { user: any }) {
       alert("Fehler beim Löschen des Accounts")
     } finally {
       setIsDeleting(false)
+      setShowDeleteConfirm(false)
     }
   }
 
@@ -296,25 +305,36 @@ function DashboardContent({ user }: { user: any }) {
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-end items-center mb-6">
-          <div className="flex items-center gap-4 bg-white px-4 py-2 rounded-lg shadow-sm border">
-            <div className="flex items-center gap-2">
-              <User className="w-4 h-4 text-gold" />
-              <span className="text-sm font-medium text-gray-700">{user?.email}</span>
+          <div className="bg-white px-4 py-3 rounded-lg shadow-sm border w-full sm:w-auto">
+            {/* Mobile: stacked layout, Desktop: horizontal */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+              <div className="flex items-center gap-2 min-w-0">
+                <User className="w-4 h-4 text-gold flex-shrink-0" />
+                <span className="text-sm font-medium text-gray-700 truncate">{user?.email}</span>
+              </div>
+              <div className="flex items-center gap-2 justify-end sm:justify-start">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="text-gray-600 hover:text-gold flex-1 sm:flex-initial"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
+                  <span className="hidden sm:inline">Aktualisieren</span>
+                  <span className="sm:hidden">Aktualisieren</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleLogout}
+                  className="text-gray-600 hover:text-gold flex-1 sm:flex-initial"
+                >
+                  <LogOut className="w-4 h-4 mr-1" />
+                  Abmelden
+                </Button>
+              </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="text-gray-600 hover:text-gold"
-            >
-              <RefreshCw className={`w-4 h-4 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
-              Aktualisieren
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-gray-600 hover:text-gold">
-              <LogOut className="w-4 h-4 mr-1" />
-              Abmelden
-            </Button>
           </div>
         </div>
 
@@ -327,21 +347,21 @@ function DashboardContent({ user }: { user: any }) {
 
         <Tabs defaultValue="orders" className="space-y-6">
           <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:grid-cols-4">
-            <TabsTrigger value="orders" className="flex items-center gap-2">
+            <TabsTrigger value="orders" className="flex flex-col items-center gap-1 py-3">
               <ShoppingBag className="w-4 h-4" />
-              Bestellungen
+              <span className="text-xs sm:text-sm">Bestellungen</span>
             </TabsTrigger>
-            <TabsTrigger value="profile" className="flex items-center gap-2">
+            <TabsTrigger value="profile" className="flex flex-col items-center gap-1 py-3">
               <User className="w-4 h-4" />
-              Profil
+              <span className="text-xs sm:text-sm">Profil</span>
             </TabsTrigger>
-            <TabsTrigger value="distributor" className="flex items-center gap-2">
+            <TabsTrigger value="distributor" className="flex flex-col items-center gap-1 py-3">
               <Users className="w-4 h-4" />
-              Verteiler
+              <span className="text-xs sm:text-sm">Verteiler</span>
             </TabsTrigger>
-            <TabsTrigger value="privacy" className="flex items-center gap-2">
+            <TabsTrigger value="privacy" className="flex flex-col items-center gap-1 py-3">
               <Shield className="w-4 h-4" />
-              Datenschutz
+              <span className="text-xs sm:text-sm">Datenschutz</span>
             </TabsTrigger>
           </TabsList>
 
@@ -364,6 +384,7 @@ function DashboardContent({ user }: { user: any }) {
                 {ordersError && (
                   <div className="text-center py-8">
                     <p className="text-destructive">Fehler beim Laden der Bestellungen</p>
+                    <p className="text-sm text-muted-foreground mt-2">{ordersError.message}</p>
                   </div>
                 )}
 
@@ -381,7 +402,12 @@ function DashboardContent({ user }: { user: any }) {
                 {!ordersLoading && !ordersError && orders.length > 0 && (
                   <div className="space-y-4">
                     {orders.map((order) => (
-                      <Card key={order.id} className="border-l-4 border-l-primary">
+                      <Card
+                        key={order.id}
+                        className={`border-l-4 ${
+                          order.status === "cancelled" ? "border-l-destructive opacity-60" : "border-l-primary"
+                        }`}
+                      >
                         <CardContent className="pt-6">
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                             <div className="space-y-2">
@@ -417,6 +443,31 @@ function DashboardContent({ user }: { user: any }) {
                                     month: "long",
                                     year: "numeric",
                                   })}
+                                </div>
+                              )}
+                              {order.pickup_token && (
+                                <div className="text-sm">
+                                  <a
+                                    href={`/pos/pickup?token=${order.pickup_token}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-primary hover:underline"
+                                  >
+                                    <QrCode className="w-4 h-4" />
+                                    <span>Abholseite mit QR-Code öffnen</span>
+                                  </a>
+                                  {order.qr_code_expires_at && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Gültig bis:{" "}
+                                      {new Date(order.qr_code_expires_at).toLocaleDateString("de-DE", {
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                        year: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </p>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -501,9 +552,9 @@ function DashboardContent({ user }: { user: any }) {
                   <div>
                     <label className="text-sm font-medium">Adresse</label>
                     <p className="text-muted-foreground">
-                      {profile?.address ? (
+                      {profile?.street || profile?.house_number ? (
                         <>
-                          {profile.address}
+                          {profile.street} {profile.house_number}
                           <br />
                           {profile.postal_code} {profile.city}
                         </>
@@ -663,33 +714,37 @@ function DashboardContent({ user }: { user: any }) {
                     <div className="p-3 bg-destructive/10 rounded-lg">
                       <Trash2 className="w-6 h-6 text-destructive" />
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg mb-2 text-destructive">Account löschen</h3>
-                      <p className="text-sm text-muted-foreground mb-4">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-destructive mb-2 break-words">Account löschen</h3>
+                      <p className="text-sm text-muted-foreground mb-4 break-words">
                         Wenn Sie Ihren Account löschen, werden Ihre persönlichen Daten anonymisiert. Bestelldaten werden
-                        aus rechtlichen Gründen (Buchhaltung, Steuern) für 10 Jahre aufbewahrt, aber ohne Bezug zu Ihrer
+                        aus rechtlichen Gründen (Buchführung, Steuern) für 10 Jahre aufbewahrt, aber ohne Bezug zu Ihrer
                         Person.
                       </p>
-                      <p className="text-xs text-muted-foreground mb-4">
-                        <strong>DSGVO Artikel 17:</strong> Recht auf Löschung ("Recht auf Vergessenwerden")
+                      <p className="text-xs text-muted-foreground italic break-words">
+                        DSGVO Artikel 17: Recht auf Löschung {"("}
+                        <a
+                          href="https://dsgvo-gesetz.de/art-17-dsgvo/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline hover:text-foreground break-all"
+                        >
+                          Recht auf Vergessenwerden
+                        </a>
+                        {")"}
                       </p>
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
-                        <p className="text-sm text-amber-800">
+                      <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                        <p className="text-sm text-amber-800 break-words">
                           <strong>Wichtig:</strong> Diese Aktion kann nicht rückgängig gemacht werden. Nach der Löschung
                           können Sie sich nicht mehr einloggen und haben keinen Zugriff mehr auf Ihre Bestellhistorie.
                         </p>
                       </div>
-                      <Button
-                        onClick={handleDeleteAccount}
-                        disabled={isDeleting}
-                        variant="destructive"
-                        className="gap-2"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        {isDeleting ? "Wird gelöscht..." : "Account unwiderruflich löschen"}
-                      </Button>
                     </div>
                   </div>
+                  <Button variant="destructive" className="w-full" onClick={() => setShowDeleteConfirm(true)}>
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Account unwiderruflich löschen
+                  </Button>
                 </div>
 
                 <div className="text-center pt-4">
@@ -721,32 +776,18 @@ function DashboardContent({ user }: { user: any }) {
 function AuthenticatedDashboard() {
   const [user, setUser] = useState<any>(null)
   const router = useRouter()
-  const supabase = createClient()
+  const { user: authUser } = useAuth()
 
   useEffect(() => {
-    checkUser()
-  }, [])
-
-  const checkUser = async () => {
-    try {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser()
-
-      if (error || !user) {
-        console.log("[v0] No user found, redirecting to login")
-        router.push("/customer/login")
-        return
-      }
-
-      console.log("[v0] User found:", user.email)
-      setUser(user)
-    } catch (error) {
-      console.error("[v0] Error checking user:", error)
+    if (!authUser) {
+      console.log("[v0] No user found, redirecting to login")
       router.push("/customer/login")
+      return
     }
-  }
+
+    console.log("[v0] User found:", authUser.email)
+    setUser(authUser)
+  }, [authUser, router])
 
   if (!user) {
     return null

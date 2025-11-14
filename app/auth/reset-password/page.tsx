@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Eye, EyeOff, Lock } from "lucide-react"
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/client"
+import { getBrowserClient } from "@/lib/supabase/browser"
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("")
@@ -24,7 +24,7 @@ export default function ResetPasswordPage() {
 
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createClient()
+  const supabase = getBrowserClient()
 
   useEffect(() => {
     // Check if we have the necessary tokens from the URL

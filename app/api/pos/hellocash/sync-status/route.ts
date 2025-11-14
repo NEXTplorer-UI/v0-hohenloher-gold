@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server"
 import { syncInvoiceStatus } from "@/lib/hellocash/sync-invoice-status"
-import { createClient } from "@supabase/supabase-js"
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+import { getAdminClient } from "@/lib/supabase/admin"
 
 export async function POST(req: Request) {
   try {
@@ -14,7 +11,7 @@ export async function POST(req: Request) {
 
     // If token provided instead of orderId, look up order
     if (token && !orderId) {
-      const supabase = createClient(supabaseUrl, supabaseServiceKey)
+      const supabase = getAdminClient()
       const { data: order, error } = await supabase.from("orders").select("id").eq("pickup_token", token).single()
 
       if (error || !order) {

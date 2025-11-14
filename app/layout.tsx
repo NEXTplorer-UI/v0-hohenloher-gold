@@ -6,6 +6,7 @@ import { CartProvider } from "@/contexts/cart-context"
 import { PricingProvider } from "@/components/pricing-context"
 import { AdminProvider } from "@/contexts/admin-context"
 import { ProductsProvider } from "@/contexts/products-context"
+import { AuthProvider } from "@/contexts/auth-context"
 import { CookieConsent } from "@/components/cookie-consent"
 import { Toaster } from "@/components/ui/toaster"
 import { Footer } from "@/components/footer"
@@ -29,11 +30,11 @@ const dmSans = DM_Sans({
 })
 
 export const metadata: Metadata = {
-  title: "Hohenloher Gold - Regionale Lebensmittel & Sizilianische Südfrüchte",
-  description: "Ursprünglich, echt, gesellig",
+  title: "Hohenloher Gold - Feines aus aller Welt",
+  description: "Hochwertige, unbehandelte Lebensmittel aus aller Welt und frische Südfrüchte direkt aus Sizilien.",
   icons: {
-    icon: "/app/icon.jpg",
-    apple: "/app/icon.jpg",
+    icon: process.env.NEXT_PUBLIC_LOGO_URL || "/hohenloher-gold-logo.png",
+    apple: process.env.NEXT_PUBLIC_LOGO_URL || "/hohenloher-gold-logo.png",
   },
   keywords: [
     "Hohenloher Gold",
@@ -59,18 +60,18 @@ export const metadata: Metadata = {
     address: false,
     telephone: false,
   },
-  metadataBase: new URL("https://hohenloher-gold.de"),
+  metadataBase: new URL("https://suedfruechte-hohenlohe.de"),
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Hohenloher Gold - Regionale Lebensmittel & Sizilianische Südfrüchte",
-    description: "Hochwertige, unbehandelte Lebensmittel aus Hohenlohe und frische Südfrüchte direkt aus Sizilien.",
-    url: "https://hohenloher-gold.de",
+    title: "Hohenloher Gold - Feines aus aller Welt",
+    description: "Hochwertige, unbehandelte Lebensmittel aus aller Welt und frische Südfrüchte direkt aus Sizilien.",
+    url: "https://suedfruechte-hohenlohe.de",
     siteName: "Hohenloher Gold",
     images: [
       {
-        url: process.env.NEXT_PUBLIC_LOGO_URL || "/placeholder.svg?height=630&width=1200",
+        url: process.env.NEXT_PUBLIC_LOGO_URL || "/hohenloher-gold-logo.png",
         width: 1200,
         height: 630,
         alt: "Hohenloher Gold Logo",
@@ -81,9 +82,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Hohenloher Gold - Regionale Lebensmittel & Sizilianische Südfrüchte",
-    description: "Hochwertige, unbehandelte Lebensmittel aus Hohenlohe und frische Südfrüchte direkt aus Sizilien.",
-    images: [process.env.NEXT_PUBLIC_LOGO_URL || "/placeholder.svg?height=630&width=1200"],
+    title: "Hohenloher Gold - Feines aus aller Welt",
+    description: "Hochwertige, unbehandelte Lebensmittel aus aller Welt und frische Südfrüchte direkt aus Sizilien.",
+    images: [process.env.NEXT_PUBLIC_LOGO_URL || "/hohenloher-gold-logo.png"],
   },
   robots: {
     index: true,
@@ -119,9 +120,9 @@ export default function RootLayout({
               "@type": "Organization",
               name: "Hohenloher Gold",
               description:
-                "Hochwertige, unbehandelte Lebensmittel aus Hohenlohe und frische Südfrüchte direkt aus Sizilien",
-              url: "https://hohenloher-gold.de",
-              logo: process.env.NEXT_PUBLIC_LOGO_URL || "https://hohenloher-gold.de/placeholder.svg",
+                "Hochwertige, unbehandelte Lebensmittel aus aller Welt und frische Südfrüchte direkt aus Sizilien",
+              url: "https://suedfruechte-hohenlohe.de",
+              logo: process.env.NEXT_PUBLIC_LOGO_URL || "https://suedfruechte-hohenlohe.de/hohenloher-gold-logo.png",
               contactPoint: {
                 "@type": "ContactPoint",
                 telephone: "+49-xxx-xxxxxxx",
@@ -166,20 +167,22 @@ export default function RootLayout({
           }}
         />
         <SWRConfig value={swrConfig}>
-          <CartProvider>
-            <PricingProvider>
-              <AdminProvider>
-                <ProductsProvider>
-                  <ScrollToTop />
-                  <Header />
-                  <ErrorBoundary>{children}</ErrorBoundary>
-                  <Footer />
-                  <CookieConsent />
-                  <Toaster />
-                </ProductsProvider>
-              </AdminProvider>
-            </PricingProvider>
-          </CartProvider>
+          <AuthProvider>
+            <CartProvider>
+              <PricingProvider>
+                <AdminProvider>
+                  <ProductsProvider>
+                    <ScrollToTop />
+                    <Header />
+                    <ErrorBoundary>{children}</ErrorBoundary>
+                    <Footer />
+                    <CookieConsent />
+                    <Toaster />
+                  </ProductsProvider>
+                </AdminProvider>
+              </PricingProvider>
+            </CartProvider>
+          </AuthProvider>
         </SWRConfig>
       </body>
     </html>

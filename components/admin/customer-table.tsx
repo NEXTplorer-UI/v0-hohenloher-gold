@@ -25,6 +25,8 @@ import CustomerEditModal from "./customer-edit-modal"
 import CustomerImport from "./customer-import"
 import CustomerDetailModal from "./customer-detail-modal"
 import { useCustomerData } from "@/hooks/use-customer-data"
+import { getAllAvailableTags } from "@/lib/customer-tags"
+import { usePersistedState } from "@/hooks/use-persisted-state"
 
 interface ExtendedCustomer {
   id: string
@@ -246,40 +248,37 @@ const CustomerTable = memo(() => {
     prevPage,
   } = useCustomerData()
 
-  const [searchTerm, setSearchTerm] = useState("")
+  const [searchTerm, setSearchTerm] = usePersistedState({
+    key: "admin-customers-search",
+    defaultValue: "",
+    expirationHours: 12,
+  })
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
   const [editingCustomer, setEditingCustomer] = useState<ExtendedCustomer | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [deleteCustomerId, setDeleteCustomerId] = useState<string | null>(null)
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
-  const [sortBy, setSortBy] = useState<string>("name")
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+  const [sortBy, setSortBy] = usePersistedState({
+    key: "admin-customers-sort-by",
+    defaultValue: "name",
+    expirationHours: 12,
+  })
+  const [sortOrder, setSortOrder] = usePersistedState<"asc" | "desc">({
+    key: "admin-customers-sort-order",
+    defaultValue: "asc",
+    expirationHours: 12,
+  })
 
-  const [availableTags, setAvailableTags] = useState<string[]>([
-    "Südfrüchte-Käufer",
-    "Trockenfrüchte-Käufer",
-    "Spezialitäten-Käufer",
-    "Regional-Käufer",
-    "Gemischt",
-    "Abholung-Stuttgart",
-    "Abholung-Heilbronn",
-    "Abholung-Schwäbisch Hall",
-    "Verteiler-Stuttgart",
-    "Verteiler-Heilbronn",
-    "Verteiler-Schwäbisch Hall",
-  ])
+  const [visibleColumns, setVisibleColumns] = usePersistedState<string[]>({
+    key: "admin-customers-visible-columns",
+    defaultValue: ["name", "email", "phone", "city", "customer_status", "order_count", "actions"],
+    expirationHours: 12,
+  })
 
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    "name",
-    "email",
-    "phone",
-    "city",
-    "customer_status",
-    "order_count",
-    "actions",
-  ])
   const [detailCustomer, setDetailCustomer] = useState<ExtendedCustomer | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+
+  const [availableTags, setAvailableTags] = useState<string[]>([])
 
   const handleSaveCustomer = useCallback(
     async (customer: ExtendedCustomer) => {
@@ -355,6 +354,12 @@ const CustomerTable = memo(() => {
       loadCustomers({ limit: pageSize, offset: (currentPage - 1) * pageSize })
     }
   }, [debouncedSearchTerm, loadCustomers, currentPage, pageSize])
+
+  useEffect(() => {
+    if (Array.isArray(customers) && customers.length > 0) {
+      setAvailableTags(getAllAvailableTags(customers))
+    }
+  }, [customers])
 
   const sortedAndFilteredCustomers = useMemo(() => {
     if (!Array.isArray(customers)) return []

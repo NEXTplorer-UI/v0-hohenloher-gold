@@ -1,23 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { getAdminClient } from "@/lib/supabase/admin"
 import { createMovementsFromOrder } from "@/lib/inventory/movement-service"
-import { randomUUID } from "crypto"
-
-export const runtime = "nodejs"
-export const dynamic = "force-dynamic"
-
-function getServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!url || !serviceKey) {
-    throw new Error("Missing Supabase environment variables")
-  }
-
-  return createClient(url, serviceKey, {
-    auth: { persistSession: false },
-  })
-}
+import { createInvoiceAfterPayment } from "@/lib/hellocash/create-invoice-after-payment"
+import { Resend } from "resend"
+import { buildEmail } from "@/lib/email/build"
+import { emailCopy } from "@/lib/email/copy"
+import QRCode from "qrcode"
+import { put } from "@vercel/blob"
+import { normalizePickupLocation } from "@/lib/pickup-location-normalizer"
+import { parsePickupLocationFromComment } from "@/lib/pickup-location-comment-parser"
 
 function toSlug(s: string): string {
   return s
@@ -29,7 +20,7 @@ function toSlug(s: string): string {
 }
 
 async function findPickupLocationId(
-  supabase: ReturnType<typeof getServiceClient>,
+  supabase: ReturnType<typeof getAdminClient>,
   orderData: any,
 ): Promise<string | null> {
   let pickupLocationId: string | null = null
@@ -109,7 +100,7 @@ async function findPickupLocationId(
 
 async function determineDeliveryDate(
   items: any[],
-  supabase: ReturnType<typeof getServiceClient>,
+  supabase: ReturnType<typeof getAdminClient>,
 ): Promise<{ deliveryDate: string | null; scheduleId: string | null; message?: string }> {
   const hasSouthernFruits = items.some(
     (item) => item.category === "Südfrüchte" || item.category === "Frische Südfrüchte",
@@ -204,6 +195,34 @@ async function determineDeliveryDate(
   }
 }
 
+async function findProductIdByNameAndPrice(
+  supabase: ReturnType<typeof getAdminClient>,
+  productName: string,
+  unitPrice: number,
+): Promise<number | null> {
+  try {
+    const { data: products, error } = await supabase
+      .from("products")
+      .select("id, name, price")
+      .ilike("name", `%${productName}%`)
+      .eq("price", unitPrice)
+      .limit(1)
+
+    if (error || !products || products.length === 0) {
+      console.warn(`[/api/orders] Could not find product_id for "${productName}" with price €${unitPrice}`)
+      return null
+    }
+
+    console.log(
+      `[/api/orders] ✅ Found product_id ${products[0].id} for "${productName}" (€${unitPrice}) via name+price fallback`,
+    )
+    return products[0].id
+  } catch (err) {
+    console.error(`[/api/orders] Error finding product by name+price: "${productName}"`, err)
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const bodyText = await request.text()
@@ -231,7 +250,7 @@ export async function POST(request: NextRequest) {
 
     console.log("[/api/orders] Saving order to database:", orderData.email)
 
-    const supabase = getServiceClient()
+    const supabase = getAdminClient()
 
     const tenSecondsAgo = new Date(Date.now() - 10000).toISOString()
     const { data: recentOrders, error: duplicateCheckError } = await supabase
@@ -322,7 +341,29 @@ export async function POST(request: NextRequest) {
 
     const pickupLocationId = await findPickupLocationId(supabase, orderData)
 
-    const pickupToken = randomUUID()
+    let pickupLocationNormalized: string | null = null
+    let normalizedLocationId: string | null = pickupLocationId
+
+    if (orderData.pickupLocation) {
+      try {
+        const normalized = await normalizePickupLocation(orderData.pickupLocation)
+        pickupLocationNormalized = normalized.normalized
+        if (normalized.location_id) {
+          normalizedLocationId = normalized.location_id
+        }
+        console.log("[/api/orders] Normalized pickup location:", {
+          original: orderData.pickupLocation,
+          normalized: pickupLocationNormalized,
+          location_id: normalizedLocationId,
+        })
+      } catch (normError) {
+        console.error("[/api/orders] Error normalizing pickup location:", normError)
+        // Fail-safe: use original value
+        pickupLocationNormalized = orderData.pickupLocation
+      }
+    }
+
+    const pickupToken = window.crypto.randomUUID()
     console.log("[/api/orders] Generated pickup token:", pickupToken)
 
     const orderRecord = {
@@ -334,14 +375,15 @@ export async function POST(request: NextRequest) {
       total: total,
       delivery_method: orderData.deliveryMethod,
       pickup_location: orderData.pickupLocation || null,
-      pickup_location_id: pickupLocationId,
+      pickup_location_normalized: pickupLocationNormalized,
+      pickup_location_id: normalizedLocationId,
       payment_method: orderData.paymentMethod,
       payment_status: orderData.paymentMethod === "sumup" ? "paid" : "pending",
       status: "confirmed",
       notes: orderData.notes || null,
       pickup_reminders: orderData.emailReminder || false,
       email_notifications: orderData.emailUpdates || false,
-      pickup_date: deliveryDate, // Now uses passed date or calculated date
+      pickup_date: deliveryDate,
       is_test: orderData.isTest || false,
       created_at: orderTime.toISOString(),
       pickup_token: pickupToken,
@@ -359,32 +401,33 @@ export async function POST(request: NextRequest) {
 
     const savedOrder = orderResult[0]
 
-    const productNames = orderData.items.map((item: any) => item.name)
-    console.log("[/api/orders] Looking up products:", productNames)
+    console.log("[/api/orders] Creating order items with product IDs from cart")
 
-    const { data: products, error: productsError } = await supabase
-      .from("products")
-      .select("id, name, unit")
-      .in("name", productNames)
+    const orderItemsPromises = orderData.items.map(async (item: any) => {
+      let productId = item.id || null
 
-    if (productsError) {
-      console.error("[/api/orders] Error fetching products:", productsError)
-    }
+      // Fallback: If no product_id, try to find it by name + price
+      if (!productId) {
+        console.warn(
+          `[/api/orders] ⚠️ No product_id (item.id) found for item: "${item.name}", trying name+price fallback`,
+        )
+        productId = await findProductIdByNameAndPrice(supabase, item.name, item.price)
 
-    const productMap = new Map(products?.map((p) => [p.name, { id: p.id, unit: p.unit }]) || [])
-    console.log("[/api/orders] Product map created with", productMap.size, "entries")
-
-    const orderItems = orderData.items.map((item: any) => {
-      const productInfo = productMap.get(item.name)
-      if (!productInfo) {
-        console.warn(`[/api/orders] ⚠️ No product_id found for item: "${item.name}"`)
+        if (productId) {
+          console.log(`[/api/orders] ✅ Fallback successful: Found product_id ${productId} for "${item.name}"`)
+        } else {
+          console.error(
+            `[/api/orders] ❌ Fallback failed: Could not find product_id for "${item.name}" (€${item.price})`,
+          )
+        }
       }
+
       return {
         order_id: savedOrder.id,
-        product_id: productInfo?.id || null,
+        product_id: productId,
         product_name: item.name,
         product_category: item.category || "Unbekannt",
-        product_size: item.size || productInfo?.unit || null,
+        product_size: item.size || item.unit || null,
         quantity: item.quantity,
         unit_price: item.price,
         expected_delivery_date: deliveryDate,
@@ -392,6 +435,8 @@ export async function POST(request: NextRequest) {
         created_at: orderTime.toISOString(),
       }
     })
+
+    const orderItems = await Promise.all(orderItemsPromises)
 
     const { data: itemsResult, error: itemsError } = await supabase.from("order_items").insert(orderItems).select()
 
@@ -448,74 +493,234 @@ export async function POST(request: NextRequest) {
     })
 
     try {
-      const adminEmail = process.env.SUMUP_PAY_TO_EMAIL || "kontakt@suedfruechte-hohenlohe.de"
-      console.log("[/api/orders] Sending admin notification to:", adminEmail)
+      console.log("[/api/orders] Generating QR code for order:", savedOrder.order_number)
 
-      let customerName = `${orderData.firstName || ""} ${orderData.lastName || ""}`.trim()
+      const pickupUrl = `https://suedfruechte-hohenlohe.de/pos/pickup?token=${pickupToken}`
 
-      if (!customerName) {
-        console.log("[/api/orders] Customer name not in orderData, fetching from database...")
-        const { data: customerData, error: customerNameError } = await supabase
-          .from("customers")
-          .select("first_name, last_name")
-          .eq("id", customer.id)
-          .single()
+      const qrCodeDataUrl = await QRCode.toDataURL(pickupUrl, {
+        width: 400,
+        margin: 2,
+        color: {
+          dark: "#000000",
+          light: "#FFFFFF",
+        },
+      })
 
-        if (!customerNameError && customerData) {
-          customerName = `${customerData.first_name || ""} ${customerData.last_name || ""}`.trim()
-          console.log("[/api/orders] Fetched customer name from database:", customerName)
+      // Convert data URL to Blob
+      const base64Data = qrCodeDataUrl.split(",")[1]
+      const binaryData = atob(base64Data)
+      const bytes = new Uint8Array(binaryData.length)
+      for (let i = 0; i < binaryData.length; i++) {
+        bytes[i] = binaryData.charCodeAt(i)
+      }
+      const qrBlob = new Blob([bytes], { type: "image/png" })
+
+      const fileName = `qr-codes/${pickupToken}.png`
+
+      const blob = await put(fileName, qrBlob, {
+        access: "public",
+      })
+
+      const now = new Date()
+      const expiresAt = new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000) // +45 days
+
+      // Update order with QR code URL
+      const { error: updateError } = await supabase
+        .from("orders")
+        .update({
+          qr_code_url: blob.url,
+          qr_code_type: "order",
+          qr_code_generated_at: now.toISOString(),
+          qr_code_expires_at: expiresAt.toISOString(),
+        })
+        .eq("id", savedOrder.id)
+
+      if (updateError) {
+        console.error("[/api/orders] Error updating order with QR code:", updateError)
+      } else {
+        console.log("[/api/orders] QR code generated and saved successfully for order:", savedOrder.order_number)
+        // Update savedOrder object with QR code URL
+        savedOrder.qr_code_url = blob.url
+      }
+    } catch (qrError: any) {
+      console.error("[/api/orders] Error generating QR code:", qrError.message)
+      // Don't fail the order if QR code generation fails
+    }
+
+    if (
+      savedOrder &&
+      (!savedOrder.pickup_location ||
+        savedOrder.pickup_location === "Lieferung" ||
+        savedOrder.pickup_location.trim() === "")
+    ) {
+      if (orderData.notes && orderData.notes.trim().length > 0) {
+        console.log(
+          "[/api/orders] Attempting to parse pickup location from comment..."
+        )
+
+        const parsedLocation = await parsePickupLocationFromComment(
+          orderData.notes
+        )
+
+        if (parsedLocation.found && parsedLocation.confidence !== "low") {
+          console.log(
+            `[/api/orders] Found pickup location in comment: ${parsedLocation.pickupLocationName} (confidence: ${parsedLocation.confidence})`
+          )
+
+          // Update order with parsed pickup location
+          const { error: updateError } = await supabase
+            .from("orders")
+            .update({
+              pickup_location: parsedLocation.matchedText,
+              pickup_location_normalized: parsedLocation.pickupLocationName,
+              pickup_location_id: parsedLocation.pickupLocationId,
+            })
+            .eq("id", savedOrder.id)
+
+          if (updateError) {
+            console.error(
+              "[/api/orders] Error updating order with parsed location:",
+              updateError
+            )
+          } else {
+            console.log(
+              "[/api/orders] Successfully updated order with parsed pickup location"
+            )
+          }
         } else {
-          console.warn("[/api/orders] Could not fetch customer name, using email:", orderData.email)
-          customerName = orderData.email
+          console.log(
+            "[/api/orders] No pickup location found in comment or confidence too low"
+          )
         }
       }
-
-      fetch(`${request.nextUrl.origin}/api/admin/order-notification`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: savedOrder.id,
-          orderNumber: savedOrder.order_number,
-          customerEmail: orderData.email,
-          customerName: customerName,
-          total: savedOrder.total,
-          deliveryMethod: savedOrder.delivery_method,
-          pickupLocation: savedOrder.pickup_location,
-          paymentMethod: savedOrder.payment_method,
-          items: itemsResult,
-          adminEmail: adminEmail,
-        }),
-      }).catch((err) => {
-        console.error("[/api/orders] Failed to send admin notification:", err)
-      })
-    } catch (notificationError) {
-      console.error("[/api/orders] Error sending admin notification:", notificationError)
     }
 
     if (savedOrder.payment_status === "paid") {
       try {
-        console.log("[/api/orders] Generating invoice for paid order:", savedOrder.order_number)
+        console.log("[/api/orders] Payment status is 'paid', creating HelloCash invoice for order ID:", savedOrder.id)
 
-        fetch(`${request.nextUrl.origin}/api/generate-invoice`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            orderId: savedOrder.id,
-            orderNumber: savedOrder.order_number,
-            customerEmail: orderData.email,
-            customerName: `${orderData.firstName || ""} ${orderData.lastName || ""}`.trim(),
-            items: itemsResult,
-            subtotal: savedOrder.subtotal,
-            shippingCost: savedOrder.shipping_cost,
-            total: savedOrder.total,
-            paymentMethod: savedOrder.payment_method,
-          }),
-        }).catch((err) => {
-          console.error("[/api/orders] Failed to trigger invoice generation:", err)
-        })
-      } catch (invoiceError) {
-        console.error("[/api/orders] Error triggering invoice generation:", invoiceError)
+        const testMode = orderData.testMode === true
+        if (testMode) {
+          console.log("[/api/orders] Test mode enabled - creating TEST invoice")
+        }
+
+        await createInvoiceAfterPayment(savedOrder.id, undefined, testMode)
+
+        console.log("[/api/orders] HelloCash invoice created successfully")
+
+        console.log("[/api/orders] Sending customer confirmation email with invoice PDF...")
+
+        const { data: updatedOrder, error: fetchError } = await supabase
+          .from("orders")
+          .select(
+            `
+            *,
+            customer:customers(*),
+            order_items(
+              *, 
+              products(*)
+            )
+          `,
+          )
+          .eq("id", savedOrder.id)
+          .single()
+
+        if (fetchError || !updatedOrder) {
+          console.error("[/api/orders] Error fetching updated order:", fetchError)
+        } else {
+          console.log("[/api/orders] Sending customer confirmation email with invoice PDF...")
+
+          const emailVars = {
+            customerName: `${updatedOrder.customer.first_name || ""} ${updatedOrder.customer.last_name || ""}`.trim(),
+            orderNumber: updatedOrder.order_number || "",
+            orderId: updatedOrder.order_number || "",
+            orderDate: updatedOrder.created_at ? new Date(updatedOrder.created_at).toLocaleDateString("de-DE") : "",
+            orderTotal: updatedOrder.total ? updatedOrder.total.toFixed(2) : "0.00",
+            total: updatedOrder.total ? updatedOrder.total.toFixed(2) : "0.00",
+            subtotal: updatedOrder.subtotal ? updatedOrder.subtotal.toFixed(2) : "0.00",
+            pickupLocation: updatedOrder.pickup_location || "Siehe Bestellbestätigung",
+            paymentMethod: updatedOrder.payment_method || "Nicht angegeben",
+            paymentStatus: updatedOrder.payment_status || "pending",
+            deliveryMethod: updatedOrder.delivery_method || "pickup",
+            orderItems: (updatedOrder.order_items || []).map((item: any) => ({
+              product_name: item.products?.name || item.product_name || "Unbekanntes Produkt",
+              quantity: item.quantity || 0,
+              unit_price: item.unit_price || 0,
+              total_price: item.total_price || item.quantity * item.unit_price || 0,
+              product_size: item.product_size || item.products?.unit || null,
+            })),
+          }
+
+          const { subject, html } = buildEmail("paymentReceipt", emailVars, emailCopy)
+
+          let attachments: Array<{ filename: string; content: string }> | undefined
+
+          if (updatedOrder.hellocash_invoice_id) {
+            try {
+              const helloCashToken = process.env.HELLOCASH_API_TOKEN
+              if (helloCashToken) {
+                const pdfResponse = await fetch(
+                  `https://api.hellocash.business/api/v1/invoices/${updatedOrder.hellocash_invoice_id}/pdf?cancellation=false&locale=de_DE`,
+                  {
+                    method: "GET",
+                    headers: {
+                      Authorization: `Bearer ${helloCashToken}`,
+                      Accept: "application/json",
+                    },
+                  },
+                )
+
+                if (pdfResponse.ok) {
+                  const pdfData = await pdfResponse.json()
+                  attachments = [
+                    {
+                      filename: `Rechnung_${updatedOrder.order_number}.pdf`,
+                      content: pdfData.pdf_base64_encoded,
+                    },
+                  ]
+                  console.log("[/api/orders] Invoice PDF attached successfully")
+                } else {
+                  console.error("[/api/orders] Failed to fetch invoice PDF:", await pdfResponse.text())
+                }
+              }
+            } catch (pdfError) {
+              console.error("[/api/orders] Error fetching invoice PDF:", pdfError)
+            }
+          }
+
+          const resend = new Resend(process.env.RESEND_API_KEY)
+          await resend.emails.send({
+            from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
+            to: updatedOrder.customer.email,
+            subject,
+            html,
+            attachments,
+          })
+
+          console.log(`[/api/orders] ✅ Customer confirmation email sent to ${updatedOrder.customer.email}`)
+
+          const adminEmail = process.env.SUMUP_PAY_TO_EMAIL || "kontakt@suedfruechte-hohenlohe.de"
+          await resend.emails.send({
+            from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
+            to: adminEmail,
+            subject: `[KOPIE] ${subject}`,
+            html: `
+              <div style="background: #fef3c7; border: 2px solid #f59e0b; padding: 15px; margin-bottom: 20px; border-radius: 8px;">
+                <strong style="color: #92400e;">📧 Admin-Kopie</strong><br>
+                <span style="color: #78350f;">Diese E-Mail wurde an ${updatedOrder.customer.email} gesendet</span>
+              </div>
+              ${html}
+            `,
+            attachments,
+          })
+
+          console.log(`[/api/orders] ✅ Admin copy sent to ${adminEmail}`)
+        }
+      } catch (invoiceError: any) {
+        console.error("[/api/orders] Error in invoice/email process:", invoiceError.message)
       }
+    } else {
+      console.log("[/api/orders] Payment status is not 'paid', skipping invoice generation and payment receipt email")
     }
 
     if (savedOrder.status === "confirmed") {

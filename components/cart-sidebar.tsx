@@ -56,7 +56,7 @@ export function CartSidebar() {
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-full sm:max-w-lg">
+      <SheetContent className="w-full sm:max-w-lg flex flex-col">
         <SheetHeader>
           <SheetTitle className="flex items-center space-x-2">
             <ShoppingCart className="w-5 h-5" />
@@ -64,7 +64,7 @@ export function CartSidebar() {
           </SheetTitle>
         </SheetHeader>
 
-        <div className="mt-6 space-y-4">
+        <div className="flex-1 flex flex-col mt-6 overflow-hidden">
           {!state.items || state.items.length === 0 ? (
             <div className="text-center py-8">
               <ShoppingCart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
@@ -77,7 +77,7 @@ export function CartSidebar() {
             </div>
           ) : (
             <>
-              <div className="space-y-4 max-h-96 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto pr-2 space-y-4 min-h-0">
                 {(state.items || []).map((item) => {
                   const itemPrice = calculatePrice(item.price, item.category)
 
@@ -126,14 +126,9 @@ export function CartSidebar() {
                     </div>
                   )
                 })}
-                {state.items && state.items.length > 3 && (
-                  <p className="text-xs text-muted-foreground text-center py-1">
-                    ... und {state.items.length - 3} weitere Artikel
-                  </p>
-                )}
               </div>
 
-              <div className="border-t pt-4 space-y-4">
+              <div className="border-t pt-4 mt-4 space-y-4 flex-shrink-0">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Lieferart:</label>
                   <div className="flex gap-2">

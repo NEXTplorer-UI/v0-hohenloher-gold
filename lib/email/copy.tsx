@@ -31,20 +31,6 @@ export const emailCopy = {
     signature: "Ihr Team von Südfrüchte Hohenlohe",
   },
 
-  // Rechnung
-  invoice: {
-    greeting: "Liebe/r {{customerName}},",
-    intro: "vielen Dank für Ihre Bestellung bei Südfrüchte Hohenlohe!",
-    body: "Im Anhang finden Sie die Rechnung für Ihre Bestellung <strong>{{orderId}}</strong>.",
-    infoHeading: "Wichtige Informationen:",
-    info1: "Bitte bewahren Sie diese Rechnung für Ihre Unterlagen auf",
-    info2: "Bei Fragen zur Rechnung kontaktieren Sie uns gerne",
-    info3: "Zahlungsziel: 14 Tage nach Rechnungsdatum",
-    outro: "Wir freuen uns auf Ihren nächsten Besuch!",
-    closing: "Mit freundlichen Grüßen",
-    signature: "Ihr Team von Südfrüchte Hohenlohe",
-  },
-
   // Abholtermin-Erinnerung
   pickupReminder: {
     greeting: "Liebe/r {{customerName}},",
@@ -121,17 +107,6 @@ export const emailCopy = {
     signature: "Ihr Team von Südfrüchte Hohenlohe",
   },
 
-  // Bestellung abgeholt
-  orderPickedUp: {
-    greeting: "Liebe/r {{customerName}},",
-    intro: "Vielen Dank für Ihre Bestellung!",
-    body: "Wir hoffen, Sie sind mit unseren Produkten zufrieden.",
-    feedback: "Bei Fragen oder Feedback stehen wir Ihnen gerne zur Verfügung.",
-    outro: "Wir freuen uns auf Ihren nächsten Besuch!",
-    closing: "Mit freundlichen Grüßen",
-    signature: "Ihr Team von Südfrüchte Hohenlohe",
-  },
-
   // Bestellung storniert
   orderCancelled: {
     greeting: "Liebe/r {{customerName}},",
@@ -144,7 +119,7 @@ export const emailCopy = {
     signature: "Ihr Team von Südfrüchte Hohenlohe",
   },
 
-  // Versandbenachrichtigung (NEU)
+  // Versandbenachrichtigung
   shippingNotification: {
     greeting: "Liebe/r {{customerName}},",
     intro: "Ihre Bestellung ist unterwegs!",
@@ -166,11 +141,11 @@ export const emailCopy = {
     email: "E-Mail:",
     phone: "Telefon:",
     postalCode: "PLZ / Ort:",
-    businessType: "Art des Geschäfts:",
+    businessType: "Art des Standorts:",
     experience: "Erfahrung:",
     motivation: "Motivation:",
     availability: "Verfügbarkeit:",
-    message: "Ihre Nachricht:",
+    message: "Persönliche Nachricht:",
     newsletter: "Newsletter:",
     notProvided: "Nicht angegeben",
     yes: "Ja",

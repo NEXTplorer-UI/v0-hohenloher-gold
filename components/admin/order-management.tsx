@@ -28,6 +28,9 @@ import type { EmailTemplateId } from "@/lib/email/build"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { ExportOptionsDialog, type ExportOptions } from "@/components/admin/export-options-dialog"
+import { usePersistedState } from "@/hooks/use-persisted-state"
+import { useTestMode } from "./test-mode-toggle" // Import useTestMode hook
 
 interface OrderItem {
   id: string
@@ -63,6 +66,16 @@ interface Order {
   }
   order_items: OrderItem[]
   hellocash_invoice_id?: string | null // Added hellocash_invoice_id field
+}
+
+interface CustomerDetails {
+  street: string | null
+  house_number: string | null
+  postal_code: string | null
+  city: string | null
+  country: string | null
+  email: string
+  phone: string | null
 }
 
 function parseBulkOrderNames(notes: string | null): string[] {
@@ -101,6 +114,7 @@ const OrderItem = memo(
     onAdminNotesChange,
     onSyncStatus, // Added onSyncStatus prop
     onCancelInvoice, // Added onCancelInvoice prop
+    onMarkAsPaid, // Added onMarkAsPaid prop
     isSelected,
     onSelectionChange,
   }: {
@@ -110,6 +124,7 @@ const OrderItem = memo(
     onAdminNotesChange: (orderId: string, adminNotes: string) => void
     onSyncStatus: (orderId: string) => Promise<void> // Added onSyncStatus prop
     onCancelInvoice: (orderId: string) => Promise<void> // Added onCancelInvoice prop type
+    onMarkAsPaid: (orderId: string) => void // Added onMarkAsPaid prop type
     isSelected: boolean
     onSelectionChange: (orderId: string, selected: boolean) => void
   }) => {
@@ -122,6 +137,10 @@ const OrderItem = memo(
     const [isCancelling, setIsCancelling] = useState(false) // Added isCancelling state
     const [showCancelModal, setShowCancelModal] = useState(false) // Added showCancelModal state
     const [cancelReason, setCancelReason] = useState("") // Added cancelReason state
+    const [showCustomerDetails, setShowCustomerDetails] = useState(false)
+    const [customerDetails, setCustomerDetails] = useState<CustomerDetails | null>(null)
+    const [loadingCustomerDetails, setLoadingCustomerDetails] = useState(false)
+
     const customerName = `${order.customer.first_name} ${order.customer.last_name}`
     const orderDate = new Date(order.created_at).toLocaleDateString("de-DE")
     const items = order.order_items.map((item) => `${item.product_name} (${item.quantity}x)`).join(", ")
@@ -132,6 +151,38 @@ const OrderItem = memo(
     const pickupUrl = order.pickup_token
       ? `${typeof window !== "undefined" ? window.location.origin : ""}/pos/pickup?token=${order.pickup_token}`
       : null
+
+    const loadCustomerDetails = async () => {
+      if (customerDetails) {
+        // Already loaded, just toggle visibility
+        setShowCustomerDetails(!showCustomerDetails)
+        return
+      }
+
+      setLoadingCustomerDetails(true)
+      try {
+        const response = await fetch(`/api/crm/customers/${order.customer_id}`)
+        if (response.ok) {
+          const data = await response.json()
+          setCustomerDetails({
+            street: data.street,
+            house_number: data.house_number,
+            postal_code: data.postal_code,
+            city: data.city,
+            country: data.country,
+            email: data.email,
+            phone: data.phone,
+          })
+          setShowCustomerDetails(true)
+        } else {
+          console.error("[v0] Failed to load customer details")
+        }
+      } catch (error) {
+        console.error("[v0] Error loading customer details:", error)
+      } finally {
+        setLoadingCustomerDetails(false)
+      }
+    }
 
     const handleSaveAdminNotes = async () => {
       setIsSavingNotes(true)
@@ -257,8 +308,51 @@ const OrderItem = memo(
               </div>
               <div className="text-sm text-muted-foreground">
                 <div>
-                  {customerName} • {order.customer.email}
+                  <button
+                    onClick={loadCustomerDetails}
+                    disabled={loadingCustomerDetails}
+                    className="hover:text-foreground underline decoration-dotted cursor-pointer text-left"
+                  >
+                    {loadingCustomerDetails ? (
+                      <>
+                        <Loader2 className="h-3 w-3 inline mr-1 animate-spin" />
+                        Lädt...
+                      </>
+                    ) : (
+                      <>
+                        {customerName}
+                        {showCustomerDetails ? (
+                          <ChevronUp className="h-3 w-3 inline ml-1" />
+                        ) : (
+                          <ChevronDown className="h-3 w-3 inline ml-1" />
+                        )}
+                      </>
+                    )}
+                  </button>
+                  {" • "}
+                  {order.customer.email}
                 </div>
+
+                {showCustomerDetails && customerDetails && (
+                  <div className="mt-2 pl-4 border-l-2 border-gold/50 space-y-1 text-sm bg-gold/5 p-2 rounded">
+                    <div className="font-medium text-foreground mb-1">📍 Lieferadresse:</div>
+                    {customerDetails.street && customerDetails.house_number && (
+                      <div>
+                        {customerDetails.street} {customerDetails.house_number}
+                      </div>
+                    )}
+                    {customerDetails.postal_code && customerDetails.city && (
+                      <div>
+                        {customerDetails.postal_code} {customerDetails.city}
+                      </div>
+                    )}
+                    {customerDetails.country && <div>{customerDetails.country}</div>}
+                    <div className="font-medium text-foreground mt-2 mb-1">📧 Kontakt:</div>
+                    <div>{customerDetails.email}</div>
+                    {customerDetails.phone && <div>📞 {customerDetails.phone}</div>}
+                  </div>
+                )}
+
                 <div className="flex items-center gap-1">
                   <span>{orderDate}</span>
                   {order.pickup_location && (
@@ -435,6 +529,17 @@ const OrderItem = memo(
                 </Button>
               )}
 
+              {order.payment_status !== "paid" && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => onMarkAsPaid(order.id)}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                >
+                  Als bezahlt markieren
+                </Button>
+              )}
+
               <div className="flex gap-2">
                 <Select value={uiStatus} onValueChange={(value) => onStatusChange(order.id, value, undefined)}>
                   <SelectTrigger className="w-32">
@@ -469,7 +574,6 @@ const OrderItem = memo(
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="orderConfirmation">Bestellbestätigung</SelectItem>
-                  <SelectItem value="paymentReceipt">Zahlungsbestätigung (mit Rechnung)</SelectItem>
                   <SelectItem value="readyForPickup">Abholbereit</SelectItem>
                   <SelectItem value="orderPickedUp">Abgeholt (Danke)</SelectItem>
                   <SelectItem value="shippingNotification">Versandbestätigung</SelectItem>
@@ -489,7 +593,7 @@ const OrderItem = memo(
                 <CardDescription>
                   Bestellung: {order.order_number}
                   <br />
-                  Diese Aktion kann nicht rückgängig gemacht werden.
+                  Diese Aktion kann nicht rückgangig gemacht werden.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -530,12 +634,32 @@ const OrderItem = memo(
 OrderItem.displayName = "OrderItem"
 
 function OrderManagement() {
+  const testMode = useTestMode()
+
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [commentFilter, setCommentFilter] = useState("all")
+  const [searchTerm, setSearchTerm] = usePersistedState({
+    key: "admin-orders-search",
+    defaultValue: "",
+    expirationHours: 12,
+  })
+  const [statusFilter, setStatusFilter] = usePersistedState({
+    key: "admin-orders-status-filter",
+    defaultValue: "all",
+    expirationHours: 12,
+  })
+  const [commentFilter, setCommentFilter] = usePersistedState({
+    key: "admin-orders-comment-filter",
+    defaultValue: "all",
+    expirationHours: 12,
+  })
+  const [deliveryMethodFilter, setDeliveryMethodFilter] = usePersistedState({
+    key: "admin-orders-delivery-filter",
+    defaultValue: "all",
+    expirationHours: 12,
+  })
+  const [showFilters, setShowFilters] = useState(false)
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
   const [showManualOrderForm, setShowManualOrderForm] = useState(false)
   const [isCreatingOrder, setIsCreatingOrder] = useState(false)
@@ -556,6 +680,17 @@ function OrderManagement() {
     items: [{ productId: "", quantity: 1, price: 0 }],
   })
   const { toast } = useToast()
+
+  const [showExportDialog, setShowExportDialog] = useState(false)
+
+  // Added modal state for marking as paid
+  const [showMarkAsPaidModal, setShowMarkAsPaidModal] = useState(false)
+  // Track selected order for payment confirmation
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<string | null>(null)
+  // Payment method selection for manual payment
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("cash")
+  // Loading state for marking as paid
+  const [isMarkingAsPaid, setIsMarkingAsPaid] = useState(false)
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -806,30 +941,41 @@ function OrderManagement() {
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
-      const customerName = `${order.customer.first_name} ${order.customer.last_name}`.toLowerCase()
+      const searchLower = (searchTerm || "").toLowerCase()
+      const customerName = `${order.customer.first_name || ""} ${order.customer.last_name || ""}`.toLowerCase()
       const matchesSearch =
-        customerName.includes(searchTerm.toLowerCase()) ||
-        order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.customer.email.toLowerCase().includes(searchTerm.toLowerCase())
+        customerName.includes(searchLower) ||
+        order.order_number.toLowerCase().includes(searchLower) ||
+        order.customer.email.toLowerCase().includes(searchLower)
+      // </CHANGE>
       const matchesStatus = statusFilter === "all" || order.status === statusFilter
       const matchesComment =
         commentFilter === "all" ||
         (commentFilter === "with" && order.admin_notes && order.admin_notes.trim() !== "") ||
         (commentFilter === "without" && (!order.admin_notes || order.admin_notes.trim() === ""))
-      return matchesSearch && matchesStatus && matchesComment
+      const matchesDeliveryMethod = deliveryMethodFilter === "all" || order.delivery_method === deliveryMethodFilter
+      return matchesSearch && matchesStatus && matchesComment && matchesDeliveryMethod
     })
-  }, [orders, searchTerm, statusFilter, commentFilter])
+  }, [orders, searchTerm, statusFilter, commentFilter, deliveryMethodFilter])
 
   const exportOrders = useCallback(
-    async (orderIds?: string[]) => {
+    async (options: ExportOptions, orderIds?: string[]) => {
       try {
-        console.log("[v0] Starting orders export...", orderIds ? `${orderIds.length} selected` : "all orders")
+        console.log("[v0] Starting advanced orders export...", options)
 
-        const url =
-          orderIds && orderIds.length > 0
-            ? `/api/admin/orders-export?ids=${orderIds.join(",")}`
-            : "/api/admin/orders-export"
+        const params = new URLSearchParams({
+          format: options.format,
+          sorting: options.sorting,
+          showSubtotals: options.showSubtotals.toString(),
+          emptyLinesBetweenGroups: options.emptyLinesBetweenGroups.toString(),
+          showGroupHeaders: options.showGroupHeaders.toString(),
+        })
 
+        if (orderIds && orderIds.length > 0) {
+          params.append("ids", orderIds.join(","))
+        }
+
+        const url = `/api/admin/orders-export-advanced?${params.toString()}`
         const response = await fetch(url)
 
         if (!response.ok) {
@@ -840,7 +986,7 @@ function OrderManagement() {
         const downloadUrl = URL.createObjectURL(blob)
         const a = document.createElement("a")
         a.href = downloadUrl
-        a.download = `bestellungen-${new Date().toISOString().split("T")[0]}.csv`
+        a.download = `bestellungen-${options.format}-${new Date().toISOString().split("T")[0]}.csv`
         a.click()
         URL.revokeObjectURL(downloadUrl)
 
@@ -1140,6 +1286,65 @@ function OrderManagement() {
     },
     [orders, fetchOrders, toast],
   )
+
+  const handleMarkAsPaid = useCallback((orderId: string) => {
+    setSelectedOrderForPayment(orderId)
+    setShowMarkAsPaidModal(true)
+  }, [])
+
+  const handleConfirmMarkAsPaid = useCallback(async () => {
+    if (!selectedOrderForPayment) return
+
+    setIsMarkingAsPaid(true)
+    try {
+      console.log(`[v0] Marking order ${selectedOrderForPayment} as paid with payment method: ${selectedPaymentMethod}`)
+
+      const response = await fetch("/api/admin/mark-order-paid", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderId: selectedOrderForPayment,
+          paymentMethod: selectedPaymentMethod,
+          testMode, // Pass test mode from hook
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        console.log(`[v0] Order marked as paid successfully:`, result)
+
+        toast({
+          title: "Als bezahlt markiert",
+          description: result.message || "Rechnung wurde erstellt und per E-Mail versendet",
+        })
+
+        setShowMarkAsPaidModal(false)
+        setSelectedOrderForPayment(null)
+        setSelectedPaymentMethod("cash")
+
+        // Reload orders
+        await fetchOrders()
+      } else {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+        toast({
+          title: "Fehler",
+          description: errorData.error || "Rechnung konnte nicht erstellt werden",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error(`[v0] Error marking as paid:`, error)
+      toast({
+        title: "Fehler",
+        description: error instanceof Error ? error.message : "Unbekannter Fehler",
+        variant: "destructive",
+      })
+    } finally {
+      setIsMarkingAsPaid(false)
+    }
+  }, [selectedOrderForPayment, selectedPaymentMethod, fetchOrders, toast, testMode])
 
   const handleOrderSelection = useCallback((orderId: string, selected: boolean) => {
     setSelectedOrderIds((prev) => {
@@ -1490,39 +1695,101 @@ function OrderManagement() {
                 />
               </div>
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-48">
+
+            <div className="relative">
+              <Button variant="outline" onClick={() => setShowFilters(!showFilters)} className="w-full sm:w-48">
                 <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Status filtern" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alle Status</SelectItem>
-                <SelectItem value="pending">Ausstehend</SelectItem>
-                <SelectItem value="confirmed">Bestätigt</SelectItem>
-                <SelectItem value="ready">Bereit</SelectItem>
-                <SelectItem value="picked_up">Abgeholt</SelectItem>
-                <SelectItem value="cancelled">Storniert</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={commentFilter} onValueChange={setCommentFilter}>
-              <SelectTrigger className="w-full sm:w-48">
-                <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Kommentar filtern" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alle Kommentare</SelectItem>
-                <SelectItem value="with">Mit Kommentar</SelectItem>
-                <SelectItem value="without">Ohne Kommentar</SelectItem>
-              </SelectContent>
-            </Select>
+                Filter
+                {(statusFilter !== "all" || deliveryMethodFilter !== "all" || commentFilter !== "all") && (
+                  <Badge variant="secondary" className="ml-2">
+                    Aktiv
+                  </Badge>
+                )}
+              </Button>
+
+              {showFilters && (
+                <Card className="absolute top-full mt-2 w-64 z-50 shadow-lg">
+                  <CardContent className="p-4 space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Status</Label>
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Alle Status</SelectItem>
+                          <SelectItem value="pending">Ausstehend</SelectItem>
+                          <SelectItem value="confirmed">Bestätigt</SelectItem>
+                          <SelectItem value="ready">Bereit</SelectItem>
+                          <SelectItem value="picked_up">Abgeholt</SelectItem>
+                          <SelectItem value="cancelled">Storniert</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="h-px bg-border" />
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Liefermethode</Label>
+                      <Select value={deliveryMethodFilter} onValueChange={setDeliveryMethodFilter}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Alle Methoden</SelectItem>
+                          <SelectItem value="pickup">Abholung</SelectItem>
+                          <SelectItem value="delivery">Versand</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="h-px bg-border" />
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Kommentare</Label>
+                      <Select value={commentFilter} onValueChange={setCommentFilter}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Alle Kommentare</SelectItem>
+                          <SelectItem value="with">Mit Kommentar</SelectItem>
+                          <SelectItem value="without">Ohne Kommentar</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setStatusFilter("all")
+                          setDeliveryMethodFilter("all")
+                          setCommentFilter("all")
+                        }}
+                        className="flex-1"
+                      >
+                        Zurücksetzen
+                      </Button>
+                      <Button size="sm" onClick={() => setShowFilters(false)} className="flex-1">
+                        Fertig
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
             {/* CHANGE: Added print QR codes button */}
             <Button onClick={() => window.open("/admin/print-qr-codes", "_blank")} variant="outline">
               <Printer className="h-4 w-4 mr-2" />
               QR-Codes drucken
             </Button>
+
             {selectedOrderIds.size > 0 ? (
               <>
-                <Button onClick={() => exportOrders(Array.from(selectedOrderIds))} variant="default">
+                <Button onClick={() => setShowExportDialog(true)} variant="default">
                   <Download className="h-4 w-4 mr-2" />
                   Ausgewählte exportieren ({selectedOrderIds.size})
                 </Button>
@@ -1531,9 +1798,9 @@ function OrderManagement() {
                 </Button>
               </>
             ) : (
-              <Button onClick={() => exportOrders()} variant="outline">
+              <Button onClick={() => setShowExportDialog(true)} variant="outline">
                 <Download className="h-4 w-4 mr-2" />
-                Alle exportieren
+                Exportieren
               </Button>
             )}
             <Button onClick={fetchOrders} variant="outline">
@@ -1556,7 +1823,8 @@ function OrderManagement() {
             </div>
           </div>
 
-          <div className="h-96 overflow-auto border rounded-lg">
+          {/* CHANGE: Increased height to show more orders and reduced bottom margin */}
+          <div className="h-[600px] overflow-auto border rounded-lg">
             <div className="space-y-2 p-4">
               {filteredOrders.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
@@ -1573,7 +1841,8 @@ function OrderManagement() {
                     onStatusChange={handleStatusChange}
                     onAdminNotesChange={handleAdminNotesChange}
                     onSyncStatus={handleSyncStatus}
-                    onCancelInvoice={handleCancelInvoice} // Pass handleCancelInvoice
+                    onCancelInvoice={handleCancelInvoice}
+                    onMarkAsPaid={handleMarkAsPaid} // Added onMarkAsPaid handler
                     isSelected={selectedOrderIds.has(order.id)}
                     onSelectionChange={handleOrderSelection}
                   />
@@ -1583,6 +1852,70 @@ function OrderManagement() {
           </div>
         </CardContent>
       </Card>
+
+      <ExportOptionsDialog
+        open={showExportDialog}
+        onOpenChange={setShowExportDialog}
+        selectedOrderIds={selectedOrderIds.size > 0 ? Array.from(selectedOrderIds) : undefined}
+        onExport={(options) =>
+          exportOrders(options, selectedOrderIds.size > 0 ? Array.from(selectedOrderIds) : undefined)
+        }
+      />
+
+      {showMarkAsPaidModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md mx-4">
+            <CardHeader>
+              <CardTitle>Als bezahlt markieren</CardTitle>
+              <CardDescription>
+                Wählen Sie die Zahlungsart und bestätigen Sie die Zahlung. Eine Rechnung wird automatisch erstellt und
+                versendet.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="paymentMethodSelect">Zahlungsart *</Label>
+                <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
+                  <SelectTrigger id="paymentMethodSelect">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Bar</SelectItem>
+                    <SelectItem value="card">EC-Karte</SelectItem>
+                    <SelectItem value="sumup">SumUp</SelectItem>
+                    <SelectItem value="bank_transfer">Rechnung</SelectItem>
+                    <SelectItem value="paypal">PayPal</SelectItem>
+                    <SelectItem value="coupon">Gutschein</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowMarkAsPaidModal(false)
+                    setSelectedOrderForPayment(null)
+                    setSelectedPaymentMethod("cash")
+                  }}
+                  disabled={isMarkingAsPaid}
+                >
+                  Abbrechen
+                </Button>
+                <Button variant="default" onClick={handleConfirmMarkAsPaid} disabled={isMarkingAsPaid}>
+                  {isMarkingAsPaid ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Wird verarbeitet...
+                    </>
+                  ) : (
+                    "Rechnung versenden"
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import {
   Mail,
   Send,
@@ -28,11 +30,13 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
+  Filter,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import NewsletterConfirmationDialog from "./newsletter-confirmation-dialog"
 import { buildEmail } from "@/lib/email/build"
 import { markdownToHtml } from "@/lib/markdown"
+import { emailCopy } from "@/lib/email/copy"
 
 interface NewsletterStats {
   subscribers: number
@@ -92,6 +96,17 @@ export default function NewsletterSystem() {
   const [imageUrl, setImageUrl] = useState("")
   const [attachment, setAttachment] = useState<Attachment | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("custom")
+  const [recipientFilters, setRecipientFilters] = useState({
+    allCustomers: false,
+    newsletterConsent: true, // Default to newsletter subscribers
+    marketingConsent: false,
+    reminderConsent: false,
+  })
+  const [recipientCount, setRecipientCount] = useState(0)
+  const [isLoadingRecipients, setIsLoadingRecipients] = useState(false)
+
   const [stats, setStats] = useState<NewsletterStats>({
     subscribers: 0,
     newslettersSent: 0,
@@ -198,7 +213,37 @@ export default function NewsletterSystem() {
   useEffect(() => {
     loadStats()
     loadDrafts()
+    loadRecipientCount()
   }, [])
+
+  useEffect(() => {
+    loadRecipientCount()
+  }, [recipientFilters])
+
+  const loadRecipientCount = async () => {
+    setIsLoadingRecipients(true)
+    try {
+      const response = await fetch("/api/admin/newsletter/recipients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filters: recipientFilters }),
+      })
+
+      if (!response.ok) throw new Error("Failed to load recipient count")
+
+      const data = await response.json()
+      setRecipientCount(data.count)
+    } catch (error) {
+      console.error("[v0] Error loading recipient count:", error)
+      toast({
+        title: "Fehler",
+        description: "Empfängeranzahl konnte nicht geladen werden",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingRecipients(false)
+    }
+  }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -293,10 +338,11 @@ export default function NewsletterSystem() {
       return
     }
 
-    if (stats.subscribers === 0) {
+    // Using recipientCount instead of stats.subscribers
+    if (recipientCount === 0) {
       toast({
         title: "Keine Empfänger",
-        description: "Es sind keine aktiven Newsletter-Abonnenten vorhanden",
+        description: "Es wurden keine Empfänger für den Newsletter gefunden",
         variant: "destructive",
       })
       return
@@ -308,11 +354,9 @@ export default function NewsletterSystem() {
   const confirmSendNewsletter = async () => {
     setIsSending(true)
     try {
-      console.log("[v0] Sending newsletter to", stats.subscribers, "subscribers")
+      console.log("[v0] Sending newsletter with filters:", recipientFilters)
 
-      const recipients = stats.subscribersList.map((sub) => sub.email)
-
-      const response = await fetch("/api/send-bulk-email", {
+      const response = await fetch("/api/admin/newsletter/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -320,8 +364,8 @@ export default function NewsletterSystem() {
           content,
           imageUrl,
           attachment,
-          recipients,
-          type: "newsletter",
+          filters: recipientFilters,
+          templateType: selectedTemplate,
         }),
       })
 
@@ -359,6 +403,7 @@ export default function NewsletterSystem() {
       setContent("")
       setImageUrl("")
       setAttachment(null)
+      setSelectedTemplate("custom") // Reset template selection
       setShowConfirmation(false)
 
       await loadStats()
@@ -418,7 +463,7 @@ export default function NewsletterSystem() {
           title: draftTitle,
           subject,
           content,
-          imageUrl,
+          image_url: imageUrl || null,
           attachment,
         }),
       })
@@ -453,6 +498,7 @@ export default function NewsletterSystem() {
     setDraftTitle(draft.title)
     setCurrentDraftId(draft.id)
     setShowDrafts(false)
+    setSelectedTemplate("custom") // Reset template selection when loading a draft
 
     toast({
       title: "Entwurf geladen",
@@ -518,6 +564,7 @@ export default function NewsletterSystem() {
           imageUrl,
           attachment,
           testEmail,
+          templateType: selectedTemplate, // Pass template type for personalization
         }),
       })
 
@@ -598,13 +645,62 @@ export default function NewsletterSystem() {
     }
   }
 
+  const handleTemplateSelect = (templateKey: string) => {
+    setSelectedTemplate(templateKey)
+
+    if (templateKey === "custom") {
+      return
+    }
+
+    const templates: Record<string, { subject: string; content: string }> = {
+      pickupReminder: {
+        subject: emailCopy.pickupReminder.intro,
+        content: `${emailCopy.pickupReminder.intro}
+
+**${emailCopy.pickupReminder.detailsHeading}**
+
+${emailCopy.pickupReminder.orderNumber} {{orderNumber}}
+${emailCopy.pickupReminder.pickupDate} {{pickupDate}}
+${emailCopy.pickupReminder.pickupLocation} {{pickupLocation}}
+
+${emailCopy.pickupReminder.reminder}
+
+${emailCopy.pickupReminder.outro}`,
+      },
+      shippingNotification: {
+        subject: "Ihre Bestellung ist unterwegs",
+        content: `${emailCopy.shippingNotification.intro}
+
+**${emailCopy.shippingNotification.detailsHeading}**
+
+Ihre Bestellung wurde heute versandt.
+
+${emailCopy.shippingNotification.outro}`,
+      },
+      specialOffer: {
+        subject: "Sonderangebot: Frische Südfrüchte",
+        content: `# Exklusives Angebot für Sie!
+
+Entdecken Sie unsere aktuellen Sonderangebote auf frische Südfrüchte.
+
+**Jetzt im Shop vorbeischauen!**`,
+      },
+    }
+
+    const template = templates[templateKey]
+    if (template) {
+      setSubject(template.subject)
+      setContent(template.content)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Newsletter System</CardTitle>
-            <CardDescription>Newsletter erstellen und an Kunden versenden</CardDescription>
+            <CardDescription>Newsletter erstellen und an gefilterte Empfänger versenden</CardDescription>
           </div>
           <div className="flex gap-2">
             <Button
@@ -625,6 +721,111 @@ export default function NewsletterSystem() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div>
+            <label className="text-sm font-medium mb-2 block">Vorlage auswählen</label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <Button
+                variant={selectedTemplate === "custom" ? "default" : "outline"}
+                onClick={() => handleTemplateSelect("custom")}
+                className="w-full"
+              >
+                Eigener Newsletter
+              </Button>
+              <Button
+                variant={selectedTemplate === "pickupReminder" ? "default" : "outline"}
+                onClick={() => handleTemplateSelect("pickupReminder")}
+                className="w-full"
+              >
+                Abholungsbenachrichtigung
+              </Button>
+              <Button
+                variant={selectedTemplate === "shippingNotification" ? "default" : "outline"}
+                onClick={() => handleTemplateSelect("shippingNotification")}
+                className="w-full"
+              >
+                Liefertermin-Erinnerung
+              </Button>
+              <Button
+                variant={selectedTemplate === "specialOffer" ? "default" : "outline"}
+                onClick={() => handleTemplateSelect("specialOffer")}
+                className="w-full"
+              >
+                Sonderaktionen
+              </Button>
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Filter className="h-4 w-4" />
+                Empfänger filtern
+              </CardTitle>
+              <CardDescription>Wählen Sie, wer den Newsletter erhalten soll</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="allCustomers"
+                  checked={recipientFilters.allCustomers}
+                  onCheckedChange={(checked) =>
+                    setRecipientFilters({ ...recipientFilters, allCustomers: checked as boolean })
+                  }
+                />
+                <Label htmlFor="allCustomers" className="text-sm font-normal cursor-pointer">
+                  Alle Kunden (unabhängig von Einwilligungen)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="newsletterConsent"
+                  checked={recipientFilters.newsletterConsent}
+                  onCheckedChange={(checked) =>
+                    setRecipientFilters({ ...recipientFilters, newsletterConsent: checked as boolean })
+                  }
+                  disabled={recipientFilters.allCustomers}
+                />
+                <Label htmlFor="newsletterConsent" className="text-sm font-normal cursor-pointer">
+                  Nur Newsletter-Einwilligung (newsletter_subscribed)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="marketingConsent"
+                  checked={recipientFilters.marketingConsent}
+                  onCheckedChange={(checked) =>
+                    setRecipientFilters({ ...recipientFilters, marketingConsent: checked as boolean })
+                  }
+                  disabled={recipientFilters.allCustomers}
+                />
+                <Label htmlFor="marketingConsent" className="text-sm font-normal cursor-pointer">
+                  Nur Marketing-Einwilligung (marketing_consent)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="reminderConsent"
+                  checked={recipientFilters.reminderConsent}
+                  onCheckedChange={(checked) =>
+                    setRecipientFilters({ ...recipientFilters, reminderConsent: checked as boolean })
+                  }
+                  disabled={recipientFilters.allCustomers}
+                />
+                <Label htmlFor="reminderConsent" className="text-sm font-normal cursor-pointer">
+                  Nur Erinnerungs-Einwilligung (reminder_notifications)
+                </Label>
+              </div>
+              <div className="pt-2 border-t">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Gefilterte Empfänger:</span>
+                  <span className="text-lg font-bold">
+                    {isLoadingRecipients ? <RefreshCw className="h-4 w-4 animate-spin inline" /> : recipientCount}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="grid gap-4 md:grid-cols-3">
             <Card className="p-4">
               <div className="flex items-center gap-2">
@@ -866,9 +1067,12 @@ export default function NewsletterSystem() {
                 <Eye className="h-4 w-4 mr-2" />
                 Vorschau
               </Button>
-              <Button onClick={handleSendNewsletter} disabled={isLoading || !subject.trim() || !content.trim()}>
+              <Button
+                onClick={handleSendNewsletter}
+                disabled={isLoading || !subject.trim() || !content.trim() || recipientCount === 0}
+              >
                 <Send className="h-4 w-4 mr-2" />
-                Senden ({stats.subscribers} Empfänger)
+                Senden ({recipientCount} Empfänger)
               </Button>
             </div>
           </div>
@@ -1086,7 +1290,7 @@ export default function NewsletterSystem() {
         onConfirm={confirmSendNewsletter}
         subject={subject}
         content={content}
-        subscriberCount={stats.subscribers}
+        subscriberCount={recipientCount} // Use recipientCount for confirmation dialog
         isLoading={isSending}
       />
     </div>

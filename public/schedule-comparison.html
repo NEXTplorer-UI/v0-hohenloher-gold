@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terminübersicht Vergleich</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-8">
+  <div class="max-w-7xl mx-auto">
+    <h1 class="text-3xl font-bold mb-8 text-center">Terminübersicht Vergleich</h1>
+    
+    <div class="grid md:grid-cols-2 gap-8">
+      
+      <!-- Vorschlag 1: Accordion -->
+      <div class="bg-white p-6 rounded-lg shadow-lg">
+        <h2 class="text-2xl font-bold mb-4 text-green-800">Vorschlag 1: Accordion</h2>
+        <p class="text-sm text-gray-600 mb-6">Alle Termine in einer ausklappbaren Liste</p>
+        
+        <div class="border border-green-200 rounded-lg overflow-hidden">
+          <!-- Header -->
+          <div class="bg-green-800 text-white p-4">
+            <h3 class="font-bold text-lg">Südfrüchte Saison 2025</h3>
+            <p class="text-sm opacity-90">Frische Südfrüchte sind Saisonware</p>
+          </div>
+          
+          <!-- Nächster Termin (immer sichtbar) -->
+          <div class="p-4 bg-green-50 border-b border-green-200">
+            <div class="flex items-start gap-3">
+              <span class="text-2xl">✓</span>
+              <div class="flex-1">
+                <div class="font-bold text-lg">22.11.2025</div>
+                <div class="text-sm text-gray-600">Bestellschluss: 8.11.2025</div>
+                <div class="text-sm mt-2">
+                  <span class="font-semibold">Abholung:</span> Bei Verteiler oder nach Terminvereinbarung
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Ausklappbarer Bereich (Standard: zugeklappt) -->
+          <div id="accordion-content" class="hidden">
+            <div class="p-4 border-b border-gray-200">
+              <div class="flex items-start gap-3">
+                <span class="text-2xl">✓</span>
+                <div class="flex-1">
+                  <div class="font-bold">6.12.2025</div>
+                  <div class="text-sm text-gray-600">Bestellschluss: 22.11.2025</div>
+                </div>
+              </div>
+            </div>
+            <div class="p-4 border-b border-gray-200">
+              <div class="flex items-start gap-3">
+                <span class="text-2xl">✓</span>
+                <div class="flex-1">
+                  <div class="font-bold">20.12.2025</div>
+                  <div class="text-sm text-gray-600">Bestellschluss: 6.12.2025</div>
+                </div>
+              </div>
+            </div>
+            <div class="p-4 border-b border-gray-200">
+              <div class="flex items-start gap-3">
+                <span class="text-2xl">📅</span>
+                <div class="flex-1">
+                  <div class="font-bold">10.01.2026</div>
+                  <div class="text-sm text-gray-600">Bestellschluss: 27.12.2025</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Button zum Ausklappen -->
+          <button 
+            onclick="document.getElementById('accordion-content').classList.toggle('hidden'); this.textContent = document.getElementById('accordion-content').classList.contains('hidden') ? '▼ Alle Termine anzeigen (3 weitere)' : '▲ Weniger anzeigen'"
+            class="w-full p-3 bg-gray-100 hover:bg-gray-200 text-center font-semibold text-sm transition-colors"
+          >
+            ▼ Alle Termine anzeigen (3 weitere)
+          </button>
+        </div>
+        
+        <div class="mt-4 p-4 bg-blue-50 rounded border border-blue-200">
+          <h4 class="font-bold text-sm mb-2">Eigenschaften:</h4>
+          <ul class="text-sm space-y-1">
+            <li>• Nächster Termin immer sichtbar</li>
+            <li>• Alle Termine mit einem Klick</li>
+            <li>• Behält vertikale Struktur</li>
+            <li>• Gut für viele Details pro Termin</li>
+            <li>• Platzbedarf: ~200-300px Höhe (zugeklappt)</li>
+          </ul>
+        </div>
+      </div>
+      
+      <!-- Vorschlag 3: Minimale Karte mit Dropdown -->
+      <div class="bg-white p-6 rounded-lg shadow-lg">
+        <h2 class="text-2xl font-bold mb-4 text-green-800">Vorschlag 3: Minimale Karte + Dropdown</h2>
+        <p class="text-sm text-gray-600 mb-6">Kompakte einzeilige Anzeige mit Dropdown-Menü</p>
+        
+        <!-- Kompakte Karte (nur eine Zeile) -->
+        <div class="border border-green-200 rounded-lg overflow-hidden">
+          <div class="bg-green-800 text-white p-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-xl">📅</span>
+              <div>
+                <div class="font-bold">Nächste Ankunft: 22.11.2025</div>
+                <div class="text-xs opacity-90">Bestellschluss: 8.11.2025</div>
+              </div>
+            </div>
+            <div class="relative">
+              <button 
+                onclick="document.getElementById('dropdown-menu').classList.toggle('hidden')"
+                class="px-4 py-2 bg-white text-green-800 rounded font-semibold text-sm hover:bg-green-50 transition-colors flex items-center gap-2"
+              >
+                Alle Termine
+                <span class="text-xs">▼</span>
+              </button>
+              
+              <!-- Dropdown Menü -->
+              <div id="dropdown-menu" class="hidden absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-10">
+                <div class="p-4 border-b border-gray-200">
+                  <h3 class="font-bold mb-2">Südfrüchte Saison 2025</h3>
+                  <p class="text-xs text-gray-600">Alle bestätigten Termine</p>
+                </div>
+                <div class="max-h-64 overflow-y-auto">
+                  <div class="p-3 hover:bg-gray-50 border-b border-gray-100 cursor-pointer">
+                    <div class="flex items-center gap-2">
+                      <span>✓</span>
+                      <div class="flex-1">
+                        <div class="font-semibold text-sm">22.11.2025</div>
+                        <div class="text-xs text-gray-500">Bestellschluss: 8.11.2025</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="p-3 hover:bg-gray-50 border-b border-gray-100 cursor-pointer">
+                    <div class="flex items-center gap-2">
+                      <span>✓</span>
+                      <div class="flex-1">
+                        <div class="font-semibold text-sm">6.12.2025</div>
+                        <div class="text-xs text-gray-500">Bestellschluss: 22.11.2025</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="p-3 hover:bg-gray-50 border-b border-gray-100 cursor-pointer">
+                    <div class="flex items-center gap-2">
+                      <span>✓</span>
+                      <div class="flex-1">
+                        <div class="font-semibold text-sm">20.12.2025</div>
+                        <div class="text-xs text-gray-500">Bestellschluss: 6.12.2025</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="p-3 hover:bg-gray-50 cursor-pointer">
+                    <div class="flex items-center gap-2">
+                      <span>📅</span>
+                      <div class="flex-1">
+                        <div class="font-semibold text-sm">10.01.2026</div>
+                        <div class="text-xs text-gray-500">Bestellschluss: 27.12.2025</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="mt-4 p-4 bg-blue-50 rounded border border-blue-200">
+          <h4 class="font-bold text-sm mb-2">Eigenschaften:</h4>
+          <ul class="text-sm space-y-1">
+            <li>• Nur eine Zeile Höhe (maximal kompakt)</li>
+            <li>• Dropdown schwebt über Content</li>
+            <li>• Sehr modern und clean</li>
+            <li>• Gut für mobile Ansicht</li>
+            <li>• Platzbedarf: ~60-80px Höhe</li>
+          </ul>
+        </div>
+      </div>
+      
+    </div>
+    
+    <div class="mt-8 bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+      <h3 class="font-bold mb-3">Hauptunterschiede:</h3>
+      <div class="grid md:grid-cols-2 gap-4 text-sm">
+        <div>
+          <h4 class="font-semibold mb-2">Accordion (Vorschlag 1):</h4>
+          <ul class="space-y-1">
+            <li>✓ Mehr Details sofort sichtbar</li>
+            <li>✓ Vertikales Ausklappen im Fluss der Seite</li>
+            <li>✓ Traditionelleres UI-Pattern</li>
+            <li>✗ Nimmt mehr vertikalen Platz ein</li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="font-semibold mb-2">Dropdown (Vorschlag 3):</h4>
+          <ul class="space-y-1">
+            <li>✓ Maximal platzsparend (nur 1 Zeile)</li>
+            <li>✓ Dropdown schwebt über Inhalt (blockiert nicht)</li>
+            <li>✓ Modernes, cleanes Design</li>
+            <li>✗ Weniger Details auf ersten Blick</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    
+    <div class="mt-6 text-center text-sm text-gray-500">
+      Klicken Sie auf die Buttons, um die Interaktionen zu testen!
+    </div>
+  </div>
+  
+  <script>
+    // Dropdown schließen wenn außerhalb geklickt wird
+    document.addEventListener('click', function(event) {
+      const dropdown = document.getElementById('dropdown-menu');
+      const button = event.target.closest('button');
+      if (!dropdown.contains(event.target) && button?.textContent.includes('Alle Termine') === false) {
+        dropdown.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>

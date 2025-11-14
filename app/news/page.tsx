@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Calendar, ArrowRight, User } from "lucide-react"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
-import { createClient } from "@/lib/supabase/client"
+import { getBrowserClient } from "@/lib/supabase/browser"
 import { useEffect, useState, Suspense } from "react"
 import { LoadingSpinner } from "@/components/loading-spinner"
 
@@ -32,7 +32,7 @@ function ArticlesList() {
 
   useEffect(() => {
     const fetchArticles = async () => {
-      const supabase = createClient()
+      const supabase = getBrowserClient()
       const { data, error } = await supabase
         .from("articles")
         .select("*")
@@ -83,6 +83,7 @@ function ArticlesList() {
                         src={
                           article.image_url ||
                           "/placeholder.svg?height=400&width=600&query=Hohenloher Gold featured article" ||
+                          "/placeholder.svg" ||
                           "/placeholder.svg" ||
                           "/placeholder.svg" ||
                           "/placeholder.svg" ||
@@ -147,6 +148,7 @@ function ArticlesList() {
                           src={
                             article.image_url ||
                             "/placeholder.svg?height=200&width=400&query=Hohenloher Gold news article" ||
+                            "/placeholder.svg" ||
                             "/placeholder.svg" ||
                             "/placeholder.svg" ||
                             "/placeholder.svg" ||

@@ -12,23 +12,38 @@ export async function GET(req: NextRequest) {
 
     const supabase = createAdminClient()
 
-    // Get checkout details
+    const { data: orderByRef, error: orderRefError } = await supabase
+      .from("orders")
+      .select("*")
+      .contains("attributes", { sumup_checkout_id: checkoutId })
+      .maybeSingle()
+
+    if (orderByRef) {
+      console.log("[v0] [Checkout Status] Found order by SumUp checkout reference:", orderByRef.order_number)
+      return NextResponse.json({
+        order: orderByRef,
+        status: "completed",
+        paymentStatus: orderByRef.payment_status,
+      })
+    }
+
     const { data: checkout, error: checkoutError } = await supabase
       .from("checkouts")
       .select("*")
       .eq("id", checkoutId)
-      .single()
+      .maybeSingle()
 
-    if (checkoutError || !checkout) {
+    if (!checkout) {
+      console.log("[v0] [Checkout Status] No checkout or order found for ID:", checkoutId)
       return NextResponse.json({ error: "Checkout not found" }, { status: 404 })
     }
 
-    // Check if order has been created
+    // Check if order has been created from checkout table
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select("*")
       .eq("checkout_id", checkoutId)
-      .single()
+      .maybeSingle()
 
     return NextResponse.json({
       checkout,

@@ -56,7 +56,7 @@ BEGIN
   (30, 'Sauerkirschen', cat_trockenfruechtе_id, 27.00, 'Getrocknete Sauerkirschen, unbehandelt oder in BIO Qualität. Fruchtig-herb.', '/mixed-dried-fruits-sonnenzauber.png', '1 kg', 'Bio', 1.0, true),
   (31, 'Sauerkirschen', cat_trockenfruechtе_id, 14.00, 'Getrocknete Sauerkirschen, unbehandelt oder in BIO Qualität. Fruchtig-herb.', '/mixed-dried-fruits-sonnenzauber.png', '500 g', 'Bio', 0.5, true),
   (32, 'Medjul-Datteln', cat_trockenfruechtе_id, 27.00, 'Premium Medjul-Datteln, unbehandelt oder in BIO Qualität. Besonders groß und süß.', '/dates-pitted-dried-natural.png', '1 kg', 'Bio', 1.0, true),
-  (33, 'Medjul-Datteln', cat_trockenfruechtе_id, 14.00, 'Premium Medjul-Datteln, unbehandelt oder in BIO Qualität. Besonders groß und süß.', '/dates-pitted-dried-natural.png', '500 g', 'Bio', 0.5, true),
+  (33, 'Medjul-Datteln', cat_trockenfruechtе_id, 14.00, 'Premium Medjul-Datteln, unbehandelt oder in BIO Qualit��t. Besonders groß und süß.', '/dates-pitted-dried-natural.png', '500 g', 'Bio', 0.5, true),
   (34, 'Cashew', cat_trockenfruechtе_id, 25.00, 'Premium Cashewkerne, unbehandelt oder in BIO Qualität. Naturbelassen und ungesalzen.', '/cashew-nuts-organic-premium.png', '1 kg', 'Bio', 1.0, true),
   (35, 'Cashew', cat_trockenfruechtе_id, 13.00, 'Premium Cashewkerne, unbehandelt oder in BIO Qualität. Naturbelassen und ungesalzen.', '/cashew-nuts-organic-premium.png', '500 g', 'Bio', 0.5, true),
   (36, 'Cranberries', cat_trockenfruechtе_id, 27.00, 'Getrocknete Cranberries, unbehandelt oder in BIO Qualität. Herb-süß und vitaminreich.', '/mixed-dried-fruits-sonnenzauber.png', '1 kg', 'Bio', 1.0, true),

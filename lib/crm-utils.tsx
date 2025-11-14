@@ -1,6 +1,6 @@
-import { createClient } from "@supabase/supabase-js"
+import { getBrowserClient } from "@/lib/supabase/browser"
 
-const supabaseBrowser = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+const supabaseBrowser = getBrowserClient()
 
 export interface CustomerData {
   firstName: string

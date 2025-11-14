@@ -26,7 +26,28 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { MapPin, Plus, Edit, Trash2, Clock, Mail, Info } from "lucide-react"
+import { MapPin, Plus, Edit, Trash2, Clock, Mail, Info, LinkIcon, MessageSquare } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 
 interface PickupLocation {
   id: string
@@ -42,6 +63,36 @@ interface PickupLocation {
   notes: string | null
   is_active: boolean
   created_at: string
+}
+
+interface PickupLocationMapping {
+  id: string
+  variant: string
+  canonical_location_id: string
+  canonical_location?: {
+    id: string
+    name: string
+    address: string
+    city: string
+  }
+}
+
+interface UnmappedVariant {
+  variant: string
+  count: number
+  notes?: string[]
+  suggestion?: {
+    locationId: string
+    locationName: string
+    confidence: number
+  }
+}
+
+interface IndividualOrderEntry {
+  orderId: string
+  pickupLocation: string
+  comment: string | null
+  orderNumber: string
 }
 
 export default function PickupLocationManagement() {
@@ -63,10 +114,21 @@ export default function PickupLocationManagement() {
     pickup_hours_end: "",
     notes: "",
   })
+  const [mappings, setMappings] = useState<PickupLocationMapping[]>([])
+  const [unmappedVariants, setUnmappedVariants] = useState<UnmappedVariant[]>([])
+  const [loadingMappings, setLoadingMappings] = useState(false)
+  const [selectedMappings, setSelectedMappings] = useState<Record<string, string>>({})
+  const [applyToExisting, setApplyToExisting] = useState(true)
+  const [isBatchNormalizing, setIsBatchNormalizing] = useState(false)
+  const [isGrouped, setIsGrouped] = useState(true) // Added grouping toggle state
+  const [individualOrders, setIndividualOrders] = useState<IndividualOrderEntry[]>([])
+  const [selectedPickupMappings, setSelectedPickupMappings] = useState<Record<string, string>>({})
+  const [selectedCommentMappings, setSelectedCommentMappings] = useState<Record<string, string>>({})
   const { toast } = useToast()
 
   useEffect(() => {
     fetchLocations()
+    fetchMappings()
   }, [])
 
   const fetchLocations = async () => {
@@ -93,6 +155,65 @@ export default function PickupLocationManagement() {
       setLoading(false)
     }
   }
+
+  const fetchMappings = async () => {
+    setLoadingMappings(true)
+    try {
+      const response = await fetch("/api/admin/pickup-location-mappings?includeUnmapped=true")
+      if (response.ok) {
+        const data = await response.json()
+        setMappings(data.mappings || [])
+        setUnmappedVariants(data.unmapped || [])
+      } else {
+        toast({
+          title: "Fehler",
+          description: "Mappings konnten nicht geladen werden",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching mappings:", error)
+      toast({
+        title: "Fehler",
+        description: "Verbindungsfehler beim Laden der Mappings",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingMappings(false)
+    }
+  }
+
+  const fetchIndividualOrders = async () => {
+    setLoadingMappings(true)
+    try {
+      const response = await fetch("/api/admin/pickup-location-mappings?includeUnmapped=true&grouped=false")
+      if (response.ok) {
+        const data = await response.json()
+        setIndividualOrders(data.individual || [])
+      } else {
+        toast({
+          title: "Fehler",
+          description: "Einzelne Bestellungen konnten nicht geladen werden",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching individual orders:", error)
+      toast({
+        title: "Fehler",
+        description: "Verbindungsfehler beim Laden der Bestellungen",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingMappings(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!isGrouped) {
+      fetchIndividualOrders()
+    }
+  }, [isGrouped])
 
   const toggleLocation = async (location: PickupLocation) => {
     try {
@@ -245,6 +366,174 @@ export default function PickupLocationManagement() {
     setIsDeleteDialogOpen(true)
   }
 
+  const createMapping = async (variant: string, canonicalLocationId: string) => {
+    try {
+      const response = await fetch("/api/admin/pickup-location-mappings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          variant,
+          canonical_location_id: canonicalLocationId,
+          applyToExisting,
+        }),
+      })
+
+      if (response.ok) {
+        await fetchMappings()
+        toast({
+          title: "Erfolg",
+          description: `Mapping für "${variant}" erstellt`,
+        })
+        setSelectedMappings((prev) => {
+          const updated = { ...prev }
+          delete updated[variant]
+          return updated
+        })
+      } else {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to create mapping")
+      }
+    } catch (error: any) {
+      console.error("Error creating mapping:", error)
+      toast({
+        title: "Fehler",
+        description: error.message || "Mapping konnte nicht erstellt werden",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const createCommentMapping = async (comment: string, canonicalLocationId: string, orderId: string) => {
+    try {
+      const response = await fetch("/api/admin/pickup-location-mappings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          variant: comment,
+          canonical_location_id: canonicalLocationId,
+          applyToExisting: true,
+          source: "comment",
+          orderId,
+        }),
+      })
+
+      if (response.ok) {
+        await fetchIndividualOrders()
+        toast({
+          title: "Erfolg",
+          description: `Kommentar-Mapping erstellt`,
+        })
+        setSelectedCommentMappings((prev) => {
+          const updated = { ...prev }
+          delete updated[orderId]
+          return updated
+        })
+      } else {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to create mapping")
+      }
+    } catch (error: any) {
+      console.error("Error creating comment mapping:", error)
+      toast({
+        title: "Fehler",
+        description: error.message || "Kommentar-Mapping konnte nicht erstellt werden",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const createPickupMapping = async (pickupLocation: string, canonicalLocationId: string, orderId: string) => {
+    try {
+      const response = await fetch("/api/admin/pickup-location-mappings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          variant: pickupLocation,
+          canonical_location_id: canonicalLocationId,
+          applyToExisting: true,
+          source: "pickup_location",
+          orderId,
+        }),
+      })
+
+      if (response.ok) {
+        await fetchIndividualOrders()
+        toast({
+          title: "Erfolg",
+          description: `Abholort-Mapping erstellt`,
+        })
+        setSelectedPickupMappings((prev) => {
+          const updated = { ...prev }
+          delete updated[orderId]
+          return updated
+        })
+      } else {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to create mapping")
+      }
+    } catch (error: any) {
+      console.error("Error creating pickup mapping:", error)
+      toast({
+        title: "Fehler",
+        description: error.message || "Abholort-Mapping konnte nicht erstellt werden",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const deleteMapping = async (mappingId: string) => {
+    try {
+      const response = await fetch(`/api/admin/pickup-location-mappings/${mappingId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        await fetchMappings()
+        toast({
+          title: "Erfolg",
+          description: "Mapping gelöscht",
+        })
+      } else {
+        throw new Error("Failed to delete mapping")
+      }
+    } catch (error) {
+      console.error("Error deleting mapping:", error)
+      toast({
+        title: "Fehler",
+        description: "Mapping konnte nicht gelöscht werden",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleBatchNormalize = async () => {
+    setIsBatchNormalizing(true)
+    try {
+      const response = await fetch("/api/admin/pickup-location-mappings/batch-normalize", {
+        method: "POST",
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        toast({
+          title: "Erfolg",
+          description: `${data.updated} Bestellungen wurden normalisiert`,
+        })
+      } else {
+        throw new Error("Batch normalization failed")
+      }
+    } catch (error) {
+      console.error("Error batch normalizing:", error)
+      toast({
+        title: "Fehler",
+        description: "Batch-Normalisierung fehlgeschlagen",
+        variant: "destructive",
+      })
+    } finally {
+      setIsBatchNormalizing(false)
+    }
+  }
+
   const resetForm = () => {
     setFormData({
       name: "",
@@ -338,6 +627,356 @@ export default function PickupLocationManagement() {
               </Card>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <LinkIcon className="h-5 w-5" />
+            Abholort-Varianten zuordnen
+          </CardTitle>
+          <CardDescription>
+            Ordnen Sie verschiedene Schreibweisen den offiziellen Abholorten zu. Das System lernt und wendet diese
+            Zuordnungen automatisch bei zukünftigen Bestellungen an.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Unmapped Variants Section */}
+          {(unmappedVariants.length > 0 || individualOrders.length > 0) && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-medium">Nicht zugeordnete Varianten</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {isGrouped
+                      ? `${unmappedVariants.length} Variante(n) gefunden in Bestellungen`
+                      : `${individualOrders.length} einzelne Bestellung(en) zum Zuordnen`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="groupVariants"
+                      checked={isGrouped}
+                      onCheckedChange={(checked) => setIsGrouped(checked as boolean)}
+                    />
+                    <Label htmlFor="groupVariants" className="text-sm cursor-pointer">
+                      Gleiche Varianten gruppieren
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="applyToExisting"
+                      checked={applyToExisting}
+                      onCheckedChange={(checked) => setApplyToExisting(checked as boolean)}
+                    />
+                    <Label htmlFor="applyToExisting" className="text-sm cursor-pointer">
+                      Auf bestehende Bestellungen anwenden
+                    </Label>
+                  </div>
+                </div>
+              </div>
+
+              {isGrouped && (
+                <div className="border rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Variante (Original)</TableHead>
+                        <TableHead className="text-right">Anzahl Bestellungen</TableHead>
+                        <TableHead>Zuordnen zu</TableHead>
+                        <TableHead className="w-[100px]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {unmappedVariants.map((variant) => (
+                        <TableRow key={variant.variant} className="group">
+                          <TableCell className="align-top">
+                            <div className="space-y-2">
+                              <div className="font-mono font-medium">{variant.variant}</div>
+                              {variant.notes && variant.notes.length > 0 && (
+                                <Collapsible>
+                                  <CollapsibleTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 gap-1 text-muted-foreground hover:text-foreground"
+                                    >
+                                      <MessageSquare className="h-3 w-3" />
+                                      {variant.notes.length} Kommentar(e) anzeigen
+                                    </Button>
+                                  </CollapsibleTrigger>
+                                  <CollapsibleContent className="mt-2 space-y-2">
+                                    {variant.suggestion && (
+                                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                                        <p className="text-sm font-medium text-blue-900">
+                                          Automatischer Vorschlag: {variant.suggestion.locationName}
+                                        </p>
+                                        <p className="text-xs text-blue-700 mt-1">
+                                          In Kommentaren erkannt (Konfidenz: {variant.suggestion.confidence})
+                                        </p>
+                                      </div>
+                                    )}
+                                    <div className="space-y-2 pl-3 border-l-2 border-muted">
+                                      {variant.notes.slice(0, 5).map((note, idx) => (
+                                        <div key={idx} className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">
+                                          {note}
+                                        </div>
+                                      ))}
+                                      {variant.notes.length > 5 && (
+                                        <p className="text-xs text-muted-foreground italic pl-2">
+                                          ... und {variant.notes.length - 5} weitere Kommentar(e)
+                                        </p>
+                                      )}
+                                    </div>
+                                  </CollapsibleContent>
+                                </Collapsible>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right align-top">
+                            <Badge variant="secondary" className="font-mono">
+                              {variant.count}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <Select
+                              value={selectedMappings[variant.variant] || (variant.suggestion?.locationId || "")}
+                              onValueChange={(value) =>
+                                setSelectedMappings((prev) => ({ ...prev, [variant.variant]: value }))
+                              }
+                            >
+                              <SelectTrigger className="w-[280px]">
+                                <SelectValue placeholder="Abholort wählen..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {locations
+                                  .filter((loc) => loc.is_active)
+                                  .map((location) => (
+                                    <SelectItem key={location.id} value={location.id}>
+                                      {location.name}
+                                      {variant.suggestion?.locationId === location.id && " ⭐"}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                            {variant.suggestion && (
+                              <Badge variant="outline" className="mt-2 bg-blue-50 text-blue-700 border-blue-200">
+                                Vorschlag verfügbar
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <Button
+                              size="sm"
+                              disabled={!selectedMappings[variant.variant] && !variant.suggestion}
+                              onClick={() =>
+                                createMapping(
+                                  variant.variant,
+                                  selectedMappings[variant.variant] || variant.suggestion?.locationId
+                                )
+                              }
+                            >
+                              Zuordnen
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {!isGrouped && (
+                <div className="border rounded-lg">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Abholort-Feld</TableHead>
+                        <TableHead>Kommentar</TableHead>
+                        <TableHead>Zuordnen zu</TableHead>
+                        <TableHead className="w-[140px]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {individualOrders.map((order) => (
+                        <TableRow key={order.orderId}>
+                          <TableCell className="align-top">
+                            <div className="space-y-2">
+                              <div className="font-mono text-sm font-medium">{order.pickupLocation}</div>
+                              <Select
+                                value={selectedPickupMappings[order.orderId] || ""}
+                                onValueChange={(value) =>
+                                  setSelectedPickupMappings((prev) => ({ ...prev, [order.orderId]: value }))
+                                }
+                              >
+                                <SelectTrigger className="w-[200px]">
+                                  <SelectValue placeholder="Abholort wählen..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {locations
+                                    .filter((loc) => loc.is_active)
+                                    .map((location) => (
+                                      <SelectItem key={location.id} value={location.id}>
+                                        {location.name}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </TableCell>
+                          <TableCell className="align-top max-w-md">
+                            <div className="space-y-2">
+                              {order.comment ? (
+                                <>
+                                  <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded max-h-20 overflow-y-auto">
+                                    {order.comment}
+                                  </div>
+                                  <Select
+                                    value={selectedCommentMappings[order.orderId] || ""}
+                                    onValueChange={(value) =>
+                                      setSelectedCommentMappings((prev) => ({ ...prev, [order.orderId]: value }))
+                                    }
+                                  >
+                                    <SelectTrigger className="w-[200px]">
+                                      <SelectValue placeholder="Aus Kommentar mappen..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {locations
+                                        .filter((loc) => loc.is_active)
+                                        .map((location) => (
+                                          <SelectItem key={location.id} value={location.id}>
+                                            {location.name}
+                                          </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                  </Select>
+                                </>
+                              ) : (
+                                <span className="text-sm text-muted-foreground italic">Kein Kommentar</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <div className="text-sm text-muted-foreground">
+                              Wählen Sie links das Dropdown für die gewünschte Quelle
+                            </div>
+                          </TableCell>
+                          <TableCell className="align-top">
+                            <div className="flex flex-col gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={!selectedPickupMappings[order.orderId]}
+                                onClick={() =>
+                                  createPickupMapping(
+                                    order.pickupLocation,
+                                    selectedPickupMappings[order.orderId],
+                                    order.orderId
+                                  )
+                                }
+                                className="w-full"
+                              >
+                                <Badge variant="secondary" className="mr-2 text-xs">
+                                  Abholort
+                                </Badge>
+                                Zuordnen
+                              </Button>
+                              {order.comment && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={!selectedCommentMappings[order.orderId]}
+                                  onClick={() =>
+                                    createCommentMapping(
+                                      order.comment!,
+                                      selectedCommentMappings[order.orderId],
+                                      order.orderId
+                                    )
+                                  }
+                                  className="w-full"
+                                >
+                                  <Badge variant="secondary" className="mr-2 text-xs">
+                                    Kommentar
+                                  </Badge>
+                                  Zuordnen
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Existing Mappings Section */}
+          {mappings.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-medium">Zugeordnete Varianten</h3>
+                  <p className="text-sm text-muted-foreground">{mappings.length} aktive(s) Mapping(s)</p>
+                </div>
+                <Button onClick={handleBatchNormalize} disabled={isBatchNormalizing} variant="outline">
+                  {isBatchNormalizing ? "Normalisiere..." : "Alle Bestellungen aktualisieren"}
+                </Button>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Variante</TableHead>
+                    <TableHead>Zugeordnet zu</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {mappings.map((mapping) => (
+                    <TableRow key={mapping.id}>
+                      <TableCell className="font-mono">{mapping.variant}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                          <span>{mapping.canonical_location?.name}</span>
+                          {mapping.canonical_location?.city && (
+                            <span className="text-sm text-muted-foreground">({mapping.canonical_location.city})</span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button size="sm" variant="outline" onClick={() => deleteMapping(mapping.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
+          {(unmappedVariants.length === 0 && mappings.length === 0 && !loadingMappings && isGrouped) && (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Keine Abholort-Varianten gefunden.</p>
+              <p className="text-sm mt-2">Varianten werden automatisch erkannt, sobald Bestellungen eingehen.</p>
+            </div>
+          )}
+
+          {(!isGrouped && individualOrders.length === 0 && mappings.length === 0 && !loadingMappings) && (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Keine einzelnen Bestellungen zum Zuordnen gefunden.</p>
+              <p className="text-sm mt-2">
+                Varianten werden automatisch erkannt, sobald Bestellungen eingehen.
+              </p>
+            </div>
+          )}
+
+          {loadingMappings && <div className="text-center py-8 text-muted-foreground">Lade Mappings...</div>}
         </CardContent>
       </Card>
 

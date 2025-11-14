@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { getAdminClient } from "@/lib/supabase/admin"
 import { EmailService } from "@/lib/email/email-service"
 
 export const dynamic = "force-dynamic"
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
     console.log("[Cron] Starting pickup reminder job...")
 
-    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const supabase = getAdminClient()
 
     // Calculate date 3 days from now
     const threeDaysFromNow = new Date()

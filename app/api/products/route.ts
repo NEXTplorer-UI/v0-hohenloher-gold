@@ -28,6 +28,27 @@ async function getNextDeliverySchedule(supabase: any) {
   }
 }
 
+async function getNextDeliveryScheduleRegardlessOfDeadline(supabase: any) {
+  try {
+    const { data: futureSchedules, error } = await supabase
+      .from("delivery_schedules")
+      .select("*")
+      .gte("delivery_date", new Date().toISOString().split("T")[0])
+      .eq("status", "confirmed")
+      .order("delivery_date", { ascending: true })
+      .limit(1)
+
+    if (error || !futureSchedules || futureSchedules.length === 0) {
+      return null
+    }
+
+    return futureSchedules[0]
+  } catch (error) {
+    console.log("[v0] Could not fetch next delivery schedule:", error)
+    return null
+  }
+}
+
 export async function GET() {
   try {
     console.log("[v0] Products API called")
@@ -77,6 +98,7 @@ export async function GET() {
     }
 
     const nextDelivery = await getNextDeliverySchedule(supabase)
+    const nextDeliveryRegardless = await getNextDeliveryScheduleRegardlessOfDeadline(supabase)
 
     const localImageProducts: string[] = []
     const supabaseImageProducts: string[] = []
@@ -114,30 +136,55 @@ export async function GET() {
         isPreorder = true
         availabilityMessage = "Vorbestellung - Sie werden über den Liefertermin informiert"
         inStock = true
-      } else if (isSouthernFruit && requiresDeliverySchedule && nextDelivery) {
-        const deliveryDate = new Date(nextDelivery.delivery_date)
-        const orderDeadline = new Date(nextDelivery.order_deadline)
-        const canOrder = orderDeadline >= new Date()
+      } else if (isSouthernFruit && requiresDeliverySchedule) {
+        if (nextDelivery) {
+          const deliveryDate = new Date(nextDelivery.delivery_date)
+          const orderDeadline = new Date(nextDelivery.order_deadline)
+          const canOrder = orderDeadline >= new Date()
 
-        nextDeliveryDate = deliveryDate.toLocaleDateString("de-DE", {
-          day: "2-digit",
-          month: "long",
-          year: "numeric",
-        })
+          nextDeliveryDate = deliveryDate.toLocaleDateString("de-DE", {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          })
 
+          if (currentStock > 0) {
+            availabilityMessage = "Sofort verfügbar"
+            inStock = true
+          } else if (canOrder) {
+            availabilityMessage = `Lieferung am ${nextDeliveryDate}`
+            inStock = true
+          } else {
+            availabilityMessage = `Nächste Lieferung: ${nextDeliveryDate}`
+            inStock = true // Always available
+          }
+        } else if (nextDeliveryRegardless) {
+          const deliveryDate = new Date(nextDeliveryRegardless.delivery_date)
+          nextDeliveryDate = deliveryDate.toLocaleDateString("de-DE", {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          })
+
+          if (currentStock > 0) {
+            availabilityMessage = "Sofort verfügbar"
+            inStock = true
+          } else {
+            availabilityMessage = `Nächste Lieferung: ${nextDeliveryDate}`
+            inStock = true
+          }
+        } else {
+          availabilityMessage = currentStock > 0 ? "Auf Lager" : "Aktuell keine Liefertermine verfügbar"
+          inStock = currentStock > 0
+        }
+      } else {
         if (currentStock > 0) {
-          availabilityMessage = "Sofort verfügbar"
-          inStock = true
-        } else if (canOrder) {
-          availabilityMessage = `Lieferung am ${nextDeliveryDate}`
+          availabilityMessage = "Auf Lager - sofort lieferbar"
           inStock = true
         } else {
-          availabilityMessage = "Bestellschluss vorbei - Bestellung wird nächstem Termin zugeordnet"
+          availabilityMessage = "Nicht auf Lager"
           inStock = false
         }
-      } else if (isSouthernFruit && requiresDeliverySchedule && !nextDelivery) {
-        availabilityMessage = currentStock > 0 ? "Auf Lager" : "Aktuell keine Liefertermine verfügbar"
-        inStock = currentStock > 0
       }
 
       return {

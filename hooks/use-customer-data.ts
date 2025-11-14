@@ -26,8 +26,6 @@ type RpcCustomerRow = {
   favorite_categories?: string[]
   account_status?: "has_account" | "no_account"
   customer_status?: "active" | "inactive" | "blocked"
-  email_confirmed?: boolean
-  email_confirmed_at?: string | null
 }
 
 function mapRpcToCustomer(row: RpcCustomerRow): ExtendedCustomer {
@@ -56,8 +54,6 @@ function mapRpcToCustomer(row: RpcCustomerRow): ExtendedCustomer {
     account_status: row.account_status ?? "no_account",
     customer_status: row.customer_status ?? "active",
     tags: Array.isArray(row.favorite_categories) ? row.favorite_categories : [],
-    email_confirmed: row.email_confirmed ?? false,
-    email_confirmed_at: row.email_confirmed_at ?? null,
   }
 }
 
@@ -152,8 +148,6 @@ export function useCustomerData() {
         account_status: customer.account_status || "no_account",
         customer_status: customer.customer_status || "active",
         favorite_categories: customer.favorite_categories ?? customer.tags ?? [],
-        email_confirmed: customer.email_confirmed || false,
-        email_confirmed_at: customer.email_confirmed_at || null,
       }
 
       const res = await fetch("/api/crm/customer", {

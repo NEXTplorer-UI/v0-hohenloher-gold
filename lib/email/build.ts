@@ -6,14 +6,12 @@
 import { wrapInBaseLayout } from "./base-layout"
 import {
   orderConfirmationContent,
-  invoiceContent,
   pickupReminderContent,
   distributorApplicationContent,
   newsletterContent,
   newsletterConfirmationContent,
   paymentReceiptContent,
   readyForPickupContent,
-  orderPickedUpContent,
   orderCancelledContent,
   shippingNotificationContent,
   contactConfirmationContent,
@@ -25,14 +23,12 @@ import type { EmailTemplateResult } from "./types" // Declare EmailTemplateResul
 
 export type EmailTemplateId =
   | "orderConfirmation"
-  | "invoice"
   | "pickupReminder"
   | "distributorApplication"
   | "newsletter"
   | "newsletterConfirmation"
   | "paymentReceipt"
   | "readyForPickup"
-  | "orderPickedUp"
   | "orderCancelled"
   | "shippingNotification"
   | "contactConfirmation"
@@ -57,17 +53,9 @@ export function buildEmail(
       contentHtml = orderConfirmationContent(vars, customCopy)
       break
 
-    case "invoice":
-      subject = `Rechnung für Ihre Bestellung ${vars.orderId} - Südfrüchte Hohenlohe`
-      headerTitle = "Ihre Rechnung ist bereit"
-      contentHtml = invoiceContent(vars, customCopy)
-      break
-
     case "pickupReminder":
       subject = `Erinnerung: Abholung Ihrer Bestellung ${vars.orderId} - Südfrüchte Hohenlohe`
       headerTitle = "Abholtermin-Erinnerung"
-      headerColor = "#d4af37"
-      headerGradient = "linear-gradient(135deg, #b8941f 0%, #d4af37 100%)"
       contentHtml = pickupReminderContent(vars, customCopy)
       break
 
@@ -99,40 +87,28 @@ export function buildEmail(
     case "paymentReceipt":
       subject = `Zahlungsbeleg für Bestellung ${vars.orderNumber} - Südfrüchte Hohenlohe`
       headerTitle = "Zahlungsbeleg"
-      headerColor = "#d4af37"
-      headerGradient = "linear-gradient(135deg, #b8941f 0%, #d4af37 100%)"
       contentHtml = paymentReceiptContent(vars, customCopy)
       break
 
     case "readyForPickup":
       subject = `Bestellung ${vars.orderNumber} bereit zur Abholung - Südfrüchte Hohenlohe`
       headerTitle = "Bereit zur Abholung"
-      headerColor = "#d4af37"
-      headerGradient = "linear-gradient(135deg, #b8941f 0%, #d4af37 100%)"
       contentHtml = readyForPickupContent(vars, customCopy)
-      break
-
-    case "orderPickedUp":
-      subject = `Bestellung ${vars.orderNumber} abgeholt - Südfrüchte Hohenlohe`
-      headerTitle = "Vielen Dank!"
-      headerColor = "#d4af37"
-      headerGradient = "linear-gradient(135deg, #b8941f 0%, #d4af37 100%)"
-      contentHtml = orderPickedUpContent(vars, customCopy)
       break
 
     case "orderCancelled":
       subject = `Bestellung ${vars.orderNumber} storniert - Südfrüchte Hohenlohe`
       headerTitle = "Bestellung storniert"
-      headerColor = "#dc2626"
-      headerGradient = "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"
+      headerColor = "#d4af37"
+      headerGradient = "linear-gradient(135deg, #b8941f 0%, #d4af37 100%)"
       contentHtml = orderCancelledContent(vars, customCopy)
       break
 
     case "shippingNotification":
       subject = `Bestellung ${vars.orderNumber} wurde versandt - Südfrüchte Hohenlohe`
       headerTitle = "Ihre Bestellung ist unterwegs"
-      headerColor = "#2563eb"
-      headerGradient = "linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)"
+      headerColor = "#d4af37"
+      headerGradient = "linear-gradient(135deg, #b8941f 0%, #d4af37 100%)"
       contentHtml = shippingNotificationContent(vars, customCopy)
       break
 
@@ -145,8 +121,8 @@ export function buildEmail(
     case "complaintConfirmation":
       subject = "Ihre Reklamation - Südfrüchte Hohenlohe"
       headerTitle = "Reklamation erfasst"
-      headerColor = "#f59e0b"
-      headerGradient = "linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)"
+      headerColor = "#d4af37"
+      headerGradient = "linear-gradient(135deg, #b8941f 0%, #d4af37 100%)"
       contentHtml = complaintConfirmationContent(vars, customCopy)
       break
 

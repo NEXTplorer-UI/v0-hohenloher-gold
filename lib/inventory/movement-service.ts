@@ -1,11 +1,4 @@
-import { createClient } from "@supabase/supabase-js"
-
-const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-})
+import { getAdminClient } from "@/lib/supabase/admin"
 
 export interface OrderItem {
   id?: string
@@ -41,16 +34,16 @@ export async function createMovementsFromOrder(
 
   const movements: InventoryMovement[] = orderItems.map((item) => ({
     product_id: item.product_id,
-    order_id: null, // Must be NULL when order_item_id is set (constraint: only one reference allowed)
+    order_id: null,
     order_item_id: item.id || null,
-    qty: -Math.abs(item.quantity), // Negative for outgoing
+    qty: -Math.abs(item.quantity),
     reason,
     reference_id: orderNumber,
-    created_by: null, // System-generated
+    created_by: null,
   }))
 
   try {
-    const { data, error } = await supabaseAdmin.from("inventory_movements").insert(movements).select()
+    const { data, error } = await getAdminClient().from("inventory_movements").insert(movements).select()
 
     if (error) {
       console.error(`[v0] Error creating inventory movements:`, error)
@@ -81,7 +74,7 @@ export async function createManualMovement(
 
   const movement: InventoryMovement = {
     product_id: productId,
-    qty, // Already signed (positive or negative)
+    qty,
     reason,
     reference_id: referenceId,
     occurred_at: occurredAt || new Date().toISOString(),
@@ -89,7 +82,7 @@ export async function createManualMovement(
   }
 
   try {
-    const { data, error } = await supabaseAdmin.from("inventory_movements").insert([movement]).select()
+    const { data, error } = await getAdminClient().from("inventory_movements").insert([movement]).select()
 
     if (error) {
       console.error(`[v0] Error creating manual movement:`, error)
@@ -109,7 +102,7 @@ export async function createManualMovement(
  */
 export async function getCurrentStock(productId: number): Promise<number> {
   try {
-    const { data, error } = await supabaseAdmin.rpc("get_current_stock", { p_product_id: productId })
+    const { data, error } = await getAdminClient().rpc("get_current_stock", { p_product_id: productId })
 
     if (error) {
       console.error(`[v0] Error fetching stock for product ${productId}:`, error)
@@ -128,7 +121,7 @@ export async function getCurrentStock(productId: number): Promise<number> {
  */
 export async function getAllCurrentStock(): Promise<Map<number, number>> {
   try {
-    const { data: movements, error } = await supabaseAdmin
+    const { data: movements, error } = await getAdminClient()
       .from("inventory_movements")
       .select("product_id, qty")
       .order("occurred_at", { ascending: true })

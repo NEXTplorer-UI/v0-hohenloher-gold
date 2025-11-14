@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { getAdminClient } from "@/lib/supabase/admin"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -7,52 +7,38 @@ export const runtime = "nodejs"
 export async function POST(req: Request) {
   try {
     const { token } = await req.json()
-    console.log("[pickup-init] Token received:", token)
 
     if (!token) {
       return NextResponse.json({ error: "Token fehlt" }, { status: 400 })
     }
 
-    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+    const supabase = getAdminClient()
 
-    let validation: any = null
-    try {
-      const { data } = await supabase.rpc("validate_qr_code", {
-        p_pickup_token: token,
-      })
-      validation = data
-      console.log("[pickup-init] QR validation result:", validation)
-    } catch (rpcError: any) {
-      console.log("[pickup-init] QR validation RPC not available, skipping:", rpcError.message)
-      // Continue without validation if RPC doesn't exist
-    }
+    const { data: validation } = await supabase.rpc("validate_qr_code", {
+      p_pickup_token: token,
+    })
 
-    if (validation && !validation.valid) {
-      if (validation.order_id) {
-        try {
-          await supabase.rpc("log_qr_scan", {
-            p_order_id: validation.order_id,
-            p_source: "pos",
-            p_scan_result: validation.error,
-            p_ip: req.headers.get("x-forwarded-for")?.split(",")[0] || null,
-            p_user_agent: req.headers.get("user-agent") || null,
-            p_error_message: validation.message,
-          })
-        } catch (logError: any) {
-          console.log("[pickup-init] Log scan RPC not available:", logError.message)
-        }
+    if (!validation?.valid) {
+      if (validation?.order_id) {
+        await supabase.rpc("log_qr_scan", {
+          p_order_id: validation.order_id,
+          p_source: "pos",
+          p_scan_result: validation.error,
+          p_ip: req.headers.get("x-forwarded-for")?.split(",")[0] || null,
+          p_user_agent: req.headers.get("user-agent") || null,
+          p_error_message: validation.message,
+        })
       }
 
       return NextResponse.json(
         {
-          error: validation.error || "invalid_token",
-          message: validation.message || "Ungültiger QR-Code",
+          error: validation?.error || "invalid_token",
+          message: validation?.message || "Ungültiger QR-Code",
         },
         { status: 400 },
       )
     }
 
-    console.log("[pickup-init] Fetching order by token...")
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select(`
@@ -66,6 +52,10 @@ export async function POST(req: Request) {
         hellocash_payment_url,
         pickup_token,
         qr_code_expires_at,
+        qr_code_url,
+        pickup_date,
+        pickup_location,
+        delivery_method,
         order_items (
           id,
           product_name,
@@ -76,46 +66,56 @@ export async function POST(req: Request) {
         customers (
           first_name,
           last_name,
-          email
+          email,
+          phone,
+          street,
+          house_number,
+          postal_code,
+          city
         )
       `)
       .eq("pickup_token", token)
       .single()
 
     if (orderError || !order) {
-      console.error("[pickup-init] Order not found:", orderError)
       return NextResponse.json({ error: "Order nicht gefunden" }, { status: 404 })
     }
 
-    console.log("[pickup-init] Order found:", order.order_number)
-
-    // The pickup page just shows the order overview with QR code
-    // Invoice creation happens via createInvoiceAfterPayment() when payment is confirmed
-
-    try {
-      await supabase.rpc("log_qr_scan", {
-        p_order_id: order.id,
-        p_source: "pos",
-        p_scan_result: "success",
-        p_ip: req.headers.get("x-forwarded-for")?.split(",")[0] || null,
-        p_user_agent: req.headers.get("user-agent") || null,
+    if (!order.hellocash_invoice_id) {
+      const draftResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/pos/hellocash/create-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: order.id }),
       })
-    } catch (logError: any) {
-      console.log("[pickup-init] Log scan RPC not available:", logError.message)
+
+      if (!draftResponse.ok) {
+        console.error("[pickup-init] Draft creation failed:", await draftResponse.text())
+      }
     }
 
-    console.log("[pickup-init] Returning order data successfully")
+    await supabase.rpc("log_qr_scan", {
+      p_order_id: order.id,
+      p_source: "pos",
+      p_scan_result: "success",
+      p_ip: req.headers.get("x-forwarded-for")?.split(",")[0] || null,
+      p_user_agent: req.headers.get("user-agent") || null,
+    })
+
     return NextResponse.json({
       order_id: order.id,
       order_number: order.order_number,
       total: order.total,
-      total_formatted: (order.total / 100).toFixed(2) + " €",
+      total_formatted: order.total.toFixed(2) + " €",
       status: order.status,
       hellocash_status: order.hellocash_status || "draft",
       hellocash_invoice_number: order.hellocash_invoice_number || order.order_number,
       hellocash_payment_url: order.hellocash_payment_url,
       pickup_token: order.pickup_token,
       expires_at: order.qr_code_expires_at,
+      qr_code_url: order.qr_code_url,
+      pickup_date: order.pickup_date,
+      pickup_location: order.pickup_location,
+      delivery_method: order.delivery_method,
       items:
         order.order_items?.map((item: any) => ({
           id: item.id,
@@ -129,6 +129,11 @@ export async function POST(req: Request) {
         ? {
             name: `${order.customers.first_name} ${order.customers.last_name}`,
             email: order.customers.email,
+            phone: order.customers.phone,
+            street: order.customers.street,
+            house_number: order.customers.house_number,
+            postal_code: order.customers.postal_code,
+            city: order.customers.city,
           }
         : null,
     })

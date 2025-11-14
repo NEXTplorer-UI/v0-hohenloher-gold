@@ -1,6 +1,6 @@
 "use client"
-import { useEffect, lazy, Suspense, useMemo, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
+import { useEffect, lazy, Suspense, useState } from "react"
+import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,9 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { AdminProvider, useAdmin } from "@/contexts/admin-context"
 import RevenueAnalyticsModal from "@/components/admin/revenue-analytics-modal"
 import { RefreshCw } from "lucide-react"
+import usePersistedState from "@/hooks/use-persisted-state"
+import { TestModeToggle } from "@/components/admin/test-mode-toggle"
+import { SettingsPanel } from "@/components/admin/settings-panel"
 
 const CustomerInput = lazy(() => import("@/components/admin/customer-input"))
 const CustomerTable = lazy(() => import("@/components/admin/customer-table"))
@@ -319,26 +322,24 @@ function CustomerSegments() {
 
 function AdminDashboardContent() {
   const { state, dispatch, updateActivity, handleLogout } = useAdmin()
+  const { user: authUser } = useAuth()
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState("overview")
+  const [activeTab, setActiveTab] = usePersistedState({
+    key: "admin-active-tab",
+    defaultValue: "overview",
+    expirationHours: 12,
+  })
   const [isRegeneratingQR, setIsRegeneratingQR] = useState(false)
-
-  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const {
-          data: { user },
-          error,
-        } = await supabase.auth.getUser()
-
-        if (error || !user) {
+        if (!authUser) {
           router.push("/auth/login")
           return
         }
 
-        dispatch({ type: "SET_USER", payload: { id: user.id, email: user.email } })
+        dispatch({ type: "SET_USER", payload: { id: authUser.id, email: authUser.email } })
       } catch (error) {
         console.error("Auth check failed:", error)
         router.push("/auth/login")
@@ -361,7 +362,7 @@ function AdminDashboardContent() {
       document.removeEventListener("visibilitychange", handleVisibilityChange)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, supabase])
+  }, [router, authUser])
 
   useEffect(() => {
     if (!state.autoLogoutEnabled || !state.user) return
@@ -564,6 +565,7 @@ function AdminDashboardContent() {
           <p className="text-sm md:text-base text-muted-foreground truncate">Willkommen zurück, {state.user?.email}</p>
         </div>
         <div className="flex items-center justify-between md:justify-end space-x-2 md:space-x-4">
+          <TestModeToggle />
           <div className="flex items-center space-x-2">
             <Shield className="h-4 w-4 text-green-600" />
             <Badge variant="secondary" className="text-xs">
@@ -650,15 +652,32 @@ function AdminDashboardContent() {
         </TabsContent>
 
         <TabsContent value="emails" className="space-y-4 md:space-y-6">
-          <Suspense fallback={<LoadingSpinner />}>
-            <NewsletterSystem />
-          </Suspense>
-          <Suspense fallback={<LoadingSpinner />}>
-            <EmailPreviewSystem />
-          </Suspense>
-          <Suspense fallback={<LoadingSpinner />}>
-            <EmailTemplatesViewer />
-          </Suspense>
+          <Card>
+            <CardContent className="pt-6">
+              <Tabs defaultValue="newsletter" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="newsletter">Newsletter-System</TabsTrigger>
+                  <TabsTrigger value="templates">E-Mail-Vorlagen</TabsTrigger>
+                  <TabsTrigger value="export">Template-Export</TabsTrigger>
+                </TabsList>
+                <TabsContent value="newsletter" className="mt-6">
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <NewsletterSystem />
+                  </Suspense>
+                </TabsContent>
+                <TabsContent value="templates" className="mt-6">
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <EmailPreviewSystem />
+                  </Suspense>
+                </TabsContent>
+                <TabsContent value="export" className="mt-6">
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <EmailTemplatesViewer />
+                  </Suspense>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="content" className="space-y-4 md:space-y-6">
@@ -702,38 +721,7 @@ function AdminDashboardContent() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg md:text-xl">QR-Code Verwaltung</CardTitle>
-              <CardDescription className="text-sm">QR-Codes für Bestellungen nachgenerieren</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  Generiert QR-Codes für alle Bestellungen, die noch keinen haben oder deren QR-Code abgelaufen ist.
-                  Maximal 100 Bestellungen pro Durchlauf.
-                </p>
-                <Button
-                  onClick={handleRegenerateQRCodes}
-                  disabled={isRegeneratingQR}
-                  variant="outline"
-                  className="w-full bg-transparent"
-                >
-                  {isRegeneratingQR ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      QR-Codes werden generiert...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      QR-Codes nachgenerieren
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <SettingsPanel />
         </TabsContent>
       </Tabs>
     </div>

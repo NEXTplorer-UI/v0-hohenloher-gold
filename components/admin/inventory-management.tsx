@@ -17,10 +17,16 @@ import {
   ArrowUp,
   ArrowDown,
   Loader2,
+  History,
 } from "lucide-react"
 import { InventoryProvider, useInventory } from "@/contexts/inventory-context"
 import { useCallback, useState } from "react"
 import { useToast } from "@/hooks/use-toast"
+import {
+  InventoryHistoryExportDialog,
+  type InventoryHistoryExportOptions,
+} from "@/components/admin/inventory-history-export-dialog"
+import { ProductMovementHistoryModal } from "@/components/admin/product-movement-history-modal"
 
 const STOCK_IN_REASONS = [
   "Wareneingang - Lieferung",
@@ -63,7 +69,12 @@ function InventoryManagementContent() {
 
   const { toast } = useToast()
   const [isExportingHistory, setIsExportingHistory] = useState(false)
+  const [showHistoryExportDialog, setShowHistoryExportDialog] = useState(false)
   const [pendingItems, setPendingItems] = useState<Set<number>>(new Set())
+  const [selectedProductForHistory, setSelectedProductForHistory] = useState<{
+    id: number
+    name: string
+  } | null>(null)
   const [stockOperation, setStockOperation] = useState<{
     itemId: number | null
     type: "in" | "out" | null
@@ -76,30 +87,56 @@ function InventoryManagementContent() {
     reason: "",
   })
 
-  const exportInventoryHistory = useCallback(async () => {
-    try {
-      setIsExportingHistory(true)
-      console.log("[v0] Starting inventory history export...")
+  const exportInventoryHistory = useCallback(
+    async (options: InventoryHistoryExportOptions) => {
+      try {
+        setIsExportingHistory(true)
+        console.log("[v0] Starting inventory history export with options:", options)
 
-      const response = await fetch("/api/admin/inventory-history")
-      if (response.ok) {
-        const blob = await response.blob()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.href = url
-        a.download = `lagerhistorie-${new Date().toISOString().split("T")[0]}.csv`
-        a.click()
-        URL.revokeObjectURL(url)
-        console.log("[v0] Inventory history export completed")
-      } else {
-        console.error("[v0] Export failed with status:", response.status)
+        const params = new URLSearchParams({
+          groupBy: options.groupBy,
+          sortBy: options.sortBy,
+          sortOrder: options.sortOrder,
+          showSummary: options.showSummary.toString(),
+          emptyLinesBetweenGroups: options.emptyLinesBetweenGroups.toString(),
+        })
+
+        const response = await fetch(`/api/admin/inventory-history?${params.toString()}`)
+        if (response.ok) {
+          const blob = await response.blob()
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement("a")
+          a.href = url
+          a.download = `lagerhistorie-${options.groupBy !== "none" ? options.groupBy + "-" : ""}${new Date().toISOString().split("T")[0]}.csv`
+          a.click()
+          URL.revokeObjectURL(url)
+          console.log("[v0] Inventory history export completed")
+
+          toast({
+            title: "Export erfolgreich",
+            description: "Die Lagerhistorie wurde erfolgreich exportiert",
+          })
+        } else {
+          console.error("[v0] Export failed with status:", response.status)
+          toast({
+            title: "Export fehlgeschlagen",
+            description: "Die Lagerhistorie konnte nicht exportiert werden",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("[v0] Error exporting inventory history:", error)
+        toast({
+          title: "Fehler",
+          description: "Ein Fehler ist beim Export aufgetreten",
+          variant: "destructive",
+        })
+      } finally {
+        setIsExportingHistory(false)
       }
-    } catch (error) {
-      console.error("[v0] Error exporting inventory history:", error)
-    } finally {
-      setIsExportingHistory(false)
-    }
-  }, [])
+    },
+    [toast],
+  )
 
   const handleStockOperation = useCallback(
     async (itemId: number, type: "in" | "out", amount: number, reason: string) => {
@@ -277,7 +314,7 @@ function InventoryManagementContent() {
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
-            <Button onClick={exportInventoryHistory} variant="outline" disabled={isExportingHistory}>
+            <Button onClick={() => setShowHistoryExportDialog(true)} variant="outline" disabled={isExportingHistory}>
               {isExportingHistory ? (
                 <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
               ) : (
@@ -360,7 +397,12 @@ function InventoryManagementContent() {
                     <div className="flex items-center justify-between">
                       <div className="space-y-1 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{item.name}</span>
+                          <button
+                            onClick={() => setSelectedProductForHistory({ id: item.id, name: item.name })}
+                            className="font-medium hover:text-primary hover:underline transition-colors"
+                          >
+                            {item.name}
+                          </button>
                           <Badge variant="outline" className="text-xs">
                             {item.category}
                           </Badge>
@@ -433,6 +475,15 @@ function InventoryManagementContent() {
                             {item.stock} x {item.unit}
                           </span>
                         </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setSelectedProductForHistory({ id: item.id, name: item.name })}
+                          className="h-8"
+                          title="Buchungshistorie anzeigen"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
                         {stockOperation.itemId === item.id ? (
                           <div className="flex items-center gap-2 p-2 border rounded-md bg-gray-50">
                             <div className="flex flex-col gap-2 min-w-48">
@@ -523,6 +574,19 @@ function InventoryManagementContent() {
           </div>
         </CardContent>
       </Card>
+
+      <InventoryHistoryExportDialog
+        open={showHistoryExportDialog}
+        onOpenChange={setShowHistoryExportDialog}
+        onExport={exportInventoryHistory}
+      />
+
+      <ProductMovementHistoryModal
+        open={!!selectedProductForHistory}
+        onOpenChange={(open) => !open && setSelectedProductForHistory(null)}
+        productId={selectedProductForHistory?.id || null}
+        productName={selectedProductForHistory?.name || ""}
+      />
     </div>
   )
 }

@@ -3,19 +3,31 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Plus, Calendar, Download, Clock, Minus, CheckCircle, ArrowUpDown } from "lucide-react"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
+import {
+  Plus,
+  Calendar,
+  Download,
+  Clock,
+  CheckCircle,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  Truck,
+  Package,
+} from "lucide-react"
 import { useCart } from "@/contexts/cart-context"
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
 import { CustomArrangementNotice } from "@/components/custom-arrangement-notice"
 import { usePricing } from "@/components/pricing-context"
 import useSWR from "swr"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input" // Import Input component
 import { formatTime } from "@/lib/format-time"
 import { calculateBasePrice } from "@/lib/utils/price"
+import { AddToCartButton } from "@/components/add-to-cart-button" // Declare AddToCartButton
+import { useSearchParams } from "next/navigation"
 
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center p-8">
@@ -101,7 +113,6 @@ const getProductStatus = (product: any, cartQuantity = 0) => {
   const isSouthernFruit = product.category === "Südfrüchte"
 
   if (isSouthernFruit && product.is_seasonal) {
-    // If there's an availability message from the API, use it
     if (product.availability_message) {
       if (product.availability_message.includes("Sofort verfügbar")) {
         const availableStock = (product.current_stock || 0) - cartQuantity
@@ -118,20 +129,19 @@ const getProductStatus = (product: any, cartQuantity = 0) => {
           color: "bg-yellow-500",
         }
       }
-      if (product.availability_message.includes("Bestellschluss vorbei")) {
+      if (product.availability_message.includes("Nächste Lieferung")) {
         return {
-          status: "deadline-passed",
-          label: "Bestellschluss vorbei",
-          color: "bg-orange-500",
+          status: "next-delivery",
+          label: product.availability_message,
+          color: "bg-blue-500",
         }
       }
       if (
         product.availability_message.includes("Keine Liefertermine") ||
         product.availability_message.includes("nicht verfügbar")
       ) {
-        return { status: "out-of-stock", label: "Saison beendet", color: "bg-red-500" }
+        return { status: "out-of-stock", label: "Keine Termine verfügbar", color: "bg-red-500" }
       }
-      // If there's stock, show it
       if (product.availability_message.includes("Auf Lager") && product.current_stock > 0) {
         const availableStock = (product.current_stock || 0) - cartQuantity
         return {
@@ -175,61 +185,6 @@ const getProductStatus = (product: any, cartQuantity = 0) => {
   return { status: "available", label: "Lieferbar", color: "bg-green-500" }
 }
 
-const AddToCartButton = ({ product }: { product: any }) => {
-  const { addToCart, checkWeightLimit } = useCart()
-  const [quantity, setQuantity] = useState(1)
-  const { pricingMode, calculatePrice } = usePricing()
-
-  const handleAddToCart = () => {
-    console.log("[v0] Adding to cart:", {
-      name: product.name,
-      weight_kg: product.weight_kg,
-      quantity: quantity,
-      totalWeight: (product.weight_kg || 1.0) * quantity,
-    })
-    addToCart(product, quantity)
-    setQuantity(1)
-  }
-
-  return (
-    <div className="flex items-center space-x-4">
-      <div className="flex items-center space-x-2">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => setQuantity(Math.max(1, quantity - 1))}
-          disabled={quantity <= 1}
-          className="h-10 w-10"
-        >
-          <Minus className="h-4 w-4" />
-        </Button>
-        <Input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          min="1"
-          value={quantity}
-          onChange={(e) => setQuantity(Math.max(1, Number.parseInt(e.target.value) || 1))}
-          className="h-10 w-16 text-center"
-        />
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => setQuantity(quantity + 1)}
-          disabled={product.limitPerPerson && quantity >= product.limitPerPerson}
-          className="h-10 w-10"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-      </div>
-      <Button onClick={handleAddToCart} className="flex-1 h-10">
-        <Plus className="h-4 w-4 mr-2" />
-        {quantity > 1 ? `${quantity}x ` : ""}In den Warenkorb
-      </Button>
-    </div>
-  )
-}
-
 function groupProductsByBaseName(products: any[]) {
   const groups = new Map<string, any[]>()
 
@@ -253,12 +208,20 @@ function extractSize(productName: string): string | null {
 type SortOption = "name-asc" | "name-desc" | "price-asc" | "price-desc" | "newest"
 
 export default function ShopPage() {
+  const searchParams = useSearchParams()
+  const categoryFromUrl = searchParams.get("category")
+
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
-  const [selectedCategory, setSelectedCategory] = useState<string>("alle")
+  const [selectedCategory, setSelectedCategory] = useState<string>(categoryFromUrl || "alle")
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [selectedSizes, setSelectedSizes] = useState<Map<string, number>>(new Map())
   const [sortBy, setSortBy] = useState<SortOption>("name-asc")
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false)
+  const [showLeftIndicator, setShowLeftIndicator] = useState(false)
+  const [showRightIndicator, setShowRightIndicator] = useState(false)
+  const [schedulePageIndex, setSchedulePageIndex] = useState(0)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const scheduleScrollRef = useRef<HTMLDivElement>(null)
   const { calculatePrice, pricingMode, setPricingMode } = usePricing()
   const { cart } = useCart()
 
@@ -303,11 +266,10 @@ export default function ShopPage() {
     let filtered =
       selectedCategory === "alle" ? allProducts : allProducts.filter((product) => product.category === selectedCategory)
 
-    // Apply availability filter
     if (showOnlyAvailable) {
       filtered = filtered.filter((product) => {
         const availability = getProductStatus(product)
-        return product.in_stock && availability.status !== "out-of-stock" && availability.status !== "deadline-passed"
+        return product.in_stock && availability.status !== "out-of-stock"
       })
     }
 
@@ -354,14 +316,13 @@ export default function ShopPage() {
 
       // Check if current variant is out of stock or unavailable
       const availability = getProductStatus(currentVariant)
-      const isUnavailable =
-        !currentVariant.in_stock || availability.status === "out-of-stock" || availability.status === "deadline-passed"
+      const isUnavailable = !currentVariant.in_stock || availability.status === "out-of-stock"
 
       if (isUnavailable) {
         // Find first available variant
         const firstAvailableIndex = variants.findIndex((v) => {
           const vAvailability = getProductStatus(v)
-          return v.in_stock && vAvailability.status !== "out-of-stock" && vAvailability.status !== "deadline-passed"
+          return v.in_stock && vAvailability.status !== "out-of-stock"
         })
 
         if (firstAvailableIndex !== -1 && firstAvailableIndex !== currentIndex) {
@@ -399,6 +360,68 @@ export default function ShopPage() {
   console.log("[v0] Selected category:", selectedCategory)
   console.log("[v0] Filtered products count:", filteredProducts.length)
 
+  useEffect(() => {
+    const handleScroll = () => {
+      const container = scrollContainerRef.current
+      if (!container) return
+
+      const { scrollLeft, scrollWidth, clientWidth } = container
+      setShowLeftIndicator(scrollLeft > 10)
+      setShowRightIndicator(scrollLeft < scrollWidth - clientWidth - 10)
+    }
+
+    const container = scrollContainerRef.current
+    if (container) {
+      handleScroll()
+      container.addEventListener("scroll", handleScroll)
+      window.addEventListener("resize", handleScroll)
+
+      return () => {
+        container.removeEventListener("scroll", handleScroll)
+        window.removeEventListener("resize", handleScroll)
+      }
+    }
+  }, [categories])
+
+  useEffect(() => {
+    if (categoryFromUrl && categoryFromUrl !== selectedCategory) {
+      console.log("[v0] Setting category from URL:", categoryFromUrl)
+      setSelectedCategory(categoryFromUrl)
+    }
+  }, [categoryFromUrl])
+
+  const SCHEDULES_PER_PAGE = 4
+  const totalSchedulePages = Math.ceil((deliverySchedules?.length || 0) / SCHEDULES_PER_PAGE)
+  const paginatedSchedules = useMemo(() => {
+    if (!deliverySchedules) return []
+    const start = schedulePageIndex * SCHEDULES_PER_PAGE
+    const end = start + SCHEDULES_PER_PAGE
+    return deliverySchedules.slice(start, end)
+  }, [deliverySchedules, schedulePageIndex, SCHEDULES_PER_PAGE])
+
+  useEffect(() => {
+    const handleScheduleScroll = () => {
+      const container = scheduleScrollRef.current
+      if (!container) return
+
+      const { scrollLeft, scrollWidth, clientWidth } = container
+      setShowLeftIndicator(scrollLeft > 10)
+      setShowRightIndicator(scrollLeft < scrollWidth - clientWidth - 10)
+    }
+
+    const container = scheduleScrollRef.current
+    if (container) {
+      handleScheduleScroll()
+      container.addEventListener("scroll", handleScheduleScroll)
+      window.addEventListener("resize", handleScheduleScroll)
+
+      return () => {
+        container.removeEventListener("scroll", handleScheduleScroll)
+        window.removeEventListener("resize", handleScheduleScroll)
+      }
+    }
+  }, [deliverySchedules])
+
   if (loading || schedulesLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -433,115 +456,210 @@ export default function ShopPage() {
         <CustomArrangementNotice />
       </div>
 
-      <section id="seasonal-overview" className="py-12 border-b text-primary bg-sidebar-accent-foreground">
+      <section id="seasonal-overview" className="py-6 border-b text-primary bg-sidebar-accent-foreground">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-6xl mx-auto">
-            <div className="p-6 bg-accent/10 border border-accent/20 rounded-lg">
-              <div className="flex items-start space-x-3 mb-4">
-                <Calendar className="w-6 h-6 text-primary mt-1" />
-                <div className="flex-1">
-                  <h3 className="font-semibold text-primary mb-2 text-xl">Südfrüchte Saison 2025</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Frische Südfrüchte sind Saisonware und nur zu bestimmten Terminen verfügbar.
-                    <strong> Bestellschluss ist jeweils 14 Tage vor dem Liefertermin. </strong>
-                    Bestellungen nach Bestellschluss werden automatisch dem nächsten verfügbaren Termin zugeordnet.
-                  </p>
-
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="font-medium text-primary mb-3 flex items-center">
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Bestätigte Termine
-                      </h4>
-                      <div className="space-y-2">
-                        {deliverySchedules
-                          ?.filter((d: any) => d.status === "confirmed")
-                          .map((delivery: any, index) => (
-                            <div key={index} className="p-3 bg-primary/10 rounded border">
-                              <div className="mb-2 flex items-baseline justify-between">
-                                <span className="font-semibold text-lg">{delivery.date}</span>
-                                <div className="text-right">
-                                  <div className="text-xs text-gold/70">Bestellschluss:</div>
-                                  <div className="text-lg font-semibold text-gold">{delivery.orderDeadline}</div>
-                                </div>
-                              </div>
-                              {delivery.notes && (
-                                <div className="mb-2 p-2 bg-primary/5 rounded">
-                                  <span className="text-primary text-sm">{delivery.notes}</span>
-                                </div>
-                              )}
-                              {delivery.pickupStartTime && delivery.pickupEndTime && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  <span className="font-medium">Abholung:</span> {formatTime(delivery.pickupStartTime)}{" "}
-                                  - {formatTime(delivery.pickupEndTime)} Uhr
-                                  <br />
-                                  <span className="text-xs italic">oder nach Terminvereinbarung</span>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="font-medium text-gold mb-3 flex items-center">
-                        <Clock className="w-4 h-4 mr-2" />
-                        Geplante Termine
-                      </h4>
-                      <div className="space-y-2">
-                        {deliverySchedules
-                          ?.filter((d: any) => d.status === "planned")
-                          .map((delivery: any, index) => (
-                            <div key={index} className="p-3 bg-gold/10 rounded border">
-                              <div className="mb-2 flex items-baseline justify-between">
-                                <span className="font-semibold text-lg">{delivery.date}</span>
-                                <div className="text-right">
-                                  <div className="text-xs text-gold/70">Bestellschluss:</div>
-                                  <div className="text-lg font-semibold text-gold">{delivery.orderDeadline}</div>
-                                </div>
-                              </div>
-                              {delivery.notes && (
-                                <div className="mb-2 p-2 bg-gold/5 rounded">
-                                  <span className="text-gold text-sm">{delivery.notes}</span>
-                                </div>
-                              )}
-                              {delivery.pickupStartTime && delivery.pickupEndTime && (
-                                <div className="text-xs text-muted-foreground mt-1">
-                                  <span className="font-medium">Abholung:</span> {formatTime(delivery.pickupStartTime)}{" "}
-                                  - {formatTime(delivery.pickupEndTime)} Uhr
-                                  <br />
-                                  <span className="text-xs italic">oder nach Terminvereinbarung</span>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-4 mt-6 pt-4 border-t border-accent/20">
-                    <Button variant="secondary" size="sm" onClick={downloadCalendarEvent} className="flex items-center">
-                      <Download className="w-4 h-4 mr-2" />
-                      Nächsten Termin speichern
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => downloadSeasonCalendar(deliverySchedules || [])}
-                      className="flex items-center bg-transparent"
-                    >
-                      <Calendar className="w-4 h-4 mr-2" />
-                      Ganze Saison exportieren
-                    </Button>
-                  </div>
-
-                  {/* Pickup notice for customers */}
-                  <div className="mt-6">
-                    <h3 className="text-3xl font-bold text-primary mb-2">Hinweis zu Abholterminen</h3>
-                    <p className="text-lg text-primary">
-                      Die Termine gelten für das Zentrallager. Unterverteiler haben eigene Abholtermine.
+            <div className="p-4 bg-accent/10 border border-accent/20 rounded-lg">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <Calendar className="w-5 h-5 text-primary flex-shrink-0" />
+                  <div>
+                    <h3 className="font-semibold text-primary text-lg leading-tight">Abholtermine Saison 2025</h3>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Termine Zentrallager • Unterverteiler haben eigene Termine
                     </p>
                   </div>
+                </div>
+
+                {/* Desktop: Download buttons in header */}
+                <div className="hidden md:flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={downloadCalendarEvent}
+                    className="flex items-center text-sm"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Nächsten Termin speichern
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadSeasonCalendar(deliverySchedules || [])}
+                    className="flex items-center bg-transparent text-sm"
+                  >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Ganze Saison exportieren
+                  </Button>
+                </div>
+              </div>
+
+              {/* Mobile: Horizontal scrollable timeline with swipe indicator */}
+              <div className="md:hidden relative">
+                {showLeftIndicator && (
+                  <div className="absolute left-0 top-0 bottom-0 w-12 bg-gradient-to-r from-accent/10 to-transparent z-10 pointer-events-none flex items-center">
+                    <ChevronLeft className="w-4 h-4 text-primary ml-2" />
+                  </div>
+                )}
+
+                {showRightIndicator && (
+                  <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-accent/10 to-transparent z-10 pointer-events-none flex items-center justify-end">
+                    <ChevronRight className="w-4 h-4 text-primary mr-2" />
+                  </div>
+                )}
+
+                <div ref={scheduleScrollRef} className="overflow-x-auto scrollbar-hide -mx-4 px-4 pb-2">
+                  <div className="flex gap-3 min-w-min">
+                    {deliverySchedules?.map((schedule: any, index: number) => (
+                      <div key={index} className="flex-shrink-0 w-56">
+                        <div className="text-base font-semibold text-primary mb-2 text-center">{schedule.date}</div>
+
+                        <div
+                          className={`p-3 rounded-lg border-2 h-[160px] ${
+                            schedule.status === "confirmed"
+                              ? "bg-emerald-50/50 border-emerald-500"
+                              : "bg-yellow-50/50 border-yellow-500"
+                          }`}
+                        >
+                          <div
+                            className={`text-sm font-semibold mb-2 flex items-center ${
+                              schedule.status === "confirmed" ? "text-emerald-700" : "text-yellow-700"
+                            }`}
+                          >
+                            {schedule.status === "confirmed" ? (
+                              <CheckCircle className="w-4 h-4 mr-1.5" />
+                            ) : (
+                              <Clock className="w-4 h-4 mr-1.5" />
+                            )}
+                            {schedule.status === "confirmed" ? "Bestätigt" : "Geplant"}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            {/* Left column: Order deadline */}
+                            <div>
+                              <div className="font-medium text-foreground leading-tight mb-1">Bestellschluss:</div>
+                              <div className="text-foreground leading-tight">{schedule.orderDeadline}</div>
+                            </div>
+
+                            {/* Right column: Pickup time */}
+                            {schedule.pickupStartTime && schedule.pickupEndTime && (
+                              <div>
+                                <div className="font-medium text-foreground leading-tight mb-1">Abholung:</div>
+                                <div className="text-foreground leading-tight">
+                                  {formatTime(schedule.pickupStartTime)}-{formatTime(schedule.pickupEndTime)}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {schedule.notes && (
+                            <div className="mt-2 p-2 bg-white/50 rounded text-xs text-foreground leading-tight">
+                              {schedule.notes}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-center items-center gap-2 mt-3 text-xs text-muted-foreground">
+                  <ChevronLeft className="w-3 h-3" />
+                  <span>Wischen für mehr Termine</span>
+                  <ChevronRight className="w-3 h-3" />
+                </div>
+              </div>
+
+              {/* Desktop: Paginated grid with navigation arrows */}
+              <div className="hidden md:block">
+                <div className="relative">
+                  {schedulePageIndex > 0 && (
+                    <button
+                      onClick={() => setSchedulePageIndex((prev) => Math.max(0, prev - 1))}
+                      className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 bg-primary text-primary-foreground rounded-full p-2 shadow-lg hover:scale-110 transition-transform"
+                      aria-label="Vorherige Termine"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {schedulePageIndex < totalSchedulePages - 1 && (
+                    <button
+                      onClick={() => setSchedulePageIndex((prev) => Math.min(totalSchedulePages - 1, prev + 1))}
+                      className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 bg-primary text-primary-foreground rounded-full p-2 shadow-lg hover:scale-110 transition-transform"
+                      aria-label="Nächste Termine"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  <div className="grid grid-cols-4 gap-3">
+                    {paginatedSchedules.map((schedule: any, index: number) => (
+                      <div key={index}>
+                        <div className="text-base font-semibold text-primary mb-2 text-center">{schedule.date}</div>
+
+                        <div
+                          className={`p-3 rounded-lg border-2 h-[160px] ${
+                            schedule.status === "confirmed"
+                              ? "bg-emerald-50/50 border-emerald-500"
+                              : "bg-yellow-50/50 border-yellow-500"
+                          }`}
+                        >
+                          <div
+                            className={`text-sm font-semibold mb-2 flex items-center ${
+                              schedule.status === "confirmed" ? "text-emerald-700" : "text-yellow-700"
+                            }`}
+                          >
+                            {schedule.status === "confirmed" ? (
+                              <CheckCircle className="w-4 h-4 mr-1.5" />
+                            ) : (
+                              <Clock className="w-4 h-4 mr-1.5" />
+                            )}
+                            {schedule.status === "confirmed" ? "Bestätigt" : "Geplant"}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            {/* Left column: Order deadline */}
+                            <div>
+                              <div className="font-medium text-foreground leading-tight mb-1">Bestellschluss:</div>
+                              <div className="text-foreground leading-tight">{schedule.orderDeadline}</div>
+                            </div>
+
+                            {/* Right column: Pickup time */}
+                            {schedule.pickupStartTime && schedule.pickupEndTime && (
+                              <div>
+                                <div className="font-medium text-foreground leading-tight mb-1">Abholung:</div>
+                                <div className="text-foreground leading-tight">
+                                  {formatTime(schedule.pickupStartTime)}-{formatTime(schedule.pickupEndTime)}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {schedule.notes && (
+                            <div className="mt-2 p-2 bg-white/50 rounded text-xs text-foreground leading-tight">
+                              {schedule.notes}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {totalSchedulePages > 1 && (
+                    <div className="flex justify-center items-center gap-2 mt-4">
+                      {Array.from({ length: totalSchedulePages }).map((_, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setSchedulePageIndex(idx)}
+                          className={`w-2 h-2 rounded-full transition-all ${
+                            idx === schedulePageIndex ? "bg-primary w-6" : "bg-primary/30 hover:bg-primary/50"
+                          }`}
+                          aria-label={`Seite ${idx + 1}`}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -549,7 +667,43 @@ export default function ShopPage() {
         </div>
       </section>
 
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className="md:hidden bg-background border border-primary/20 rounded-lg p-3 mt-4 container mx-auto px-4">
+        <div className="text-xs font-semibold text-center text-muted-foreground mb-2">Preise für:</div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setPricingMode("pickup")}
+            className={`flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+              pricingMode === "pickup"
+                ? "bg-primary text-primary-foreground shadow-md"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            <Truck className="w-4 h-4" />
+            <span>Abholung</span>
+          </button>
+          <button
+            onClick={() => setPricingMode("shipping")}
+            className={`flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
+              pricingMode === "shipping"
+                ? "bg-primary text-primary-foreground shadow-md"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            <span>Versand</span>
+          </button>
+        </div>
+      </div>
+
+      <button
+        onClick={() => setPricingMode(pricingMode === "pickup" ? "shipping" : "pickup")}
+        className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 bg-primary text-primary-foreground rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform active:scale-95"
+        aria-label="Preismodus wechseln"
+      >
+        {pricingMode === "pickup" ? <Truck className="w-6 h-6" /> : <Package className="w-6 h-6" />}
+      </button>
+
+      <div className="hidden md:block fixed bottom-6 right-6 z-50">
         <div className="bg-background border-2 border-primary/20 rounded-xl shadow-2xl p-4">
           <div className="text-center mb-3">
             <h3 className="text-sm font-semibold text-primary mb-1">Preise für:</h3>
@@ -584,27 +738,60 @@ export default function ShopPage() {
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-primary mb-4">Unser Shop</h1>
-          <p className="text-lg text-muted-foreground">
-            Entdecken Sie unsere Auswahl an frischen Südfrüchten, Trockenfrüchten und Produkten.
-          </p>
         </div>
 
-        <div className="mb-8 space-y-4">
+        <div id="shop-filter" className="scroll-mt-20 mb-4 space-y-3">
           {/* Category filter */}
-          <div className="flex flex-wrap gap-2">
-            {categories.map((category) => (
-              <button
-                key={category}
-                onClick={() => setSelectedCategory(category)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                  selectedCategory === category
-                    ? "bg-gold text-gold-foreground hover:bg-gold-hover"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300"
-                }`}
-              >
-                {category === "alle" ? "Alle Produkte" : category}
-              </button>
-            ))}
+          <div className="md:flex md:flex-wrap md:gap-2">
+            {/* Mobile: Horizontal scrollable with indicators */}
+            <div className="md:hidden relative">
+              {showLeftIndicator && (
+                <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none flex items-center">
+                  <ChevronLeft className="w-4 h-4 text-muted-foreground" />
+                </div>
+              )}
+
+              {showRightIndicator && (
+                <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none flex items-center justify-end">
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                </div>
+              )}
+
+              <div ref={scrollContainerRef} className="overflow-x-auto scrollbar-hide -mx-4 px-4">
+                <div className="flex gap-1.5 min-w-min pb-2">
+                  {categories.map((category) => (
+                    <button
+                      key={category}
+                      onClick={() => setSelectedCategory(category)}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                        selectedCategory === category
+                          ? "bg-gold text-gold-foreground hover:bg-gold-hover"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300"
+                      }`}
+                    >
+                      {category === "alle" ? "Alle Produkte" : category}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Desktop: Flex wrap */}
+            <div className="hidden md:flex md:flex-wrap md:gap-2">
+              {categories.map((category) => (
+                <button
+                  key={category}
+                  onClick={() => setSelectedCategory(category)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    selectedCategory === category
+                      ? "bg-gold text-gold-foreground hover:bg-gold-hover"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300"
+                  }`}
+                >
+                  {category === "alle" ? "Alle Produkte" : category}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Sort and availability controls */}
@@ -645,8 +832,8 @@ export default function ShopPage() {
           </div>
         </div>
 
-        <section className="py-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <section className="py-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 md:gap-6">
             {Array.from(productGroups.entries()).map(([baseName, variants]) => {
               const selectedVariant = getSelectedVariant(baseName, variants)
               const hasMultipleVariants = variants.length > 1
@@ -674,74 +861,101 @@ export default function ShopPage() {
       </div>
 
       <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
-        <DialogContent
-          className="w-[90vw] h-[85vh] md:w-[70vw] md:h-[70vh] lg:w-[55vw] lg:h-[60vh] max-w-none overflow-y-auto"
-          style={{
-            width: "90vw",
-            height: "85vh",
-            maxWidth: "none",
-          }}
-        >
+        <DialogContent className="w-[90vw] h-auto md:w-[80vw] md:min-w-[800px] max-w-none p-6">
           {selectedProduct && (
             <>
-              <DialogHeader>
-                <DialogTitle className="text-2xl font-bold text-primary">{selectedProduct.name}</DialogTitle>
-                <DialogDescription>
-                  Detaillierte Produktinformationen und Bestellmöglichkeiten für {selectedProduct.name}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="grid md:grid-cols-2 gap-6 mt-4">
-                {/* Product image */}
-                <div className="aspect-square rounded-lg overflow-hidden bg-secondary">
-                  <img
-                    src={selectedProduct.image_url || selectedProduct.images?.[0] || "/placeholder.svg"}
-                    alt={selectedProduct.name}
-                    className="w-full h-full object-cover"
-                  />
+              <div className="grid md:grid-cols-2 gap-6 md:items-start">
+                {/* Left: Image with fixed size */}
+                <div className="flex items-start">
+                  <div className="w-full aspect-square rounded-lg overflow-hidden bg-secondary">
+                    <img
+                      src={selectedProduct.image_url || selectedProduct.images?.[0] || "/placeholder.svg"}
+                      alt={selectedProduct.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
                 </div>
 
-                {/* Product details */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
+                {/* Right: Content with flex layout - button at bottom */}
+                <div className="flex flex-col h-full min-h-0">
+                  {/* Title at top */}
+                  <div className="mb-4">
+                    <h2 className="text-3xl font-bold text-primary mb-2">{selectedProduct.name}</h2>
                     <Badge variant="secondary">{selectedProduct.category}</Badge>
-                    {selectedProduct.organic && <Badge variant="outline">Bio</Badge>}
+                    {selectedProduct.organic && (
+                      <Badge variant="outline" className="ml-2">
+                        Bio
+                      </Badge>
+                    )}
                   </div>
 
-                  <p className="text-muted-foreground">{selectedProduct.description}</p>
-
-                  {selectedProduct.fullDescription && (
-                    <div
-                      className="text-sm text-muted-foreground prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={{ __html: selectedProduct.fullDescription }}
-                    />
+                  {/* Delivery info for seasonal products */}
+                  {selectedProduct.category === "Südfrüchte" && deliverySchedules && deliverySchedules.length > 0 && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
+                      <div className="flex items-center gap-2 text-base">
+                        <Calendar className="w-4 h-4 text-blue-600" />
+                        <span className="font-medium text-blue-900">
+                          Bestellschluss: {(() => {
+                            const nextConfirmed = deliverySchedules.find((d: any) => d.status === "confirmed")
+                            return nextConfirmed?.orderDeadline || "Siehe Terminübersicht"
+                          })()}
+                        </span>
+                      </div>
+                    </div>
                   )}
 
-                  {/* Product info grid */}
-                  <div className="grid grid-cols-2 gap-4 pt-4 border-t">
-                    <div>
-                      <span className="text-sm text-muted-foreground">Preis:</span>
-                      <p className="text-2xl font-bold text-primary">
-                        €{calculatePrice(selectedProduct.price, selectedProduct.category).toFixed(2).replace(".", ",")}
-                      </p>
-                      <p className="text-xs text-muted-foreground">pro {selectedProduct.unit}</p>
+                  {/* Product description */}
+                  <div className="text-base text-muted-foreground leading-relaxed mb-4">
+                    {selectedProduct.description}
+                    {selectedProduct.fullDescription && (
+                      <div
+                        className="mt-2 prose prose-sm max-w-none"
+                        dangerouslySetInnerHTML={{ __html: selectedProduct.fullDescription }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t mb-4" />
+
+                  <div className="grid grid-cols-2 gap-6 mb-4">
+                    {/* Left: Price info */}
+                    <div className="space-y-1">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Preis:</p>
+                        <p className="text-3xl font-bold text-primary">
+                          €
+                          {calculatePrice(selectedProduct.price, selectedProduct.category).toFixed(2).replace(".", ",")}
+                        </p>
+                      </div>
+                      <p className="text-sm text-muted-foreground">pro {selectedProduct.unit}</p>
+                      {(() => {
+                        const basePrice = calculateBasePrice(
+                          selectedProduct.price,
+                          selectedProduct.weight_kg,
+                          selectedProduct.unit,
+                        )
+                        return basePrice ? <p className="text-sm text-muted-foreground">{basePrice}</p> : null
+                      })()}
                     </div>
-                    <div>
-                      <span className="text-sm text-muted-foreground">Herkunft:</span>
-                      <p className="font-medium">{selectedProduct.origin}</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-muted-foreground">Gewicht:</span>
-                      <p className="font-medium">{selectedProduct.weight_kg} kg</p>
-                    </div>
-                    <div>
-                      <span className="text-sm text-muted-foreground">Einheit:</span>
-                      <p className="font-medium">{selectedProduct.unit}</p>
+
+                    {/* Right: Metadata */}
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Herkunft:</p>
+                        <p className="text-base font-medium">{selectedProduct.origin}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Gewicht:</p>
+                        <p className="text-base font-medium">{selectedProduct.weight_kg} kg</p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Add to cart */}
-                  <div className="pt-4">
+                  <div className="flex-1 min-h-4" />
+
+                  {/* Add to cart button - at bottom */}
+                  <div className="mt-auto">
                     <AddToCartButton product={selectedProduct} />
                   </div>
                 </div>
@@ -781,8 +995,7 @@ function ProductCard({
     addToCart(product, 1)
   }
 
-  const canAddToCart =
-    product.in_stock && availability.status !== "out-of-stock" && availability.status !== "deadline-passed"
+  const canAddToCart = product.in_stock && availability.status !== "out-of-stock"
 
   const imageUrl = product.image_url || product.images?.[0] || "/images/banana-chips-placeholder.jpg"
 
@@ -795,18 +1008,16 @@ function ProductCard({
     })
   }
 
-  const basePrice = calculateBasePrice(product.price, product.weight_kg, product.unit)
-
   const availableFrom = product.attributes?.available_from
     ? String(product.attributes.available_from).replace(/^["']|["']$/g, "")
     : null
 
   return (
-    <Card className="h-full flex flex-col hover:shadow-lg transition-shadow bg-accent/10 border border-accent/20">
-      <CardHeader className="pb-2">
+    <Card className="h-full flex flex-col hover:shadow-lg transition-shadow bg-accent/10 border border-accent/20 p-1.5 md:p-3">
+      <CardHeader className="pb-0.5 p-1.5 md:p-3">
         {/* Product image */}
         <div
-          className="aspect-square bg-muted rounded-lg mb-3 overflow-hidden cursor-pointer"
+          className="aspect-square bg-muted rounded-lg mb-1 md:mb-2 overflow-hidden cursor-pointer"
           onClick={() => onSelect(product)}
         >
           <img
@@ -824,25 +1035,24 @@ function ProductCard({
           />
         </div>
 
-        {/* Product title */}
-        <CardTitle className="text-lg mb-2 line-clamp-2">{product.name}</CardTitle>
+        <CardTitle className="text-base md:text-xl mb-1 line-clamp-2">{product.name}</CardTitle>
 
-        {/* Seasonal availability display under status badge */}
-        <div className="space-y-1">
-          <div className="flex items-center space-x-1 h-5">
+        {/* Status badge */}
+        <div className="space-y-0.5">
+          <div className="flex items-center space-x-1 h-4 md:h-5">
             <div className={`w-2 h-2 rounded-full ${availability.color}`}></div>
-            <span className="text-xs text-muted-foreground">{availability.label}</span>
+            <span className="text-xs md:text-sm text-muted-foreground line-clamp-1">{availability.label}</span>
           </div>
-          {availableFrom && <div className="text-xs text-blue-600">Verfügbar ab {availableFrom}</div>}
+          {availableFrom && <div className="text-xs md:text-sm text-blue-600">Verfügbar ab {availableFrom}</div>}
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 space-y-2 flex flex-col">
+      <CardContent className="flex-1 space-y-1 flex flex-col p-1.5 pt-0 md:p-3 md:pt-0 md:pb-0">
         {/* Size variants */}
-        <div className="min-h-[2.5rem]">
+        <div className="min-h-[2rem] md:min-h-[2.5rem]">
           {variants && variants.length > 1 && onVariantChange && (
             <>
-              <div className="text-xs font-medium text-muted-foreground mb-1">Größe:</div>
+              <div className="text-xs md:text-sm font-medium text-muted-foreground mb-1">Größe:</div>
               <div className="flex flex-wrap gap-1">
                 {variants.map((variant, index) => {
                   const size = extractSize(variant.name) || variant.unit
@@ -855,7 +1065,7 @@ function ProductCard({
                       onClick={() => onVariantChange(index)}
                       disabled={!isAvailable}
                       className={`
-                        px-2 py-1 rounded text-xs font-medium transition-all
+                        px-1.5 py-0.5 md:px-2 md:py-1 rounded text-xs md:text-sm font-medium transition-all
                         ${
                           isSelected
                             ? "bg-primary text-primary-foreground"
@@ -874,58 +1084,36 @@ function ProductCard({
           )}
         </div>
 
-        {/* Description */}
-        <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
+        <p className="text-base text-muted-foreground line-clamp-1">{product.description}</p>
 
         <Button
           variant="link"
           size="sm"
           onClick={() => onSelect(product)}
-          className="p-0 h-auto text-xs text-primary hover:text-primary/80 justify-start"
+          className="p-0 h-auto text-xs md:text-sm text-primary hover:text-primary/80 justify-start"
         >
           Mehr lesen →
         </Button>
-
-        {/* Flex-1 spacer to push footer to bottom */}
-        <div className="flex-1" />
       </CardContent>
 
-      <CardFooter className="pt-2 flex items-center justify-between gap-2">
+      <CardFooter className="pt-0.5 p-1.5 md:p-3 md:pt-1 flex items-center justify-between gap-2">
         {/* Price */}
         <div>
-          <div className="text-xl font-bold text-primary">
+          <div className="text-lg md:text-2xl font-bold text-primary">
             €{calculatePrice(product.price, product.category).toFixed(2).replace(".", ",")}
           </div>
-          <div className="text-xs text-muted-foreground">
-            {(() => {
-              const unitText = `pro ${product.unit}`
-              const parenIndex = unitText.indexOf("(")
-              if (parenIndex === -1) {
-                return unitText
-              }
-              const beforeParen = unitText.substring(0, parenIndex).trim()
-              const afterParen = unitText.substring(parenIndex).trim()
-              return (
-                <>
-                  <div>{beforeParen}</div>
-                  <div>{afterParen}</div>
-                </>
-              )
-            })()}
-          </div>
-          {basePrice && <div className="text-xs text-muted-foreground">{basePrice}</div>}
+          <div className="text-xs md:text-sm text-muted-foreground">pro {product.unit}</div>
         </div>
 
-        {/* Button */}
         <Button
           onClick={handleQuickAddToCart}
           size="sm"
           disabled={!canAddToCart}
           variant={canAddToCart ? "default" : "secondary"}
-          className="shrink-0"
+          className="shrink-0 h-7 md:h-8 px-2 md:px-3"
         >
-          <Plus className="w-4 h-4 mr-1" />
-          {canAddToCart ? "Warenkorb" : "Nicht verfügbar"}
+          <Plus className="w-4 h-4 md:mr-1" />
+          <span className="hidden md:inline">{canAddToCart ? "Warenkorb" : "Nicht verfügbar"}</span>
         </Button>
       </CardFooter>
     </Card>

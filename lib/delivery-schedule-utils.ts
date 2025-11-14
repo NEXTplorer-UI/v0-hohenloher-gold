@@ -16,8 +16,9 @@ export interface DeliverySchedule {
 
 /**
  * Fetches the next available delivery schedule
+ * @param skipPastDeadlines If true, returns only schedules where the order deadline hasn't passed
  */
-export async function getNextDeliverySchedule(): Promise<DeliverySchedule | null> {
+export async function getNextDeliverySchedule(skipPastDeadlines = false): Promise<DeliverySchedule | null> {
   try {
     const response = await fetch("/api/delivery-schedules")
     if (!response.ok) {
@@ -54,6 +55,17 @@ export async function getNextDeliverySchedule(): Promise<DeliverySchedule | null
         const deliveryDate = new Date(schedule.delivery_date)
         const isFuture = deliveryDate >= today
 
+        let deadlineValid = true
+        if (skipPastDeadlines) {
+          const orderDeadline = new Date(schedule.order_deadline)
+          deadlineValid = orderDeadline >= today
+          if (!deadlineValid) {
+            console.log(
+              `[v0] Schedule ${schedule.id} filtered out: order deadline ${schedule.order_deadline} has passed`,
+            )
+          }
+        }
+
         if (!isActive) {
           console.log(
             `[v0] Schedule ${schedule.id} filtered out: status is "${schedule.status}" (expected "confirmed" or "planned")`,
@@ -65,7 +77,7 @@ export async function getNextDeliverySchedule(): Promise<DeliverySchedule | null
           )
         }
 
-        return isActive && isFuture
+        return isActive && isFuture && deadlineValid
       })
       .sort((a: any, b: any) => {
         const dateA = new Date(a.delivery_date)
@@ -138,6 +150,8 @@ export async function determineOrderDeliveryDate(cartItems: any[]): Promise<{
   deliveryDate: string | null
   scheduleId: string | null
   message: string
+  pickupStartTime?: string | null
+  pickupEndTime?: string | null
 }> {
   const hasSouthernFruits = cartItems.some(
     (item) => item.category === "Südfrüchte" || item.category === "Frische Südfrüchte",
@@ -147,11 +161,16 @@ export async function determineOrderDeliveryDate(cartItems: any[]): Promise<{
     return {
       deliveryDate: null,
       scheduleId: null,
-      message: "Sofort verfügbar",
+      message: "Lagerware - sofort lieferbar",
     }
   }
 
-  const nextSchedule = await getNextDeliverySchedule()
+  let nextSchedule = await getNextDeliverySchedule(true)
+
+  if (!nextSchedule) {
+    console.log("[v0] No schedule with valid order deadline, getting next available schedule")
+    nextSchedule = await getNextDeliverySchedule(false)
+  }
 
   if (!nextSchedule) {
     return {
@@ -163,20 +182,18 @@ export async function determineOrderDeliveryDate(cartItems: any[]): Promise<{
 
   const orderDeadline = new Date(nextSchedule.order_deadline)
   const today = new Date()
+  today.setHours(0, 0, 0, 0)
 
-  if (orderDeadline < today) {
-    // Deadline passed, order will be assigned to next available schedule
-    return {
-      deliveryDate: nextSchedule.delivery_date,
-      scheduleId: nextSchedule.id,
-      message: `Bestellschluss vorbei - Lieferung am nächsten Termin: ${nextSchedule.formattedDeliveryDate || nextSchedule.delivery_date}`,
-    }
-  }
+  const isPastDeadline = orderDeadline < today
 
   return {
     deliveryDate: nextSchedule.delivery_date,
     scheduleId: nextSchedule.id,
-    message: `Lieferung am ${nextSchedule.formattedDeliveryDate || nextSchedule.delivery_date}`,
+    pickupStartTime: nextSchedule.pickup_start_time,
+    pickupEndTime: nextSchedule.pickup_end_time,
+    message: isPastDeadline
+      ? `Bestellschluss vorbei - Lieferung am ${nextSchedule.formattedDeliveryDate || nextSchedule.delivery_date}`
+      : `Lieferung am ${nextSchedule.formattedDeliveryDate || nextSchedule.delivery_date}`,
   }
 }
 
@@ -188,7 +205,7 @@ export async function canOrderFreshFruits(): Promise<{
   message: string
   nextDeliveryDate?: string
 }> {
-  const nextSchedule = await getNextDeliverySchedule()
+  const nextSchedule = await getNextDeliverySchedule(false)
 
   if (!nextSchedule) {
     return {
@@ -204,7 +221,7 @@ export async function canOrderFreshFruits(): Promise<{
   if (orderDeadline < today) {
     return {
       canOrder: true,
-      message: `Bestellschluss vorbei - Ihre Bestellung wird dem nächsten Termin zugeordnet`,
+      message: `Bestellschluss vorbei - Ihre Bestellung wird dem nächsten Termin (${nextSchedule.formattedDeliveryDate || nextSchedule.delivery_date}) zugeordnet`,
       nextDeliveryDate: nextSchedule.delivery_date,
     }
   }
