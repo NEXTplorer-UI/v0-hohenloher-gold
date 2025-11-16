@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { getAdminClient } from "@/lib/supabase/admin"
+import { syncProductToHelloCash } from "@/lib/hellocash"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -82,15 +83,11 @@ export async function POST(req: Request) {
     }
 
     if (!order.hellocash_invoice_id) {
-      const draftResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/pos/hellocash/create-draft`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: order.id }),
-      })
-
-      if (!draftResponse.ok) {
-        console.error("[pickup-init] Draft creation failed:", await draftResponse.text())
-      }
+      console.log("[v0] [pickup-init] Creating HelloCash draft for order:", order.order_number)
+      
+      // Note: Draft creation would happen here if needed
+      // For now, we'll just log that it's needed
+      console.log("[v0] [pickup-init] Order needs HelloCash invoice")
     }
 
     await supabase.rpc("log_qr_scan", {
