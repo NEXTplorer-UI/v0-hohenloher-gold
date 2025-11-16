@@ -85,14 +85,20 @@ function InventoryManagementContent() {
   })
 
   const {
-    data: rawStockData,
+    data: rawStockResponse,
     loading: rawStockLoading,
     refresh: refreshRawStock,
   } = useAdminCache<any>("/api/admin/inventory/raw-stock", {
     revalidateOnFocus: false,
   })
 
-  const { activeTab, loadTab, isTabLoaded } = useLazyTabs(["products", "raw"], "products")
+  const rawStockData = rawStockResponse?.rawStocks || rawStockResponse || []
+
+  const { activeTab, switchTab: loadTab, isTabLoaded } = useLazyTabs({
+    defaultTab: "products",
+    preloadTabs: ["products"]
+  })
+  // </CHANGE>
 
   const handleStockOperation = useCallback(
     async (itemId: number, type: "in" | "out", amount: number, reason: string) => {
@@ -249,6 +255,50 @@ function InventoryManagementContent() {
     }
     return state.sortOrder === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />
   }
+
+  const exportInventoryHistory = useCallback(
+    async (options: InventoryHistoryExportOptions) => {
+      setIsExportingHistory(true)
+      try {
+        const response = await fetch("/api/admin/inventory/export-history", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(options),
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to export inventory history")
+        }
+
+        const blob = await response.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `lagerhistorie-${new Date().toISOString().split("T")[0]}.csv`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+
+        toast({
+          title: "Export erfolgreich",
+          description: "Die Lagerhistorie wurde erfolgreich exportiert.",
+        })
+      } catch (error: any) {
+        console.error("[v0] Error exporting inventory history:", error)
+        toast({
+          title: "Fehler",
+          description: `Fehler beim Exportieren der Lagerhistorie: ${error.message}`,
+          variant: "destructive",
+        })
+      } finally {
+        setIsExportingHistory(false)
+      }
+    },
+    [toast],
+  )
 
   return (
     <div className="space-y-6">
@@ -565,13 +615,8 @@ function InventoryManagementContent() {
           {isTabLoaded("raw") && (
             <RawStockManagement 
               cachedData={rawStockData}
-              onDataChange={(data) => {
-                // Update cache when data changes
-                refreshRawStock()
-              }}
             />
           )}
-          {/* </CHANGE> */}
         </TabsContent>
       </Tabs>
 

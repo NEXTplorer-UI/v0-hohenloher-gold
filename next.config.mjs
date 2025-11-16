@@ -39,7 +39,7 @@ const nextConfig = {
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://browser.sentry-cdn.com https://*.sentry.io https://*.pusher.com https://vercel.live https://cdn.cr-relay.com https://vercel.com https://fides-cdn.ethyca.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "img-src 'self' data: blob: https://*.sentry.io https://*.supabase.co",
+      "img-src 'self' data: blob: https://*.sentry.io https://*.supabase.co https://*.blob.vercel-storage.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       `connect-src 'self' https://*.sentry.io wss://*.pusher.com https://*.pusher.com ${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""} https://vercel.live`,
       "frame-src 'self'",

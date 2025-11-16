@@ -50,7 +50,7 @@ const STOCK_OUT_REASONS = [
   "Sonstige Ausgänge",
 ]
 
-export function RawStockManagement({ cachedData, onDataChange }: RawStockManagementProps = {}) {
+export function RawStockManagement({ cachedData, onDataChange }: RawStockManagementProps) {
   const [rawStocks, setRawStocks] = useState<RawStock[]>(cachedData || [])
   const [loading, setLoading] = useState(!cachedData)
   const [pendingItems, setPendingItems] = useState<Set<number>>(new Set())
@@ -65,9 +65,10 @@ export function RawStockManagement({ cachedData, onDataChange }: RawStockManagem
   })
 
   const fetchRawStocks = useCallback(async () => {
-    if (cachedData && cachedData.length > 0) {
+    if (cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
       console.log("[v0] Using cached raw stock data, skipping fetch")
       setRawStocks(cachedData)
+      setLoading(false)
       return
     }
 
@@ -76,7 +77,7 @@ export function RawStockManagement({ cachedData, onDataChange }: RawStockManagem
       const response = await fetch("/api/admin/inventory/raw-stock")
       if (!response.ok) throw new Error("Failed to fetch raw stocks")
       const data = await response.json()
-      const stocks = data.rawStocks || []
+      const stocks = Array.isArray(data) ? data : (data.rawStocks || [])
       setRawStocks(stocks)
       if (onDataChange) {
         onDataChange(stocks)
@@ -88,20 +89,24 @@ export function RawStockManagement({ cachedData, onDataChange }: RawStockManagem
         description: "Rohwaren konnten nicht geladen werden",
         variant: "destructive",
       })
+      setRawStocks([])
     } finally {
       setLoading(false)
     }
   }, [toast, cachedData, onDataChange])
 
   useEffect(() => {
-    if (cachedData) {
+    if (cachedData && Array.isArray(cachedData)) {
       setRawStocks(cachedData)
+      setLoading(false)
     }
   }, [cachedData])
 
   useEffect(() => {
-    fetchRawStocks()
-  }, [fetchRawStocks])
+    if (!cachedData || !Array.isArray(cachedData) || cachedData.length === 0) {
+      fetchRawStocks()
+    }
+  }, [fetchRawStocks, cachedData])
 
   const startStockOperation = useCallback((rawStockId: number, type: "in" | "out", unitType: "weight" | "volume") => {
     setStockOperation({
@@ -201,9 +206,6 @@ export function RawStockManagement({ cachedData, onDataChange }: RawStockManagem
           const refreshData = await refreshResponse.json()
           const updatedStocks = refreshData.rawStocks || []
           setRawStocks(updatedStocks)
-          if (onDataChange) {
-            onDataChange(updatedStocks)
-          }
         }
       } catch (error: any) {
         console.error("[v0] Error creating raw stock movement:", error)
@@ -220,7 +222,7 @@ export function RawStockManagement({ cachedData, onDataChange }: RawStockManagem
         })
       }
     },
-    [toast, onDataChange],
+    [toast],
   )
 
   const formatStock = (grams: number, unitType: "weight" | "volume") => {
@@ -232,7 +234,7 @@ export function RawStockManagement({ cachedData, onDataChange }: RawStockManagem
     }
   }
 
-  const lowStockItems = rawStocks.filter((item) => item.stock_grams <= item.min_stock_grams)
+  const lowStockItems = Array.isArray(rawStocks) ? rawStocks.filter((item) => item.stock_grams <= item.min_stock_grams) : []
 
   if (loading) {
     return (
@@ -251,7 +253,7 @@ export function RawStockManagement({ cachedData, onDataChange }: RawStockManagem
         <CardHeader>
           <CardTitle>Rohwaren-Bestand (Gramm-basiert)</CardTitle>
           <CardDescription>
-            {rawStocks.length} Rohwaren-Gruppen
+            {Array.isArray(rawStocks) ? rawStocks.length : 0} Rohwaren-Gruppen
             {lowStockItems.length > 0 && (
               <span className="ml-2 text-red-600 font-medium">
                 ({lowStockItems.length} mit niedrigem Bestand)
@@ -261,7 +263,7 @@ export function RawStockManagement({ cachedData, onDataChange }: RawStockManagem
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {rawStocks.map((item) => {
+            {Array.isArray(rawStocks) && rawStocks.map((item) => {
               const isPending = pendingItems.has(item.id)
               const isLowStock = item.stock_grams <= item.min_stock_grams
 

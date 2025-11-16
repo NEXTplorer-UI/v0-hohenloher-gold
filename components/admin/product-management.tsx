@@ -34,6 +34,9 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Plus, Edit, Trash2, Search, RefreshCw, Package, Cloud, CloudOff } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Checkbox } from "@/components/ui/checkbox"
+
 
 interface Product {
   id: number
@@ -73,6 +76,13 @@ interface RawStockGroup {
   product_group: string
   stock_grams: number
   unit_type: "weight" | "volume"
+}
+
+interface ProductAssignment {
+  product_id: number
+  product_name: string
+  current_raw_id: number | null
+  selected_raw_id: number | null
 }
 
 export default function ProductManagement() {
@@ -115,6 +125,13 @@ export default function ProductManagement() {
     hellocash_category_id: number | null
   }>>([])
 
+  const [activeTab, setActiveTab] = useState("products")
+  const [selectedRawGroup, setSelectedRawGroup] = useState<number | null>(null)
+  const [productAssignments, setProductAssignments] = useState<ProductAssignment[]>([])
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [editingGroupName, setEditingGroupName] = useState<string>("")
+  const [editingGroupType, setEditingGroupType] = useState<"weight" | "volume">("weight")
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false)
 
   const [formData, setFormData] = useState({
     name: "",
@@ -134,6 +151,158 @@ export default function ProductManagement() {
     hellocash_category_id: null as number | null, // Added hellocash_category_id field
     hellocash_stock_managed: false, // Added hellocash_stock_managed field
   })
+
+  const loadProductAssignments = () => {
+    const assignments: ProductAssignment[] = products.map(p => ({
+      product_id: p.id,
+      product_name: p.name,
+      current_raw_id: p.inventory_raw_id || null,
+      selected_raw_id: selectedRawGroup && p.inventory_raw_id === selectedRawGroup ? selectedRawGroup : null
+    }))
+    setProductAssignments(assignments)
+    setHasUnsavedChanges(false)
+  }
+
+  const handleProductToggle = (productId: number, checked: boolean) => {
+    setProductAssignments(prev => prev.map(p => 
+      p.product_id === productId 
+        ? { ...p, selected_raw_id: checked ? selectedRawGroup : null }
+        : p
+    ))
+    setHasUnsavedChanges(true)
+  }
+
+  const saveProductAssignments = async () => {
+    if (!selectedRawGroup) {
+      toast({
+        title: "Fehler",
+        description: "Keine Rohware-Gruppe ausgewählt",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      setLoading(true)
+      const updates = productAssignments
+        .filter(p => p.selected_raw_id !== p.current_raw_id)
+        .map(p => ({
+          product_id: p.product_id,
+          inventory_raw_id: p.selected_raw_id
+        }))
+
+      if (updates.length === 0) {
+        toast({
+          title: "Info",
+          description: "Keine Änderungen zu speichern"
+        })
+        return
+      }
+
+      const response = await fetch("/api/admin/inventory/assign-products", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          assignments: updates
+        })
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Erfolg",
+          description: `${updates.length} Produkt(e) wurden zugeordnet`
+        })
+        await fetchProducts()
+        loadProductAssignments()
+      } else {
+        const error = await response.json()
+        toast({
+          title: "Fehler",
+          description: error.error || "Fehler beim Speichern",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error("Error saving assignments:", error)
+      toast({
+        title: "Fehler",
+        description: "Verbindungsfehler beim Speichern",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateNewGroup = async () => {
+    if (!editingGroupName.trim()) {
+      toast({
+        title: "Fehler",
+        description: "Bitte geben Sie einen Namen ein",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      const response = await fetch("/api/admin/inventory/raw-stock", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          product_group: editingGroupName.trim(),
+          unit_type: editingGroupType,
+          stock_grams: 0,
+          min_stock_grams: editingGroupType === "weight" ? 2000 : 5000
+        })
+      })
+
+      if (response.ok) {
+        const newGroup = await response.json()
+        toast({
+          title: "Erfolg",
+          description: "Rohware-Gruppe wurde erstellt"
+        })
+        await fetchRawStockGroups()
+        setIsCreatingGroup(false)
+        setEditingGroupName("")
+        setSelectedRawGroup(newGroup.id)
+      } else {
+        const error = await response.json()
+        toast({
+          title: "Fehler",
+          description: error.error || "Fehler beim Erstellen",
+          variant: "destructive"
+        })
+      }
+    } catch (error) {
+      console.error("Error creating group:", error)
+      toast({
+        title: "Fehler",
+        description: "Verbindungsfehler",
+        variant: "destructive"
+      })
+    }
+  }
+
+  useEffect(() => {
+    if (selectedRawGroup && products.length > 0) {
+      loadProductAssignments()
+    }
+  }, [selectedRawGroup, products])
+
+  useEffect(() => {
+    if (activeTab === "raw-stock") {
+      fetchRawStockGroups()
+      // Auto-select the first group if none is selected and groups are available
+      if (rawStockGroups.length > 0 && !selectedRawGroup) {
+        setSelectedRawGroup(rawStockGroups[0].id)
+      }
+    }
+  }, [activeTab, rawStockGroups]) // Depend on rawStockGroups to re-evaluate selection
 
   const fetchProducts = async () => {
     if (cachedProducts && products.length > 0) {
@@ -199,7 +368,7 @@ export default function ProductManagement() {
       if (response.ok) {
         const data = await response.json()
         console.log("[v0] Raw stock groups loaded:", data)
-        setRawStockGroups(data)
+        setRawStockGroups(data.rawStocks || data || [])
       } else {
         const errorText = await response.text()
         console.error("[v0] Failed to fetch raw stock groups:", response.status, errorText)
@@ -329,9 +498,9 @@ export default function ProductManagement() {
       available_from: "",
       inventory_raw_id: null,
       is_raw_stock_managed: true,
-      hellocash_article_id: null, // Added HelloCash article ID
-      hellocash_category_id: null, // Reset HelloCash category ID
-      hellocash_stock_managed: false, // Reset hellocash_stock_managed
+      hellocash_article_id: null,
+      hellocash_category_id: null,
+      hellocash_stock_managed: false,
     })
     setEditingProduct(null)
     setIsCreatingNewCategory(false)
@@ -971,7 +1140,7 @@ export default function ProductManagement() {
                   </div>
                 </div>
 
-                <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                <div className="space-4 p-4 border rounded-lg bg-muted/50">
                   <div className="flex items-center justify-between">
                     <div>
                       <Label className="text-base font-medium">Gramm-basierte Lagerverwaltung</Label>
@@ -1292,160 +1461,372 @@ export default function ProductManagement() {
         <CardHeader>
           <CardTitle className="flex items-center">
             <Package className="h-5 w-5 mr-2" />
-            Produktübersicht
+            Produktverwaltung
           </CardTitle>
           <CardDescription>
-            {products.length} Produkte insgesamt, {products.filter((p) => p.is_active).length} aktiv
+            Verwalten Sie Ihr Produktsortiment und Rohware-Gruppen
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Produkte durchsuchen..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-full sm:w-48">
-                <SelectValue placeholder="Kategorie wählen" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alle Kategorien</SelectItem>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.name}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="products">Produkte</TabsTrigger>
+              <TabsTrigger value="raw-stock">Rohware-Gruppen</TabsTrigger>
+            </TabsList>
 
-          <div className="rounded-md border max-h-[600px] overflow-y-auto">
-            <Table>
-              <TableHeader className="sticky top-0 bg-background z-10">
-                <TableRow>
-                  <TableHead>Produkt</TableHead>
-                  <TableHead>Kategorie</TableHead>
-                  <TableHead>Preis</TableHead>
-                  <TableHead>Einheit</TableHead>
-                  <TableHead>Herkunft</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Aktionen</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
-                      Lade Produkte...
-                    </TableCell>
-                  </TableRow>
-                ) : filteredProducts.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      Keine Produkte gefunden
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredProducts.map((product) => (
-                    <TableRow key={product.id}>
-                      <TableCell>
-                        <div className="flex items-center space-x-3">
-                          {product.image_url && (
-                            <img
-                              src={product.image_url || "/placeholder.svg"}
-                              alt={product.name}
-                              className="h-10 w-10 rounded object-cover"
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none"
-                              }}
-                            />
-                          )}
-                          <div>
-                            <div className="font-medium">{product.name}</div>
-                            {product.weight_kg && (
-                              <div className="text-sm text-muted-foreground">{product.weight_kg} kg</div>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{product.category}</Badge>
-                      </TableCell>
-                      <TableCell className="font-medium">{formatCurrency(product.price)}</TableCell>
-                      <TableCell>{product.unit}</TableCell>
-                      <TableCell>{product.origin || "-"}</TableCell>
-                      <TableCell>
-                        <Badge variant={product.is_active ? "default" : "secondary"}>
-                          {product.is_active ? "Aktiv" : "Inaktiv"}
-                        </Badge>
-                        {product.attributes?.available_from && (
-                          <div className="text-sm text-muted-foreground">
-                            Verfügbar ab {product.attributes.available_from}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleHelloCashSync(product)}
-                            title={
-                              product.hellocash_article_id
-                                ? "Mit HelloCash synchronisieren"
-                                : "In HelloCash erstellen"
-                            }
-                          >
-                            {product.hellocash_article_id ? (
-                              <Cloud className="h-4 w-4 text-green-600" />
-                            ) : (
-                              <CloudOff className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleEdit(product)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="outline" size="sm">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Produkt löschen</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Sind Sie sicher, dass Sie "{product.name}" löschen möchten? Diese Aktion kann nicht
-                                  rückgängig gemacht werden.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(product.id)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                >
-                                  Löschen
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      </TableCell>
+            <TabsContent value="products" className="mt-6">
+              <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Produkte durchsuchen..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger className="w-full sm:w-48">
+                    <SelectValue placeholder="Kategorie wählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Alle Kategorien</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.name}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="rounded-md border max-h-[600px] overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background z-10">
+                    <TableRow>
+                      <TableHead>Produkt</TableHead>
+                      <TableHead>Kategorie</TableHead>
+                      <TableHead>Preis</TableHead>
+                      <TableHead>Einheit</TableHead>
+                      <TableHead>Herkunft</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Aktionen</TableHead>
                     </TableRow>
-                  ))
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8">
+                          <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
+                          Lade Produkte...
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredProducts.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          Keine Produkte gefunden
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredProducts.map((product) => (
+                        <TableRow key={product.id}>
+                          <TableCell>
+                            <div className="flex items-center space-x-3">
+                              {product.image_url && (
+                                <img
+                                  src={product.image_url || "/placeholder.svg"}
+                                  alt={product.name}
+                                  className="h-10 w-10 rounded object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none"
+                                  }}
+                                />
+                              )}
+                              <div>
+                                <div className="font-medium">{product.name}</div>
+                                {product.weight_kg && (
+                                  <div className="text-sm text-muted-foreground">{product.weight_kg} kg</div>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{product.category}</Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">{formatCurrency(product.price)}</TableCell>
+                          <TableCell>{product.unit}</TableCell>
+                          <TableCell>{product.origin || "-"}</TableCell>
+                          <TableCell>
+                            <Badge variant={product.is_active ? "default" : "secondary"}>
+                              {product.is_active ? "Aktiv" : "Inaktiv"}
+                            </Badge>
+                            {product.attributes?.available_from && (
+                              <div className="text-sm text-muted-foreground">
+                                Verfügbar ab {product.attributes.available_from}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleHelloCashSync(product)}
+                                title={
+                                  product.hellocash_article_id
+                                    ? "Mit HelloCash synchronisieren"
+                                    : "In HelloCash erstellen"
+                                }
+                              >
+                                {product.hellocash_article_id ? (
+                                  <Cloud className="h-4 w-4 text-green-600" />
+                                ) : (
+                                  <CloudOff className="h-4 w-4 text-muted-foreground" />
+                                )}
+                              </Button>
+                              <Button variant="outline" size="sm" onClick={() => handleEdit(product)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="outline" size="sm">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Produkt löschen</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Sind Sie sicher, dass Sie "{product.name}" löschen möchten? Diese Aktion kann nicht
+                                      rückgängig gemacht werden.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDelete(product.id)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Löschen
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="raw-stock" className="mt-6">
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">Rohware-Gruppen verwalten</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Ordnen Sie Produkte Rohware-Gruppen zu für die gramm-basierte Lagerverwaltung
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setIsCreatingGroup(true)
+                      setEditingGroupName("")
+                      setEditingGroupType("weight")
+                    }}
+                    disabled={isCreatingGroup}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Neue Gruppe
+                  </Button>
+                </div>
+
+                {isCreatingGroup && (
+                  <Card className="border-primary">
+                    <CardHeader>
+                      <CardTitle className="text-base">Neue Rohware-Gruppe erstellen</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="group-name">Gruppenname *</Label>
+                        <Input
+                          id="group-name"
+                          value={editingGroupName}
+                          onChange={(e) => setEditingGroupName(e.target.value)}
+                          placeholder="z.B. Orangen, Mandeln geröstet, Olivenöl"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="group-type">Typ</Label>
+                        <Select
+                          value={editingGroupType}
+                          onValueChange={(value) => setEditingGroupType(value as "weight" | "volume")}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="weight">Gewicht (kg/g)</SelectItem>
+                            <SelectItem value="volume">Volumen (L/ml)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button onClick={handleCreateNewGroup} disabled={loading}>
+                          Erstellen
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setIsCreatingGroup(false)
+                            setEditingGroupName("")
+                          }}
+                        >
+                          Abbrechen
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
                 )}
-              </TableBody>
-            </Table>
-          </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Rohware-Gruppe auswählen</Label>
+                      <Select
+                        value={selectedRawGroup?.toString() || ""}
+                        onValueChange={(value) => {
+                          setSelectedRawGroup(Number.parseInt(value))
+                          setHasUnsavedChanges(false) // Reset unsaved changes when group changes
+                        }}
+                      >
+                        <SelectTrigger className="mt-2">
+                          <SelectValue placeholder="Gruppe wählen" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {rawStockGroups.map((group) => (
+                            <SelectItem key={group.id} value={group.id.toString()}>
+                              {group.product_group} ({group.stock_grams / 1000}kg)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {selectedRawGroup && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Gruppeninformationen</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 text-sm">
+                          {(() => {
+                            const group = rawStockGroups.find(g => g.id === selectedRawGroup)
+                            if (!group) return null
+                            return (
+                              <>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Name:</span>
+                                  <span className="font-medium">{group.product_group}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Typ:</span>
+                                  <span>{group.unit_type === "weight" ? "Gewicht" : "Volumen"}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Aktueller Bestand:</span>
+                                  <span className="font-bold">{(group.stock_grams / 1000).toFixed(2)} kg</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Zugeordnete Produkte:</span>
+                                  <span>{productAssignments.filter(p => p.current_raw_id === selectedRawGroup).length}</span>
+                                </div>
+                              </>
+                            )
+                          })()}
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    {selectedRawGroup ? (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <Label>Produkte zuordnen</Label>
+                          {hasUnsavedChanges && (
+                            <Badge variant="outline" className="text-orange-600 border-orange-600">
+                              Ungespeicherte Änderungen
+                            </Badge>
+                          )}
+                        </div>
+                        <Card className="max-h-[500px] overflow-y-auto">
+                          <CardContent className="p-4 space-y-2">
+                            {productAssignments.length === 0 ? (
+                              <p className="text-sm text-muted-foreground text-center py-8">
+                                Keine Produkte verfügbar
+                              </p>
+                            ) : (
+                              productAssignments.map((assignment) => (
+                                <div
+                                  key={assignment.product_id}
+                                  className="flex items-center space-x-3 p-2 rounded hover:bg-muted/50"
+                                >
+                                  <Checkbox
+                                    id={`product-${assignment.product_id}`}
+                                    checked={assignment.selected_raw_id === selectedRawGroup}
+                                    onCheckedChange={(checked) =>
+                                      handleProductToggle(assignment.product_id, checked as boolean)
+                                    }
+                                  />
+                                  <Label
+                                    htmlFor={`product-${assignment.product_id}`}
+                                    className="flex-1 cursor-pointer text-sm"
+                                  >
+                                    {assignment.product_name}
+                                    {assignment.current_raw_id && assignment.current_raw_id !== selectedRawGroup && (
+                                      <span className="ml-2 text-xs text-muted-foreground">
+                                        (aktuell: {rawStockGroups.find(g => g.id === assignment.current_raw_id)?.product_group})
+                                      </span>
+                                    )}
+                                  </Label>
+                                </div>
+                              ))
+                            )}
+                          </CardContent>
+                        </Card>
+                        <Button
+                          onClick={saveProductAssignments}
+                          disabled={!hasUnsavedChanges || loading}
+                          className="w-full"
+                        >
+                          {loading ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                              Speichere...
+                            </>
+                          ) : (
+                            <>Änderungen speichern</>
+                          )}
+                        </Button>
+                      </>
+                    ) : (
+                      <Card>
+                        <CardContent className="p-8 text-center text-muted-foreground">
+                          Wählen Sie eine Rohware-Gruppe aus um Produkte zuzuordnen
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>

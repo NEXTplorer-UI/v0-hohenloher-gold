@@ -48,7 +48,7 @@ export function useAdminCache<T>(
       dedupingInterval: 60000,      // 1 Minute Dedup
       refreshInterval: options?.refreshInterval,
       fallbackData: options?.fallbackData,
-      onError: options?.onError,
+      ...(typeof options?.onError === 'function' && { onError: options.onError }),
       // Persistence über Session
       keepPreviousData: true,
     }
