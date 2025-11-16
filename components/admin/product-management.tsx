@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import type React from "react"
+import { useAdminCache } from "@/hooks/use-admin-cache"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -31,7 +32,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Plus, Edit, Trash2, Search, RefreshCw, Package } from "lucide-react"
+import { Plus, Edit, Trash2, Search, RefreshCw, Package, Cloud, CloudOff } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
 
 interface Product {
@@ -49,6 +50,11 @@ interface Product {
   is_active: boolean
   created_at: string
   updated_at: string
+  inventory_raw_id?: number | null
+  is_raw_stock_managed?: boolean
+  hellocash_article_id?: number | null // Added HelloCash article ID
+  hellocash_category_id?: number | null // Added HelloCash category ID
+  hellocash_stock_managed?: boolean // Added HelloCash stock managed field
   attributes?: {
     available_from?: string
   }
@@ -59,19 +65,56 @@ interface Category {
   name: string
   slug: string
   is_active: boolean
+  hellocash_category_id?: number | null // Added for category mapping
+}
+
+interface RawStockGroup {
+  id: number
+  product_group: string
+  stock_grams: number
+  unit_type: "weight" | "volume"
 }
 
 export default function ProductManagement() {
-  const [products, setProducts] = useState<Product[]>([])
+  const {
+    data: cachedProducts,
+    isLoading: cacheLoading,
+    refresh: refreshCache,
+    updateCache,
+  } = useAdminCache<Product[]>("/api/admin/products", {
+    revalidateOnFocus: false,
+  })
+
+  const [products, setProducts] = useState<Product[]>(cachedProducts || [])
   const [categories, setCategories] = useState<Category[]>([])
-  const [loading, setLoading] = useState(false)
+  const [rawStockGroups, setRawStockGroups] = useState<RawStockGroup[]>([])
+  const [helloCashCategories, setHelloCashCategories] = useState<any[]>([])
+  const [isHelloCashCategoriesDialogOpen, setIsHelloCashCategoriesDialogOpen] = useState(false)
+  const [loading, setLoading] = useState(!cachedProducts)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<string>("all")
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState("")
+  const [isCreatingNewRawStock, setIsCreatingNewRawStock] = useState(false)
+  const [newRawStockName, setNewRawStockName] = useState("")
+  const [newRawStockType, setNewRawStockType] = useState<"weight" | "volume">("weight")
   const { toast } = useToast()
+
+  const [showCategoryMappings, setShowCategoryMappings] = useState(false)
+  const [categoryMappings, setCategoryMappings] = useState<Array<{
+    id: number
+    name: string
+    hellocash_category_id: number | null
+  }>>([])
+
+  const [tempCategoryMappings, setTempCategoryMappings] = useState<Array<{
+    id: number
+    name: string
+    hellocash_category_id: number | null
+  }>>([])
+
 
   const [formData, setFormData] = useState({
     name: "",
@@ -85,22 +128,27 @@ export default function ProductManagement() {
     min_stock: "0",
     is_active: true,
     available_from: "",
+    inventory_raw_id: null as number | null,
+    is_raw_stock_managed: true,
+    hellocash_article_id: null as number | null, // Added HelloCash article ID
+    hellocash_category_id: null as number | null, // Added hellocash_category_id field
+    hellocash_stock_managed: false, // Added hellocash_stock_managed field
   })
 
   const fetchProducts = async () => {
+    if (cachedProducts && products.length > 0) {
+      console.log("[v0] Using cached products data")
+      return
+    }
+    
     setLoading(true)
     try {
-      const response = await fetch("/api/admin/products")
-      if (response.ok) {
-        const data = await response.json()
-        setProducts(data)
-      } else {
-        toast({
-          title: "Fehler",
-          description: "Produkte konnten nicht geladen werden",
-          variant: "destructive",
-        })
-      }
+      await refreshCache()
+      
+      toast({
+        title: "Aktualisiert",
+        description: "Produkte wurden neu geladen",
+      })
     } catch (error) {
       console.error("Error fetching products:", error)
       toast({
@@ -142,6 +190,130 @@ export default function ProductManagement() {
     }
   }
 
+  const fetchRawStockGroups = async () => {
+    try {
+      console.log("[v0] Fetching raw stock groups...")
+      const response = await fetch("/api/admin/inventory/raw-stock")
+      console.log("[v0] Raw stock groups response status:", response.status)
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("[v0] Raw stock groups loaded:", data)
+        setRawStockGroups(data)
+      } else {
+        const errorText = await response.text()
+        console.error("[v0] Failed to fetch raw stock groups:", response.status, errorText)
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching raw stock groups:", error)
+    }
+  }
+
+  const fetchHelloCashCategories = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch("/api/admin/hellocash/categories")
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log("[v0] HelloCash categories:", data)
+        const categoriesArray = data.categories || []
+        setHelloCashCategories(categoriesArray)
+        setIsHelloCashCategoriesDialogOpen(true)
+        
+        toast({
+          title: "HelloCash Kategorien geladen",
+          description: `${categoriesArray.length} Kategorien gefunden`,
+        })
+      } else {
+        const error = await response.json()
+        toast({
+          title: "Fehler",
+          description: error.error || "Fehler beim Laden der HelloCash Kategorien",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching HelloCash categories:", error)
+      toast({
+        title: "Fehler",
+        description: "Verbindungsfehler beim Laden der HelloCash Kategorien",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchCategoryMappings = async () => {
+    try {
+      const [categoriesResponse, helloCashResponse] = await Promise.all([
+        fetch("/api/admin/categories"),
+        fetch("/api/admin/hellocash/categories")
+      ])
+      
+      if (categoriesResponse.ok) {
+        const data = await categoriesResponse.json()
+        const mappings = data.map((cat: any) => ({
+          id: cat.id,
+          name: cat.name,
+          hellocash_category_id: cat.hellocash_category_id || null
+        }))
+        setCategoryMappings(mappings)
+        setTempCategoryMappings(mappings)
+      }
+      
+      if (helloCashResponse.ok) {
+        const helloCashData = await helloCashResponse.json()
+        setHelloCashCategories(helloCashData.categories || [])
+      }
+      
+      setShowCategoryMappings(true)
+    } catch (error) {
+      console.error("Error fetching category mappings:", error)
+      toast({
+        title: "Fehler",
+        description: "Verbindungsfehler beim Laden der Kategorien",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const saveCategoryMappings = async () => {
+    try {
+      const promises = tempCategoryMappings.map(async (mapping) => {
+        const response = await fetch(`/api/admin/categories/${mapping.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ hellocash_category_id: mapping.hellocash_category_id }),
+        })
+        
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(`Failed to update category ${mapping.name}: ${error.error || 'Unknown error'}`)
+        }
+      })
+      
+      await Promise.all(promises)
+      
+      setCategoryMappings(tempCategoryMappings) // Update permanent mappings
+      
+      toast({
+        title: "Erfolg",
+        description: "Alle Kategorie-Mappings wurden gespeichert",
+      })
+    } catch (error) {
+      console.error("Error saving category mappings:", error)
+      toast({
+        title: "Fehler",
+        description: (error as Error).message || "Fehler beim Speichern der Kategorie-Mappings",
+        variant: "destructive",
+      })
+    }
+  }
+
   const resetForm = () => {
     setFormData({
       name: "",
@@ -155,10 +327,18 @@ export default function ProductManagement() {
       min_stock: "0",
       is_active: true,
       available_from: "",
+      inventory_raw_id: null,
+      is_raw_stock_managed: true,
+      hellocash_article_id: null, // Added HelloCash article ID
+      hellocash_category_id: null, // Reset HelloCash category ID
+      hellocash_stock_managed: false, // Reset hellocash_stock_managed
     })
     setEditingProduct(null)
     setIsCreatingNewCategory(false)
     setNewCategoryName("")
+    setIsCreatingNewRawStock(false)
+    setNewRawStockName("")
+    setNewRawStockType("weight")
   }
 
   const handleCreateCategory = async () => {
@@ -190,7 +370,6 @@ export default function ProductManagement() {
           description: "Kategorie wurde erstellt",
         })
 
-        // Refresh categories and select the new one
         await fetchCategories()
         setFormData({ ...formData, category: newCategory.name })
         setIsCreatingNewCategory(false)
@@ -214,6 +393,64 @@ export default function ProductManagement() {
     }
   }
 
+  const handleCreateRawStockGroup = async () => {
+    if (!newRawStockName.trim()) {
+      toast({
+        title: "Fehler",
+        description: "Bitte geben Sie einen Namen für die Rohware-Gruppe ein",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      console.log("[v0] Creating new raw stock group:", newRawStockName.trim(), newRawStockType)
+      const response = await fetch("/api/admin/inventory/raw-stock", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          product_group: newRawStockName.trim(),
+          unit_type: newRawStockType,
+          stock_grams: 0,
+          min_stock_grams: newRawStockType === "weight" ? 2000 : 5000,
+        }),
+      })
+
+      if (response.ok) {
+        const newGroup = await response.json()
+        console.log("[v0] Raw stock group created:", newGroup)
+
+        toast({
+          title: "Erfolg",
+          description: "Rohware-Gruppe wurde erstellt",
+        })
+
+        await fetchRawStockGroups()
+        setFormData({ ...formData, inventory_raw_id: newGroup.id })
+        setIsCreatingNewRawStock(false)
+        setNewRawStockName("")
+        setNewRawStockType("weight")
+      } else {
+        const error = await response.json()
+        console.error("[v0] Error creating raw stock group:", error)
+        toast({
+          title: "Fehler",
+          description: error.error || "Fehler beim Erstellen der Rohware-Gruppe",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Error creating raw stock group:", error)
+      toast({
+        title: "Fehler",
+        description: "Verbindungsfehler beim Erstellen der Rohware-Gruppe",
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -224,6 +461,24 @@ export default function ProductManagement() {
       toast({
         title: "Fehler",
         description: "Name, Kategorie und Preis sind Pflichtfelder",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (formData.is_raw_stock_managed && !formData.inventory_raw_id) {
+      toast({
+        title: "Fehler",
+        description: "Bitte wählen Sie eine Rohware-Gruppe aus oder erstellen Sie eine neue",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!formData.weight_kg || Number.parseFloat(formData.weight_kg) <= 0) {
+      toast({
+        title: "Fehler",
+        description: "Gewicht ist erforderlich und muss größer als 0 sein",
         variant: "destructive",
       })
       return
@@ -255,13 +510,16 @@ export default function ProductManagement() {
       if (formData.available_from && formData.available_from.trim()) {
         attributes.available_from = formData.available_from.trim()
       }
-      // If attributes is empty, send null to clear the field in database
       const attributesValue = Object.keys(attributes).length > 0 ? attributes : null
 
       const payload = {
         ...formData,
         category_id: categoryId,
         attributes: attributesValue,
+        inventory_raw_id: formData.is_raw_stock_managed ? formData.inventory_raw_id : null,
+        is_raw_stock_managed: formData.is_raw_stock_managed,
+        hellocash_category_id: formData.hellocash_category_id, // Ensure this is passed
+        hellocash_stock_managed: formData.hellocash_stock_managed // Ensure this is passed
       }
 
       console.log("[v0] Sending request to:", url)
@@ -280,6 +538,15 @@ export default function ProductManagement() {
       if (response.ok) {
         const result = await response.json()
         console.log("[v0] Success:", result)
+        
+        if (editingProduct) {
+          const updatedProducts = products.map(p => p.id === editingProduct.id ? result : p)
+          updateCache(updatedProducts)
+        } else {
+          const updatedProducts = [...products, result]
+          updateCache(updatedProducts)
+        }
+        
         toast({
           title: "Erfolg",
           description: editingProduct ? "Produkt wurde aktualisiert" : "Produkt wurde erstellt",
@@ -321,6 +588,11 @@ export default function ProductManagement() {
       min_stock: product.min_stock.toString(),
       is_active: product.is_active,
       available_from: (product as any).attributes?.available_from || "",
+      inventory_raw_id: product.inventory_raw_id || null,
+      is_raw_stock_managed: product.is_raw_stock_managed !== false, // Default to true
+      hellocash_article_id: product.hellocash_article_id || null, // Added HelloCash article ID
+      hellocash_category_id: product.hellocash_category_id || null, // Added hellocash_category_id to edit form
+      hellocash_stock_managed: (product as any).hellocash_stock_managed || false, // Load hellocash_stock_managed from product
     })
     setIsDialogOpen(true)
   }
@@ -332,6 +604,9 @@ export default function ProductManagement() {
       })
 
       if (response.ok) {
+        const updatedProducts = products.filter(p => p.id !== productId)
+        updateCache(updatedProducts)
+        
         toast({
           title: "Erfolg",
           description: "Produkt wurde gelöscht",
@@ -348,10 +623,110 @@ export default function ProductManagement() {
     } catch (error) {
       console.error("Error deleting product:", error)
       toast({
+          title: "Fehler",
+          description: "Verbindungsfehler beim Löschen",
+          variant: "destructive",
+        })
+    }
+  }
+
+  const handleHelloCashSync = async (product: Product) => {
+    try {
+      const response = await fetch("/api/admin/products/hellocash-sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          product_id: product.id,
+          hellocash_article_id: product.hellocash_article_id,
+          hellocash_category_id: product.hellocash_category_id, // Include category ID for sync
+          hellocash_stock_managed: product.hellocash_stock_managed, // Include stock managed flag
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        
+        // Update product with HelloCash ID, category ID, and stock managed flag
+        const updatedProducts = products.map(p => 
+          p.id === product.id 
+            ? { 
+                ...p, 
+                hellocash_article_id: result.hellocash_article_id, 
+                hellocash_category_id: result.hellocash_category_id,
+                hellocash_stock_managed: result.hellocash_stock_managed // Update stock managed flag
+              } 
+            : p
+        )
+        updateCache(updatedProducts)
+        
+        toast({
+          title: "Erfolg",
+          description: result.message,
+        })
+        
+        await fetchProducts()
+      } else {
+        const error = await response.json()
+        toast({
+          title: "Fehler",
+          description: error.error || "Fehler bei der HelloCash Synchronisation",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error syncing with HelloCash:", error)
+      toast({
+          title: "Fehler",
+          description: "Verbindungsfehler bei der HelloCash Synchronisation",
+          variant: "destructive",
+        })
+    }
+  }
+
+  const handleBulkHelloCashSync = async () => {
+    setLoading(true)
+    try {
+      toast({
+        title: "Synchronisierung gestartet",
+        description: "Alle Produkte werden mit HelloCash synchronisiert...",
+      })
+
+      const response = await fetch("/api/admin/products/hellocash-sync-all", {
+        method: "POST",
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        
+        toast({
+          title: "Synchronisierung abgeschlossen",
+          description: result.message,
+        })
+        
+        if (result.errors && result.errors.length > 0) {
+          console.error("[v0] Bulk sync errors:", result.errors)
+        }
+        
+        await fetchProducts()
+      } else {
+        const error = await response.json()
+        toast({
+          title: "Fehler",
+          description: error.error || "Fehler bei der Bulk-Synchronisation",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error with bulk HelloCash sync:", error)
+      toast({
         title: "Fehler",
-        description: "Verbindungsfehler beim Löschen",
+        description: "Verbindungsfehler bei der Synchronisation",
         variant: "destructive",
       })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -374,8 +749,15 @@ export default function ProductManagement() {
   useEffect(() => {
     if (isDialogOpen) {
       fetchCategories()
+      fetchRawStockGroups()
     }
   }, [isDialogOpen])
+
+  useEffect(() => {
+    if (cachedProducts) {
+      setProducts(cachedProducts)
+    }
+  }, [cachedProducts])
 
   useEffect(() => {
     fetchProducts()
@@ -390,9 +772,40 @@ export default function ProductManagement() {
           <p className="text-muted-foreground">Verwalten Sie Ihr Produktsortiment</p>
         </div>
         <div className="flex items-center space-x-2">
-          <Button onClick={fetchProducts} disabled={loading} variant="outline" size="sm">
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+          <Button onClick={fetchProducts} disabled={loading || cacheLoading} variant="outline" size="sm">
+            <RefreshCw className={`h-4 w-4 mr-2 ${(loading || cacheLoading) ? "animate-spin" : ""}`} />
             Aktualisieren
+          </Button>
+          {/* CHANGE: Added HelloCash categories button */}
+          <Button 
+            onClick={fetchHelloCashCategories} 
+            disabled={loading || cacheLoading} 
+            variant="outline" 
+            size="sm"
+            title="HelloCash Kategorien anzeigen"
+          >
+            <Package className="h-4 w-4 mr-2" />
+            HC Kategorien
+          </Button>
+          <Button 
+            onClick={handleBulkHelloCashSync} 
+            disabled={loading || cacheLoading} 
+            variant="outline" 
+            size="sm"
+            title="Alle aktiven Produkte mit HelloCash synchronisieren"
+          >
+            <Cloud className="h-4 w-4 mr-2" />
+            Alle synchronisieren
+          </Button>
+          <Button 
+            onClick={fetchCategoryMappings} 
+            disabled={loading || cacheLoading} 
+            variant="outline" 
+            size="sm"
+            title="Kategorie zu HelloCash Mapping verwalten"
+          >
+            <Package className="h-4 w-4 mr-2" />
+            Kategorie-Mapping
           </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
@@ -533,7 +946,7 @@ export default function ProductManagement() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="weight_kg">Gewicht (kg)</Label>
+                    <Label htmlFor="weight_kg">Gewicht (kg) *</Label>
                     <Input
                       id="weight_kg"
                       type="number"
@@ -541,7 +954,11 @@ export default function ProductManagement() {
                       value={formData.weight_kg}
                       onChange={(e) => setFormData({ ...formData, weight_kg: e.target.value })}
                       placeholder="z.B. 7.5 für 7,5kg Kiste"
+                      required
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Für Öl: 1L = 1kg. Dieses Gewicht wird vom Rohwaren-Bestand abgezogen.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="origin">Herkunft</Label>
@@ -552,6 +969,107 @@ export default function ProductManagement() {
                       placeholder="z.B. Sizilien, Hohenlohe"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-base font-medium">Gramm-basierte Lagerverwaltung</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Empfohlen für alle Produkte. Bestand wird in Gramm vom Rohwaren-Lager abgezogen.
+                      </p>
+                    </div>
+                    <Switch
+                      id="is_raw_stock_managed"
+                      checked={formData.is_raw_stock_managed}
+                      onCheckedChange={(checked) => setFormData({ ...formData, is_raw_stock_managed: checked })}
+                    />
+                  </div>
+
+                  {formData.is_raw_stock_managed && (
+                    <div className="space-y-2">
+                      <Label htmlFor="inventory_raw_id">Rohware-Gruppe *</Label>
+                      {isCreatingNewRawStock ? (
+                        <div className="space-y-2">
+                          <Input
+                            value={newRawStockName}
+                            onChange={(e) => setNewRawStockName(e.target.value)}
+                            placeholder="Name der Rohware-Gruppe"
+                            autoFocus
+                          />
+                          <div className="flex items-center gap-2">
+                            <Label className="text-sm">Typ:</Label>
+                            <select
+                              value={newRawStockType}
+                              onChange={(e) => setNewRawStockType(e.target.value as "weight" | "volume")}
+                              className="px-2 py-1 border rounded text-sm"
+                            >
+                              <option value="weight">Gewicht (kg/g)</option>
+                              <option value="volume">Volumen (L/ml)</option>
+                            </select>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleCreateRawStockGroup}
+                              className="flex-1"
+                            >
+                              Erstellen
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setIsCreatingNewRawStock(false)
+                                setNewRawStockName("")
+                                setNewRawStockType("weight")
+                              }}
+                            >
+                              Abbrechen
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Select
+                          value={formData.inventory_raw_id?.toString() || ""}
+                          onValueChange={(value) => {
+                            if (value === "__create_new__") {
+                              setIsCreatingNewRawStock(true)
+                            } else {
+                              setFormData({ ...formData, inventory_raw_id: value ? Number.parseInt(value) : null })
+                            }
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Rohware-Gruppe wählen" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__create_new__" className="text-primary font-medium">
+                              <div className="flex items-center">
+                                <Plus className="h-4 w-4 mr-2" />
+                                Neue Rohware-Gruppe erstellen
+                              </div>
+                            </SelectItem>
+                            {rawStockGroups.map((group) => (
+                              <SelectItem key={group.id} value={group.id.toString()}>
+                                {group.product_group} ({group.unit_type === "weight" ? "Gewicht" : "Volumen"})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {formData.inventory_raw_id && formData.weight_kg && (
+                        <div className="text-sm text-muted-foreground bg-background p-2 rounded border">
+                          <strong>Info:</strong> Bei jedem Verkauf werden{" "}
+                          {(Number.parseFloat(formData.weight_kg) * 1000).toFixed(0)} g vom Bestand "
+                          {rawStockGroups.find((g) => g.id === formData.inventory_raw_id)?.product_group}" abgezogen.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -597,7 +1115,67 @@ export default function ProductManagement() {
                     Wird unter dem Verfügbarkeitsstatus angezeigt, z.B. "Verfügbar ab Januar"
                   </p>
                 </div>
-                {/* </CHANGE> */}
+
+                {/* CHANGE: Added HelloCash stock management checkbox */}
+                <div className="flex items-center space-x-2 p-3 border rounded-lg">
+                  <Switch
+                    id="hellocash_stock_managed"
+                    checked={formData.hellocash_stock_managed}
+                    onCheckedChange={(checked) => setFormData({ ...formData, hellocash_stock_managed: checked })}
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="hellocash_stock_managed" className="cursor-pointer">
+                      Bestand in HelloCash-Kasse führen
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Wenn aktiviert (article_stock_status: 0), ändert HelloCash den Bestand bei Verkauf. Wenn deaktiviert (article_stock_status: 2), bleibt der Bestand unverändert.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="hellocash_category_id">HelloCash Kategorie (optional)</Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={formData.hellocash_category_id ? formData.hellocash_category_id.toString() : "none"}
+                      onValueChange={(value) => {
+                        setFormData({ 
+                          ...formData, 
+                          hellocash_category_id: value === "none" ? null : parseInt(value)
+                        })
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="HelloCash Kategorie wählen" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Keine Kategorie</SelectItem>
+                        {categories.map((category) => (
+                          <SelectItem key={category.id} value={category.id.toString()}>
+                            {category.name}
+                            {category.hellocash_category_id && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                (HC ID: {category.hellocash_category_id})
+                              </span>
+                            )}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={fetchHelloCashCategories}
+                      title="HelloCash Kategorien anzeigen"
+                    >
+                      <Package className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Wählen Sie die passende HelloCash Kategorie-ID für die Synchronisation. Klicken Sie auf das Icon um die verfügbaren HelloCash Kategorien anzuzeigen.
+                  </p>
+                </div>
 
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
@@ -610,6 +1188,105 @@ export default function ProductManagement() {
           </Dialog>
         </div>
       </div>
+
+      {/* CHANGE: Added HelloCash categories dialog */}
+      <Dialog open={isHelloCashCategoriesDialogOpen} onOpenChange={setIsHelloCashCategoriesDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>HelloCash Kategorien</DialogTitle>
+            <DialogDescription>
+              Diese Kategorie-IDs werden von HelloCash verwendet. Verwenden Sie diese IDs beim Mapping Ihrer Produkte.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[400px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Kategorie ID</TableHead>
+                  <TableHead>Name</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {helloCashCategories.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
+                      Keine Kategorien gefunden
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  helloCashCategories.map((category) => (
+                    <TableRow key={category.article_category_id}>
+                      <TableCell className="font-mono font-bold">{category.article_category_id}</TableCell>
+                      <TableCell>{category.article_category_name}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsHelloCashCategoriesDialogOpen(false)}>Schließen</Button>
+            <Button onClick={fetchCategoryMappings}>Kategorie-Mapping</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCategoryMappings} onOpenChange={setShowCategoryMappings}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Kategorie zu HelloCash Mapping</DialogTitle>
+            <DialogDescription>
+              Ordnen Sie Ihre lokalen Kategorien den HelloCash Kategorien zu. Wählen Sie die passende HelloCash Kategorie aus dem Dropdown.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {tempCategoryMappings.map((category) => (
+              <div key={category.id} className="flex items-center gap-4 p-3 border rounded-lg">
+                <div className="flex-1">
+                  <label className="text-sm font-medium">{category.name}</label>
+                </div>
+                <Select
+                  value={category.hellocash_category_id?.toString() || "none"}
+                  onValueChange={(value) => {
+                    const newValue = value === "none" ? null : parseInt(value)
+                    setTempCategoryMappings(mappings => 
+                      mappings.map(m => 
+                        m.id === category.id 
+                          ? { ...m, hellocash_category_id: newValue }
+                          : m
+                      )
+                    )
+                  }}
+                >
+                  <SelectTrigger className="w-64">
+                    <SelectValue placeholder="HelloCash Kategorie wählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Keine Zuordnung</SelectItem>
+                    {helloCashCategories.map((hcCat: any) => (
+                      <SelectItem 
+                        key={hcCat.article_category_id} 
+                        value={hcCat.article_category_id.toString()}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {hcCat.article_category_id}
+                          </span>
+                          <span>{hcCat.article_category_name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCategoryMappings(false)}>Abbrechen</Button>
+            <Button onClick={saveCategoryMappings}>Speichern</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
@@ -717,6 +1394,22 @@ export default function ProductManagement() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleHelloCashSync(product)}
+                            title={
+                              product.hellocash_article_id
+                                ? "Mit HelloCash synchronisieren"
+                                : "In HelloCash erstellen"
+                            }
+                          >
+                            {product.hellocash_article_id ? (
+                              <Cloud className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <CloudOff className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
                           <Button variant="outline" size="sm" onClick={() => handleEdit(product)}>
                             <Edit className="h-4 w-4" />
                           </Button>

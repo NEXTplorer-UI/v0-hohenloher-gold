@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { AlertCircle, CheckCircle, XCircle, Clock, RefreshCw, Trash2 } from "lucide-react"
+import { AlertCircle, CheckCircle, XCircle, RefreshCw, Trash2 } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { useAdminCache } from "@/hooks/use-admin-cache"
 
 interface AdminNotification {
   id: string
@@ -45,39 +46,30 @@ interface PendingEmail {
 }
 
 export function ErrorLogsComponent() {
-  const [notifications, setNotifications] = useState<AdminNotification[]>([])
-  const [pendingEmails, setPendingEmails] = useState<PendingEmail[]>([])
-  const [loading, setLoading] = useState(true)
+  const {
+    data: notificationsData,
+    isLoading: notificationsLoading,
+    refresh: refreshNotifications,
+    mutate: mutateNotifications,
+  } = useAdminCache<{ notifications: AdminNotification[] }>("/api/admin/notifications?filter=unresolved")
+
+  const {
+    data: emailsData,
+    isLoading: emailsLoading,
+    refresh: refreshEmails,
+    mutate: mutateEmails,
+  } = useAdminCache<{ emails: PendingEmail[] }>("/api/admin/pending-emails")
+
+  const notifications = notificationsData?.notifications || []
+  const pendingEmails = emailsData?.emails || []
+  const loading = notificationsLoading || emailsLoading
+
   const [filter, setFilter] = useState<"all" | "unresolved">("unresolved")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteType, setDeleteType] = useState<"resolved" | "all">("resolved")
 
-  useEffect(() => {
-    loadData()
-  }, [filter])
-
-  async function loadData() {
-    setLoading(true)
-    try {
-      const [notificationsRes, emailsRes] = await Promise.all([
-        fetch(`/api/admin/notifications?filter=${filter}`),
-        fetch("/api/admin/pending-emails"),
-      ])
-
-      if (notificationsRes.ok) {
-        const data = await notificationsRes.json()
-        setNotifications(data.notifications || [])
-      }
-
-      if (emailsRes.ok) {
-        const data = await emailsRes.json()
-        setPendingEmails(data.emails || [])
-      }
-    } catch (error) {
-      console.error("Failed to load error logs:", error)
-    } finally {
-      setLoading(false)
-    }
+  const loadData = async () => {
+    await Promise.all([refreshNotifications(), refreshEmails()])
   }
 
   async function resolveNotification(id: string) {
@@ -87,7 +79,13 @@ export function ErrorLogsComponent() {
       })
 
       if (res.ok) {
-        loadData()
+        mutateNotifications(
+          (current) => ({
+            notifications: current?.notifications.map((n) => (n.id === id ? { ...n, is_resolved: true } : n)) || [],
+          }),
+          false,
+        )
+        await refreshNotifications()
       }
     } catch (error) {
       console.error("Failed to resolve notification:", error)
@@ -101,7 +99,8 @@ export function ErrorLogsComponent() {
       })
 
       if (res.ok) {
-        loadData()
+        mutateEmails((current) => ({ emails: current?.emails.filter((e) => e.id !== id) || [] }), false)
+        await refreshEmails()
       }
     } catch (error) {
       console.error("Failed to retry email:", error)
@@ -116,7 +115,15 @@ export function ErrorLogsComponent() {
 
       if (res.ok) {
         setDeleteDialogOpen(false)
-        loadData()
+        if (deleteType === "all") {
+          mutateNotifications({ notifications: [] }, false)
+        } else {
+          mutateNotifications(
+            (current) => ({ notifications: current?.notifications.filter((n) => !n.is_resolved) || [] }),
+            false,
+          )
+        }
+        await refreshNotifications()
       }
     } catch (error) {
       console.error("Failed to delete notifications:", error)

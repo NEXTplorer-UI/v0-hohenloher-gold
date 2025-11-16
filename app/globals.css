@@ -139,6 +139,9 @@
   --font-dm-sans: "DM Sans", sans-serif;
   --font-sans: var(--font-space-grotesk);
   --font-serif: var(--font-dm-sans);
+  /* Added Stalemate as script font variable */
+  --font-stalemate: "Stalemate", cursive;
+  --font-script: var(--font-stalemate);
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   /* Added gold and hover color variables for Tailwind */
@@ -199,4 +202,91 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* Erweiterte Utility Classes für Design-Modus */
+  /* Icon Styles */
+  .icon-bg-sand { background-color: var(--color-hg-icon-bg); }
+  .icon-stroke-orange { color: var(--color-hg-icon-stroke); }
+  .text-primary-dark { color: var(--color-hg-text-primary); }
+
+  /* Hover Effects */
+  .hover\:icon-stroke-orange:hover { color: var(--color-hg-icon-stroke); }
+}
+
+/* ========================================
+   HOHENLOHER GOLD FARBKONZEPT
+   ======================================== */
+
+:root {
+  /* Hauptfarben */
+  /* Weiß als Haupthintergrund, warmes helles Grün als Akzent */
+  --hg-white: #ffffff;       /* Haupthintergrund */
+  --hg-light-green: #f0f5eb; /* Warmer, heller Grün-Akzent für Sektionen */
+  --hg-sand: #fffcdc;        /* Optional für besondere Akzente */
+  --hg-green: #4d7621;       /* Primary - Überschriften, CTA */
+  --hg-gold: #d4af37;        /* Secondary - Highlights, Akzente */
+  --hg-orange: #f7941d;      /* Accent - Buttons, Badges */
+  --hg-dark: #1a1a1a;        /* Text */
+  --hg-gray: #6b7280;        /* Sekundärer Text */
+  --hg-border: rgba(77, 118, 33, 0.2); /* Borders (green mit 20% opacity) */
+  
+  /* Neue Design-Tokens für Design-Modus-Zugriff */
+  --color-hg-sand: #fffcdc;
+  --color-hg-gold: #d4af37;
+  --color-hg-green: #4d7621;
+  --color-hg-orange: #f7941d;
+  --color-hg-text-primary: #333333;
+  --color-hg-icon-bg: #fffcdc;
+  --color-hg-icon-stroke: #f7941d;
+}
+
+/* Script Fonts für Marken-Highlights */
+@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Allura&display=swap');
+
+/* Fixed utility classes - moved outside of duplicate @layer utilities */
+/* Backgrounds */
+.bg-hg-white { background-color: var(--hg-white); }
+.bg-hg-light-green { background-color: var(--hg-light-green); }
+.bg-hg-sand { background-color: var(--hg-sand); }
+.bg-hg-green { background-color: var(--hg-green); }
+.bg-hg-gold { background-color: var(--hg-gold); }
+.bg-hg-orange { background-color: var(--hg-orange); }
+
+/* Text Colors */
+.text-hg-green { color: var(--hg-green); }
+.text-hg-gold { color: var(--hg-gold); }
+.text-hg-orange { color: var(--hg-orange); }
+.text-hg-dark { color: var(--hg-dark); }
+.text-hg-gray { color: var(--hg-gray); }
+
+/* Borders */
+.border-hg-green { border-color: var(--hg-green); }
+.border-hg-gold { border-color: var(--hg-gold); }
+.border-hg-subtle { border-color: var(--hg-border); }
+
+/* Script fonts with !important to override body font-sans */
+.font-script-gold {
+  font-family: 'Great Vibes', cursive !important;
+  color: var(--hg-gold) !important;
+  font-weight: 400 !important;
+}
+
+.font-script-elegant {
+  font-family: 'Allura', cursive !important;
+  font-weight: 400 !important;
+}
+
+/* Adding script fonts to specific heading classes for global use */
+.heading-script-gold {
+  font-family: 'Great Vibes', cursive !important;
+  color: var(--hg-gold) !important;
+}
+
+.heading-script-elegant {
+  font-family: 'Allura', cursive !important;
+}
+
+/* Override for h2 elements with script class */
+h2.font-script-elegant {
+  font-family: 'Allura', cursive !important;
 }

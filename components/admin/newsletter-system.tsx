@@ -10,33 +10,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import {
-  Mail,
-  Send,
-  Users,
-  Eye,
-  RefreshCw,
-  TrendingUp,
-  ImageIcon,
-  Paperclip,
-  X,
-  Upload,
-  HelpCircle,
-  Save,
-  FolderOpen,
-  Trash2,
-  TestTube,
-  History,
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  Filter,
-} from "lucide-react"
+import { Mail, Send, Users, Eye, RefreshCw, TrendingUp, ImageIcon, Paperclip, X, Upload, HelpCircle, Save, FolderOpen, Trash2, TestTube, History, AlertCircle, CheckCircle, Clock, Filter } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
 import NewsletterConfirmationDialog from "./newsletter-confirmation-dialog"
 import { buildEmail } from "@/lib/email/build"
 import { markdownToHtml } from "@/lib/markdown"
 import { emailCopy } from "@/lib/email/copy"
+import { useAdminCache } from "@/hooks/use-admin-cache"
 
 interface NewsletterStats {
   subscribers: number
@@ -91,6 +71,32 @@ interface EmailSend {
 }
 
 export default function NewsletterSystem() {
+  const {
+    data: stats,
+    isLoading: isLoadingStats,
+    refresh: refreshStats,
+    mutate: mutateStats,
+  } = useAdminCache<NewsletterStats>("/api/newsletter/stats", {
+    subscribers: 0,
+    newslettersSent: 0,
+    openRate: 0,
+    subscribersList: [],
+  })
+
+  const {
+    data: drafts,
+    isLoading: isLoadingDrafts,
+    refresh: refreshDrafts,
+    mutate: mutateDrafts,
+  } = useAdminCache<Draft[]>("/api/newsletter/drafts", [])
+
+  const {
+    data: sendHistory,
+    isLoading: isLoadingSendHistory,
+    refresh: refreshSendHistory,
+    mutate: mutateSendHistory,
+  } = useAdminCache<SendHistory[]>("/api/newsletter/send-history", [])
+
   const [subject, setSubject] = useState("")
   const [content, setContent] = useState("")
   const [imageUrl, setImageUrl] = useState("")
@@ -107,21 +113,13 @@ export default function NewsletterSystem() {
   const [recipientCount, setRecipientCount] = useState(0)
   const [isLoadingRecipients, setIsLoadingRecipients] = useState(false)
 
-  const [stats, setStats] = useState<NewsletterStats>({
-    subscribers: 0,
-    newslettersSent: 0,
-    openRate: 0,
-    subscribersList: [],
-  })
   const [isLoading, setIsLoading] = useState(false)
-  const [isUpdating, setIsUpdating] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [previewHtml, setPreviewHtml] = useState("")
   const { toast } = useToast()
   const [showMarkdownHelp, setShowMarkdownHelp] = useState(false)
-  const [drafts, setDrafts] = useState<Draft[]>([])
   const [showDrafts, setShowDrafts] = useState(false)
   const [showSaveDraft, setShowSaveDraft] = useState(false)
   const [draftTitle, setDraftTitle] = useState("")
@@ -130,67 +128,10 @@ export default function NewsletterSystem() {
   const [testEmail, setTestEmail] = useState("")
   const [isSendingTest, setIsSendingTest] = useState(false)
   const [showSendHistory, setShowSendHistory] = useState(false)
-  const [sendHistory, setSendHistory] = useState<SendHistory[]>([])
   const [selectedSend, setSelectedSend] = useState<SendHistory | null>(null)
   const [emailSends, setEmailSends] = useState<EmailSend[]>([])
   const [showSendDetails, setShowSendDetails] = useState(false)
   const [isResending, setIsResending] = useState(false)
-
-  const loadStats = async () => {
-    setIsUpdating(true)
-    try {
-      console.log("[v0] Loading newsletter stats...")
-      const response = await fetch("/api/newsletter/stats")
-      if (!response.ok) throw new Error("Failed to load stats")
-
-      const data = await response.json()
-      setStats(data)
-      console.log("[v0] Newsletter stats loaded:", data)
-    } catch (error) {
-      console.error("[v0] Error loading newsletter stats:", error)
-      toast({
-        title: "Fehler",
-        description: "Newsletter-Statistiken konnten nicht geladen werden",
-        variant: "destructive",
-      })
-    } finally {
-      setIsUpdating(false)
-    }
-  }
-
-  const loadDrafts = async () => {
-    try {
-      const response = await fetch("/api/newsletter/drafts")
-      if (!response.ok) throw new Error("Failed to load drafts")
-
-      const data = await response.json()
-      setDrafts(data.drafts || [])
-    } catch (error) {
-      console.error("[v0] Error loading drafts:", error)
-      toast({
-        title: "Fehler",
-        description: "Entwürfe konnten nicht geladen werden",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const loadSendHistory = async () => {
-    try {
-      const response = await fetch("/api/newsletter/send-history")
-      if (!response.ok) throw new Error("Failed to load send history")
-
-      const data = await response.json()
-      setSendHistory(data.sends || [])
-    } catch (error) {
-      console.error("[v0] Error loading send history:", error)
-      toast({
-        title: "Fehler",
-        description: "Versandhistorie konnte nicht geladen werden",
-        variant: "destructive",
-      })
-    }
-  }
 
   const loadSendDetails = async (sendId: string) => {
     try {
@@ -209,12 +150,6 @@ export default function NewsletterSystem() {
       })
     }
   }
-
-  useEffect(() => {
-    loadStats()
-    loadDrafts()
-    loadRecipientCount()
-  }, [])
 
   useEffect(() => {
     loadRecipientCount()
@@ -406,8 +341,8 @@ export default function NewsletterSystem() {
       setSelectedTemplate("custom") // Reset template selection
       setShowConfirmation(false)
 
-      await loadStats()
-      await loadSendHistory()
+      refreshStats()
+      refreshSendHistory()
     } catch (error) {
       console.error("[v0] Error sending newsletter:", error)
       toast({
@@ -470,6 +405,8 @@ export default function NewsletterSystem() {
 
       if (!response.ok) throw new Error("Failed to save draft")
 
+      const savedDraft = await response.json()
+
       toast({
         title: "Entwurf gespeichert",
         description: currentDraftId ? "Entwurf wurde aktualisiert" : "Entwurf wurde erstellt",
@@ -477,7 +414,14 @@ export default function NewsletterSystem() {
 
       setShowSaveDraft(false)
       setDraftTitle("")
-      await loadDrafts()
+
+      if (currentDraftId) {
+        mutateDrafts((prevDrafts) =>
+          prevDrafts.map((d) => (d.id === currentDraftId ? { ...d, ...savedDraft.draft } : d))
+        )
+      } else {
+        mutateDrafts((prevDrafts) => [...prevDrafts, savedDraft.draft])
+      }
     } catch (error) {
       console.error("[v0] Error saving draft:", error)
       toast({
@@ -521,7 +465,7 @@ export default function NewsletterSystem() {
         description: "Der Entwurf wurde erfolgreich gelöscht",
       })
 
-      await loadDrafts()
+      mutateDrafts((prevDrafts) => prevDrafts.filter((d) => d.id !== draftId))
     } catch (error) {
       console.error("[v0] Error deleting draft:", error)
       toast({
@@ -630,9 +574,8 @@ export default function NewsletterSystem() {
         description: `${result.results.sent} E-Mails erfolgreich versendet, ${result.results.failed} fehlgeschlagen`,
       })
 
-      // Reload details
       await loadSendDetails(newsletterSendId)
-      await loadSendHistory()
+      refreshSendHistory()
     } catch (error) {
       console.error("[v0] Error resending failed emails:", error)
       toast({
@@ -708,14 +651,24 @@ Entdecken Sie unsere aktuellen Sonderangebote auf frische Südfrüchte.
               size="sm"
               onClick={() => {
                 setShowSendHistory(true)
-                loadSendHistory()
               }}
             >
               <History className="h-4 w-4 mr-2" />
               Versandhistorie
             </Button>
-            <Button variant="outline" size="sm" onClick={loadStats} disabled={isUpdating}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isUpdating ? "animate-spin" : ""}`} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                refreshStats()
+                refreshDrafts()
+                refreshSendHistory()
+              }}
+              disabled={isLoadingStats || isLoadingDrafts || isLoadingSendHistory}
+            >
+              <RefreshCw
+                className={`h-4 w-4 mr-2 ${isLoadingStats || isLoadingDrafts || isLoadingSendHistory ? "animate-spin" : ""}`}
+              />
               Aktualisieren
             </Button>
           </div>

@@ -19,7 +19,8 @@ import {
   Pie,
   Cell,
 } from "recharts"
-import { TrendingUp, TrendingDown, Download, Euro, ShoppingCart } from "lucide-react"
+import { TrendingUp, TrendingDown, Download, Euro, ShoppingCart, RefreshCw } from 'lucide-react'
+import { useAdminCache } from "@/hooks/use-admin-cache"
 
 interface RevenueData {
   monthlyRevenue: Array<{
@@ -64,36 +65,14 @@ const COLORS = [
 ]
 
 export default function RevenueAnalyticsModal({ open, onOpenChange }: RevenueAnalyticsModalProps) {
-  const [data, setData] = useState<RevenueData | null>(null)
-  const [loading, setLoading] = useState(false)
+  const {
+    data,
+    isLoading: loading,
+    refresh,
+  } = useAdminCache<RevenueData>("/api/analytics/revenue-details", {
+    enabled: open, // Only fetch when modal is open
+  })
 
-  const fetchRevenueData = async () => {
-    setLoading(true)
-    try {
-      console.log("[v0] Fetching revenue data from /api/analytics/revenue-details")
-      const response = await fetch("/api/analytics/revenue-details")
-      console.log("[v0] Revenue data response status:", response.status)
-
-      if (response.ok) {
-        const revenueData = await response.json()
-        console.log("[v0] Revenue data fetched successfully:", revenueData)
-        setData(revenueData)
-      } else {
-        const errorText = await response.text()
-        console.error("[v0] Failed to fetch revenue data. Status:", response.status, "Error:", errorText)
-      }
-    } catch (error) {
-      console.error("[v0] Error fetching revenue data:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    if (open) {
-      fetchRevenueData()
-    }
-  }, [open])
 
   const exportData = () => {
     if (!data) return
@@ -136,6 +115,9 @@ export default function RevenueAnalyticsModal({ open, onOpenChange }: RevenueAna
           <DialogTitle className="flex items-center gap-2">
             <Euro className="h-5 w-5" />
             Umsatz-Analyse
+            <Button onClick={refresh} variant="ghost" size="sm" className="ml-auto">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
           </DialogTitle>
         </DialogHeader>
 

@@ -1,6 +1,6 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Space_Grotesk, DM_Sans } from "next/font/google"
+import { Space_Grotesk, DM_Sans, Stalemate } from 'next/font/google'
 import "./globals.css"
 import { CartProvider } from "@/contexts/cart-context"
 import { PricingProvider } from "@/components/pricing-context"
@@ -27,6 +27,13 @@ const dmSans = DM_Sans({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-dm-sans",
+})
+
+const stalemate = Stalemate({
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-stalemate",
 })
 
 export const metadata: Metadata = {
@@ -109,7 +116,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="de" className={`${spaceGrotesk.variable} ${dmSans.variable} antialiased`}>
+    <html lang="de" className={`${spaceGrotesk.variable} ${dmSans.variable} ${stalemate.variable} antialiased`}>
       <body className="font-sans">
         <Script
           id="json-ld"

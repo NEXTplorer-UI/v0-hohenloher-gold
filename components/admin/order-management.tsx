@@ -6,23 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Download,
-  Mail,
-  Search,
-  Filter,
-  Loader2,
-  ChevronDown,
-  ChevronUp,
-  MapPin,
-  Users,
-  Plus,
-  X,
-  RefreshCw,
-  XCircle,
-  FileText,
-  Printer,
-} from "lucide-react"
+import { Download, Mail, Search, Filter, Loader2, ChevronDown, ChevronUp, MapPin, Users, Plus, X, RefreshCw, XCircle, FileText, Printer } from 'lucide-react'
 import { mapDBToUIStatus } from "@/lib/order-status-mapping"
 import type { EmailTemplateId } from "@/lib/email/build"
 import { useToast } from "@/hooks/use-toast"
@@ -31,6 +15,7 @@ import { Label } from "@/components/ui/label"
 import { ExportOptionsDialog, type ExportOptions } from "@/components/admin/export-options-dialog"
 import { usePersistedState } from "@/hooks/use-persisted-state"
 import { useTestMode } from "./test-mode-toggle" // Import useTestMode hook
+import { useAdminCache } from "@/hooks/use-admin-cache"
 
 interface OrderItem {
   id: string
@@ -636,9 +621,19 @@ OrderItem.displayName = "OrderItem"
 function OrderManagement() {
   const testMode = useTestMode()
 
-  const [orders, setOrders] = useState<Order[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const {
+    data: orders,
+    isLoading: loading,
+    error: errorData,
+    refresh: fetchOrders,
+    updateCache: updateOrdersCache,
+  } = useAdminCache<Order[]>("/api/admin/orders", {
+    fallbackData: [],
+    revalidateOnMount: true,
+  })
+
+  const error = errorData ? String(errorData) : null
+
   const [searchTerm, setSearchTerm] = usePersistedState({
     key: "admin-orders-search",
     defaultValue: "",
@@ -692,55 +687,6 @@ function OrderManagement() {
   // Loading state for marking as paid
   const [isMarkingAsPaid, setIsMarkingAsPaid] = useState(false)
 
-  const fetchOrders = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      console.log("[v0] Fetching orders from database...")
-
-      const response = await fetch("/api/admin/orders", {
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-        },
-      })
-
-      if (!response.ok) {
-        const contentType = response.headers.get("content-type")
-        if (contentType && contentType.includes("application/json")) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || "Failed to fetch orders")
-        } else {
-          const errorText = await response.text()
-          console.error("[v0] Non-JSON error response:", errorText.substring(0, 200))
-          throw new Error(`Server error: ${response.status} ${response.statusText}`)
-        }
-      }
-
-      const contentType = response.headers.get("content-type")
-      if (!contentType || !contentType.includes("application/json")) {
-        const responseText = await response.text()
-        console.error("[v0] Expected JSON but got:", responseText.substring(0, 200))
-        throw new Error("Server returned invalid response format")
-      }
-
-      const ordersData = await response.json()
-
-      console.log("[v0] Successfully loaded orders:", ordersData?.length || 0)
-      setOrders(ordersData || [])
-    } catch (err) {
-      console.error("[v0] Unexpected error fetching orders:", err)
-      setError(`Fehler beim Laden der Bestellungen: ${err instanceof Error ? err.message : "Unbekannter Fehler"}`)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    fetchOrders()
-  }, [fetchOrders])
 
   const fetchFormData = useCallback(async () => {
     try {
@@ -1051,10 +997,8 @@ function OrderManagement() {
       try {
         console.log(`[v0] Updating order ${orderId} status:`, { status, paymentStatus })
 
-        const previousOrders = orders
-
-        setOrders((prevOrders) =>
-          prevOrders.map((order) => {
+        updateOrdersCache((prevOrders) =>
+          prevOrders?.map((order) => {
             if (order.id === orderId) {
               return {
                 ...order,
@@ -1083,8 +1027,8 @@ function OrderManagement() {
 
           const { order: updatedOrder } = await response.json()
 
-          setOrders((prevOrders) =>
-            prevOrders.map((order) => {
+          updateOrdersCache((prevOrders) =>
+            prevOrders?.map((order) => {
               if (order.id === orderId && updatedOrder) {
                 return {
                   ...order,
@@ -1104,7 +1048,7 @@ function OrderManagement() {
           const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
           console.error(`[v0] Failed to update order status:`, errorData)
 
-          setOrders(previousOrders)
+          await fetchOrders()
 
           toast({
             title: "Fehler",
@@ -1124,7 +1068,7 @@ function OrderManagement() {
         })
       }
     },
-    [orders, fetchOrders, toast],
+    [updateOrdersCache, fetchOrders, toast],
   )
 
   const handleAdminNotesChange = useCallback(
@@ -1146,8 +1090,8 @@ function OrderManagement() {
         if (response.ok) {
           console.log(`[v0] Admin notes updated successfully`)
 
-          setOrders((prevOrders) =>
-            prevOrders.map((order) => {
+          updateOrdersCache((prevOrders) =>
+            prevOrders?.map((order) => {
               if (order.id === orderId) {
                 return {
                   ...order,
@@ -1182,7 +1126,7 @@ function OrderManagement() {
         })
       }
     },
-    [toast],
+    [updateOrdersCache, toast],
   )
 
   // Added handleSyncStatus function
@@ -1804,6 +1748,7 @@ function OrderManagement() {
               </Button>
             )}
             <Button onClick={fetchOrders} variant="outline">
+              <RefreshCw className="h-4 w-4 mr-2" />
               Aktualisieren
             </Button>
           </div>

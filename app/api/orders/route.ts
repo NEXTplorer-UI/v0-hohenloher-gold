@@ -9,6 +9,7 @@ import QRCode from "qrcode"
 import { put } from "@vercel/blob"
 import { normalizePickupLocation } from "@/lib/pickup-location-normalizer"
 import { parsePickupLocationFromComment } from "@/lib/pickup-location-comment-parser"
+import { randomUUID } from "crypto"
 
 function toSlug(s: string): string {
   return s
@@ -363,7 +364,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const pickupToken = window.crypto.randomUUID()
+    const pickupToken = randomUUID()
     console.log("[/api/orders] Generated pickup token:", pickupToken)
 
     const orderRecord = {
