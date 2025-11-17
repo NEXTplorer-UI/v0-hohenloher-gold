@@ -60,6 +60,7 @@ export async function POST(req: Request) {
 
     if (!invoiceResult.success) {
       console.error("[mark-paid] Invoice creation failed:", invoiceResult.error)
+      // Continue anyway - don't block payment confirmation
     }
 
     const { error: updateError } = await supabase
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
         status: "paid",
         hellocash_status: "paid",
         payment_status: "paid",
-        payment_method: paymentMethod, // Store selected payment method
+        payment_method: paymentMethod,
         pos_synced_at: new Date().toISOString(),
       })
       .eq("id", order.id)
@@ -84,6 +85,16 @@ export async function POST(req: Request) {
       )
     }
 
+    const { data: updatedOrder } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        customer:customers(*),
+        order_items(*, products(*))
+      `)
+      .eq("id", order.id)
+      .single()
+
     await supabase.rpc("log_qr_scan", {
       p_order_id: order.id,
       p_source: "pos",
@@ -93,15 +104,17 @@ export async function POST(req: Request) {
     })
 
     try {
-      console.log("[mark-paid] Sending payment receipt email to", order.customer.email)
+      console.log("[mark-paid] Sending payment receipt email to", updatedOrder?.customer.email || order.customer.email)
+
+      const finalOrder = updatedOrder || order
 
       const emailVars = {
-        customerName: `${order.customer.first_name || ""} ${order.customer.last_name || ""}`.trim(),
-        orderNumber: order.order_number || "",
-        orderId: order.order_number || "",
-        orderDate: order.created_at ? new Date(order.created_at).toLocaleDateString("de-DE") : "",
-        orderTotal: order.total ? order.total.toFixed(2) : "0.00",
-        total: order.total ? order.total.toFixed(2) : "0.00",
+        customerName: `${finalOrder.customer.first_name || ""} ${finalOrder.customer.last_name || ""}`.trim(),
+        orderNumber: finalOrder.order_number || "",
+        orderId: finalOrder.order_number || "",
+        orderDate: finalOrder.created_at ? new Date(finalOrder.created_at).toLocaleDateString("de-DE") : "",
+        orderTotal: finalOrder.total ? finalOrder.total.toFixed(2) : "0.00",
+        total: finalOrder.total ? finalOrder.total.toFixed(2) : "0.00",
         paymentMethod:
           paymentMethod === "cash"
             ? "Bar"
@@ -111,7 +124,7 @@ export async function POST(req: Request) {
                 ? "EC-Karte"
                 : "SumUp",
         paymentStatus: "paid",
-        orderItems: (order.order_items || []).map((item: any) => ({
+        orderItems: (finalOrder.order_items || []).map((item: any) => ({
           product_name: item.products?.name || item.product_name || "Unbekanntes Produkt",
           quantity: item.quantity || 0,
           unit_price: item.unit_price || 0,
@@ -122,15 +135,15 @@ export async function POST(req: Request) {
 
       const { subject, html } = buildEmail("paymentReceipt", emailVars, emailCopy)
 
-      // Fetch invoice PDF if available
       let attachments: Array<{ filename: string; content: string }> | undefined
 
-      if (invoiceResult.success && order.hellocash_invoice_id) {
+      if (invoiceResult.success && finalOrder.hellocash_invoice_id) {
         try {
+          console.log("[mark-paid] Fetching PDF for invoice ID:", finalOrder.hellocash_invoice_id)
           const helloCashToken = process.env.HELLOCASH_API_TOKEN
           if (helloCashToken) {
             const pdfResponse = await fetch(
-              `https://api.hellocash.business/api/v1/invoices/${order.hellocash_invoice_id}/pdf?cancellation=false&locale=de_DE`,
+              `https://api.hellocash.business/api/v1/invoices/${finalOrder.hellocash_invoice_id}/pdf?cancellation=false&locale=de_DE`,
               {
                 method: "GET",
                 headers: {
@@ -142,23 +155,31 @@ export async function POST(req: Request) {
 
             if (pdfResponse.ok) {
               const pdfData = await pdfResponse.json()
-              attachments = [
-                {
-                  filename: `Rechnung_${order.order_number}.pdf`,
-                  content: pdfData.pdf_base64_encoded,
-                },
-              ]
-              console.log("[mark-paid] Invoice PDF attached to email")
+              if (pdfData.pdf_base64_encoded) {
+                attachments = [
+                  {
+                    filename: `Rechnung_${finalOrder.order_number}.pdf`,
+                    content: pdfData.pdf_base64_encoded,
+                  },
+                ]
+                console.log("[mark-paid] Invoice PDF attached to email")
+              } else {
+                console.warn("[mark-paid] PDF response missing base64 data")
+              }
+            } else {
+              console.error("[mark-paid] PDF fetch failed with status:", pdfResponse.status)
             }
           }
         } catch (pdfError) {
           console.error("[mark-paid] Error fetching PDF:", pdfError)
         }
+      } else {
+        console.log("[mark-paid] No invoice ID available, sending email without PDF attachment")
       }
 
       await resend.emails.send({
         from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
-        to: order.customer.email,
+        to: finalOrder.customer.email,
         subject,
         html,
         attachments,

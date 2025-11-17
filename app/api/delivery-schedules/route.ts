@@ -63,7 +63,6 @@ export async function GET() {
       }
     })
 
-    console.log("[v0] Transformed delivery schedules:", transformedSchedules?.length || 0)
     return NextResponse.json(transformedSchedules || [])
   } catch (error) {
     console.error("[v0] Error loading delivery schedules:", error)

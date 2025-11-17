@@ -84,15 +84,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ... existing POST code ...
-
 export async function POST(request: NextRequest) {
   try {
     await requireAdmin()
     const supabase = await createServerClient()
     const body = await request.json()
 
-    const { variant, canonical_location_id, applyToExisting } = body
+    const { variant, canonical_location_id, applyToExisting, distribution_person_id } = body
 
     if (!variant || !canonical_location_id) {
       return NextResponse.json({ error: "variant and canonical_location_id are required" }, { status: 400 })
@@ -120,6 +118,21 @@ export async function POST(request: NextRequest) {
     if (applyToExisting && mapping) {
       try {
         await batchNormalizeOrders(mapping.id)
+        
+        if (distribution_person_id) {
+          console.log("[v0] Updating orders with distribution person:", distribution_person_id)
+          
+          const { error: updateError } = await supabase
+            .from("orders")
+            .update({ distribution_person_id })
+            .eq("pickup_location", variant)
+
+          if (updateError) {
+            console.error("[v0] Error updating orders with distribution person:", updateError)
+          } else {
+            console.log("[v0] Orders updated with distribution person")
+          }
+        }
       } catch (batchError) {
         console.error("[pickup-location-mappings] Batch normalize error:", batchError)
         // Don't fail the request, just log

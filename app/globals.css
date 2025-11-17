@@ -164,7 +164,7 @@
   }
 }
 
-/* Added custom utility classes for consistent color usage */
+/* Fixed @layer utilities - properly closed and removed duplicate utility definitions */
 @layer utilities {
   .bg-gold {
     background-color: var(--color-gold);
@@ -203,7 +203,6 @@
     display: none;
   }
 
-  /* Erweiterte Utility Classes für Design-Modus */
   /* Icon Styles */
   .icon-bg-sand { background-color: var(--color-hg-icon-bg); }
   .icon-stroke-orange { color: var(--color-hg-icon-stroke); }

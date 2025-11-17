@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch pickup locations" }, { status: 500 })
     }
 
-    return NextResponse.json(locations)
+    return NextResponse.json({ locations })
   } catch (error) {
     console.error("Error fetching pickup locations:", error)
     return NextResponse.json({ error: "Failed to fetch pickup locations" }, { status: 500 })

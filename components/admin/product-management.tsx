@@ -76,6 +76,8 @@ interface RawStockGroup {
   product_group: string
   stock_grams: number
   unit_type: "weight" | "volume"
+  product_count?: number
+  product_names?: string[] | null
 }
 
 interface ProductAssignment {
@@ -153,15 +155,26 @@ export default function ProductManagement() {
   })
 
   const loadProductAssignments = () => {
-    const assignments: ProductAssignment[] = products.map(p => ({
+  console.log("[v0] loadProductAssignments called with selectedRawGroup:", selectedRawGroup)
+  console.log("[v0] Current products:", products.length)
+  console.log("[v0] Current rawStockGroups:", rawStockGroups)
+  
+  const assignments: ProductAssignment[] = products.map(p => {
+    const isAssigned = p.inventory_raw_id === selectedRawGroup
+    console.log(`[v0] Product ${p.name} (id: ${p.id}): inventory_raw_id=${p.inventory_raw_id}, isAssigned=${isAssigned}`)
+    
+    return {
       product_id: p.id,
       product_name: p.name,
       current_raw_id: p.inventory_raw_id || null,
-      selected_raw_id: selectedRawGroup && p.inventory_raw_id === selectedRawGroup ? selectedRawGroup : null
-    }))
-    setProductAssignments(assignments)
-    setHasUnsavedChanges(false)
-  }
+      selected_raw_id: isAssigned ? selectedRawGroup : null
+    }
+  })
+  
+  console.log("[v0] Created assignments:", assignments)
+  setProductAssignments(assignments)
+  setHasUnsavedChanges(false)
+}
 
   const handleProductToggle = (productId: number, checked: boolean) => {
     setProductAssignments(prev => prev.map(p => 
@@ -214,7 +227,14 @@ export default function ProductManagement() {
           title: "Erfolg",
           description: `${updates.length} Produkt(e) wurden zugeordnet`
         })
-        await fetchProducts()
+        
+        await Promise.all([
+          fetchProducts(),
+          fetchRawStockGroups()
+        ])
+        
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
         loadProductAssignments()
       } else {
         const error = await response.json()
@@ -247,6 +267,8 @@ export default function ProductManagement() {
     }
 
     try {
+      setLoading(true)
+      
       const response = await fetch("/api/admin/inventory/raw-stock", {
         method: "POST",
         headers: {
@@ -266,10 +288,13 @@ export default function ProductManagement() {
           title: "Erfolg",
           description: "Rohware-Gruppe wurde erstellt"
         })
+        
         await fetchRawStockGroups()
         setIsCreatingGroup(false)
         setEditingGroupName("")
         setSelectedRawGroup(newGroup.id)
+        
+        loadProductAssignments()
       } else {
         const error = await response.json()
         toast({
@@ -285,6 +310,8 @@ export default function ProductManagement() {
         description: "Verbindungsfehler",
         variant: "destructive"
       })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -294,15 +321,19 @@ export default function ProductManagement() {
     }
   }, [selectedRawGroup, products])
 
+  // CHANGE: Separate effect for auto-selecting first group
+  useEffect(() => {
+    if (selectedRawGroup === null && rawStockGroups.length > 0) {
+      setSelectedRawGroup(rawStockGroups[0].id)
+    }
+  }, [rawStockGroups.length, selectedRawGroup])
+
+  // CHANGE: Only fetch once when tab activates, not on every rawStockGroups change
   useEffect(() => {
     if (activeTab === "raw-stock") {
       fetchRawStockGroups()
-      // Auto-select the first group if none is selected and groups are available
-      if (rawStockGroups.length > 0 && !selectedRawGroup) {
-        setSelectedRawGroup(rawStockGroups[0].id)
-      }
     }
-  }, [activeTab, rawStockGroups]) // Depend on rawStockGroups to re-evaluate selection
+  }, [activeTab])
 
   const fetchProducts = async () => {
     if (cachedProducts && products.length > 0) {
@@ -1720,37 +1751,71 @@ export default function ProductManagement() {
                     </div>
 
                     {selectedRawGroup && (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-base">Gruppeninformationen</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2 text-sm">
-                          {(() => {
-                            const group = rawStockGroups.find(g => g.id === selectedRawGroup)
-                            if (!group) return null
-                            return (
-                              <>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Name:</span>
-                                  <span className="font-medium">{group.product_group}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Typ:</span>
-                                  <span>{group.unit_type === "weight" ? "Gewicht" : "Volumen"}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Aktueller Bestand:</span>
-                                  <span className="font-bold">{(group.stock_grams / 1000).toFixed(2)} kg</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-muted-foreground">Zugeordnete Produkte:</span>
-                                  <span>{productAssignments.filter(p => p.current_raw_id === selectedRawGroup).length}</span>
-                                </div>
-                              </>
-                            )
-                          })()}
-                        </CardContent>
-                      </Card>
+                      <>
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base">Gruppeninformationen</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-2 text-sm">
+                            {(() => {
+                              const group = rawStockGroups.find(g => g.id === selectedRawGroup)
+                              if (!group) return null
+                              return (
+                                <>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Name:</span>
+                                    <span className="font-medium">{group.product_group}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Typ:</span>
+                                    <span>{group.unit_type === "weight" ? "Gewicht" : "Volumen"}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Aktueller Bestand:</span>
+                                    <span className="font-bold">{(group.stock_grams / 1000).toFixed(2)} kg</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Zugeordnete Produkte:</span>
+                                    <span>{group.product_count}</span>
+                                  </div>
+                                </>
+                              )
+                            })()}
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base">Zugeordnete Produkte</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            {(() => {
+                              const group = rawStockGroups.find(g => g.id === selectedRawGroup)
+                              if (!group) return null
+                              
+                              const productNames = group.product_names || []
+                              
+                              if (productNames.length === 0) {
+                                return (
+                                  <p className="text-sm text-muted-foreground text-center py-4">
+                                    Keine Produkte zugeordnet
+                                  </p>
+                                )
+                              }
+                              return (
+                                <ul className="space-y-2">
+                                  {productNames.map((name, idx) => (
+                                    <li key={idx} className="text-sm flex items-center gap-2">
+                                      <span className="w-2 h-2 bg-primary rounded-full"></span>
+                                      {name}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )
+                            })()}
+                          </CardContent>
+                        </Card>
+                      </>
                     )}
                   </div>
 

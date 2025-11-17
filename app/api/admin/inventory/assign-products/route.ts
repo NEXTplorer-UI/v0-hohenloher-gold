@@ -17,7 +17,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid assignments format" }, { status: 400 })
     }
 
-    // Update products with new inventory_raw_id
     const updates = await Promise.all(
       assignments.map(async (assignment: { product_id: number; inventory_raw_id: number | null }) => {
         const { error } = await supabase
@@ -41,7 +40,7 @@ export async function POST(request: Request) {
     const failures = updates.filter(u => !u.success)
 
     return NextResponse.json({
-      success: true,
+      success: successCount > 0,
       message: `${successCount} Produkt(e) erfolgreich zugeordnet`,
       updated: successCount,
       failures: failures

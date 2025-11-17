@@ -3,9 +3,9 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ArrowDown, ArrowUp, Loader2 } from "lucide-react"
+import { ArrowDown, ArrowUp, Loader2 } from 'lucide-react'
 import { useEffect, useState } from "react"
-import { createBrowserClient } from "@supabase/ssr"
+import { createClient } from "@/lib/supabase/client"
 
 type MovementRecord = {
   id: string
@@ -44,10 +44,7 @@ export function ProductMovementHistoryModal({
 
     setLoading(true)
     try {
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      )
+      const supabase = createClient()
 
       const { data, error } = await supabase
         .from("inventory_movements_with_details")

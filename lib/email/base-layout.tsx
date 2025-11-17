@@ -20,17 +20,32 @@ export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions
     unsubscribeEmail,
   } = options
 
-  let siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://hohenloher-gold.de"
-
-  // Force HTTPS if not present
-  if (!siteUrl.startsWith("http")) {
-    siteUrl = `https://${siteUrl}`
-  } else if (siteUrl.startsWith("http://")) {
-    siteUrl = siteUrl.replace("http://", "https://")
+  let siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://suedfruechte-hohenlohe.de"
+  
+  // Validate and clean the URL
+  try {
+    // Remove any invalid characters or malformed parts
+    siteUrl = siteUrl.trim()
+    
+    // If URL doesn't start with http, add https
+    if (!siteUrl.startsWith("http")) {
+      siteUrl = `https://${siteUrl}`
+    }
+    
+    // Force HTTPS for security
+    if (siteUrl.startsWith("http://")) {
+      siteUrl = siteUrl.replace("http://", "https://")
+    }
+    
+    // Remove trailing slash
+    siteUrl = siteUrl.replace(/\/$/, "")
+    
+    // Validate URL format - if invalid, use fallback
+    new URL(siteUrl) // This will throw if URL is malformed
+  } catch (error) {
+    console.error("[v0] Invalid NEXT_PUBLIC_SITE_URL:", siteUrl, "- using fallback")
+    siteUrl = "https://suedfruechte-hohenlohe.de"
   }
-
-  // Remove trailing slash
-  siteUrl = siteUrl.replace(/\/$/, "")
 
   const logoUrl =
     process.env.NEXT_PUBLIC_NEWS_LOGO_URL ||

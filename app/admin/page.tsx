@@ -1,17 +1,17 @@
 "use client"
 import { useEffect, lazy, Suspense, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
-import { LogOut, Clock, Shield, Users, ShoppingCart, TrendingUp, Loader2, Menu } from "lucide-react"
+import { LogOut, Clock, Shield, Users, ShoppingCart, TrendingUp, Loader2, Menu } from 'lucide-react'
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { AdminProvider, useAdmin } from "@/contexts/admin-context"
 import RevenueAnalyticsModal from "@/components/admin/revenue-analytics-modal"
-import { RefreshCw } from "lucide-react"
+import { RefreshCw } from 'lucide-react'
 import usePersistedState from "@/hooks/use-persisted-state"
 import { TestModeToggle } from "@/components/admin/test-mode-toggle"
 import { SettingsPanel } from "@/components/admin/settings-panel"
@@ -21,6 +21,8 @@ const CustomerTable = lazy(() => import("@/components/admin/customer-table"))
 const OrderManagement = lazy(() => import("@/components/admin/order-management"))
 const InventoryManagement = lazy(() => import("@/components/admin/inventory-management"))
 const PickupLocationManagement = lazy(() => import("@/components/admin/pickup-management"))
+const DeliveryRouteManagement = lazy(() => import("@/components/admin/delivery-route-management"))
+const DistributionPersonManagement = lazy(() => import("@/components/admin/distribution-person-management"))
 const SupplierOrderCalculator = lazy(() => import("@/components/admin/supplier-calculator"))
 const NewsletterSystem = lazy(() => import("@/components/admin/newsletter-system"))
 const ContentManagementSystem = lazy(() => import("@/components/admin/content-management"))
@@ -448,11 +450,11 @@ function AdminDashboardContent() {
             variant="ghost"
             className="justify-start"
             onClick={() => {
-              setActiveTab("pickup")
+              setActiveTab("distribution")
               dispatch({ type: "SET_MOBILE_SHEET", payload: false })
             }}
           >
-            Abholorte
+            Verteilsystem
           </Button>
           <Button
             variant="ghost"
@@ -594,7 +596,7 @@ function AdminDashboardContent() {
             <TabsTrigger value="orders">Bestellungen</TabsTrigger>
             <TabsTrigger value="products">Produkte</TabsTrigger>
             <TabsTrigger value="inventory">Lager</TabsTrigger>
-            <TabsTrigger value="pickup">Abholorte</TabsTrigger>
+            <TabsTrigger value="distribution">Verteilsystem</TabsTrigger>
             <TabsTrigger value="delivery">Liefertermine</TabsTrigger>
             <TabsTrigger value="supplier">Großhändler</TabsTrigger>
             <TabsTrigger value="emails">E-Mails</TabsTrigger>
@@ -633,10 +635,33 @@ function AdminDashboardContent() {
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="pickup" className="space-y-4 md:space-y-6">
-          <Suspense fallback={<LoadingSpinner />}>
-            <PickupLocationManagement />
-          </Suspense>
+        <TabsContent value="distribution" className="space-y-4 md:space-y-6">
+          <Card>
+            <CardContent className="pt-6">
+              <Tabs defaultValue="locations" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="locations">Abholorte</TabsTrigger>
+                  <TabsTrigger value="routes">Touren</TabsTrigger>
+                  <TabsTrigger value="persons">Verteilpersonen</TabsTrigger>
+                </TabsList>
+                <TabsContent value="locations" className="mt-6">
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <PickupLocationManagement />
+                  </Suspense>
+                </TabsContent>
+                <TabsContent value="routes" className="mt-6">
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <DeliveryRouteManagement />
+                  </Suspense>
+                </TabsContent>
+                <TabsContent value="persons" className="mt-6">
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <DistributionPersonManagement />
+                  </Suspense>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="delivery" className="space-y-4 md:space-y-6">

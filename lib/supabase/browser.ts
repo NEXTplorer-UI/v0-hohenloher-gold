@@ -19,15 +19,10 @@ declare global {
  * @returns Supabase browser client
  */
 export function getBrowserClient(): SupabaseClient {
-  console.log("[v0] [getBrowserClient] Called, cached:", !!globalThis.__supabase_browser__)
-
   // Return cached client if it exists
   if (globalThis.__supabase_browser__) {
-    console.log("[v0] [getBrowserClient] Returning cached client")
     return globalThis.__supabase_browser__
   }
-
-  console.log("[v0] [getBrowserClient] Creating NEW browser client")
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -44,7 +39,6 @@ export function getBrowserClient(): SupabaseClient {
 
   // Cache the client globally
   globalThis.__supabase_browser__ = client
-  console.log("[v0] [getBrowserClient] Client cached globally")
 
   return client
 }

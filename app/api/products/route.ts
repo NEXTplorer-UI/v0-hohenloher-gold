@@ -10,7 +10,6 @@ async function getNextDeliverySchedule(supabase: any) {
       .order("delivery_date", { ascending: true })
 
     if (error) {
-      console.log("[v0] Delivery schedules table not available yet:", error.message)
       return null
     }
 
@@ -212,18 +211,6 @@ export async function GET() {
         attributes: product.attributes,
       }
     })
-
-    console.log(`[v0] Image URL Statistics:`)
-    console.log(`[v0] - Products with Supabase URLs: ${supabaseImageProducts.length}`)
-    console.log(`[v0] - Products with local paths: ${localImageProducts.length}`)
-    console.log(`[v0] - Products without images: ${noImageProducts.length}`)
-
-    if (localImageProducts.length > 0) {
-      console.log(`[v0] Products using LOCAL image paths (need to be updated to Supabase):`)
-      localImageProducts.forEach((name) => console.log(`[v0]   - ${name}`))
-    }
-
-    console.log(`[v0] Found ${enrichedProducts.length} products with full details`)
 
     return NextResponse.json(enrichedProducts, {
       headers: {

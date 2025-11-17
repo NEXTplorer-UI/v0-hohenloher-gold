@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { MapPin, Plus, Edit, Trash2, Clock, Mail, Info, LinkIcon, MessageSquare } from 'lucide-react'
+import { MapPin, Plus, Edit, Trash2, Clock, Mail, Info, LinkIcon, MessageSquare, User } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -48,6 +48,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import useSWR from "swr"
 
 interface PickupLocation {
   id: string
@@ -63,6 +64,8 @@ interface PickupLocation {
   notes: string | null
   is_active: boolean
   created_at: string
+  route_id?: string | null
+  route_name?: string | null
 }
 
 interface PickupLocationMapping {
@@ -93,6 +96,30 @@ interface IndividualOrderEntry {
   pickupLocation: string
   comment: string | null
   orderNumber: string
+}
+
+interface DistributionPerson {
+  id: string
+  name: string
+  phone: string | null
+  email: string | null
+  is_active: boolean
+}
+
+interface LocationPerson {
+  id: string
+  pickup_location_id: string
+  person_id: string
+  is_primary: boolean
+}
+
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+  if (!res.ok) {
+    throw new Error(`HTTP error! status: ${res.status}`)
+  }
+  const data = await res.json()
+  return data
 }
 
 export default function PickupLocationManagement() {
@@ -126,6 +153,26 @@ export default function PickupLocationManagement() {
   const [selectedCommentMappings, setSelectedCommentMappings] = useState<Record<string, string>>({})
   const { toast } = useToast()
 
+  const [selectedPersonsForLocation, setSelectedPersonsForLocation] = useState<Record<string, boolean>>({})
+  const [primaryPerson, setPrimaryPerson] = useState<string | null>(null)
+  const [loadingPersons, setLoadingPersons] = useState(false)
+
+  const [selectedDistributionPersons, setSelectedDistributionPersons] = useState<Record<string, string>>({})
+  const [distributionPersonsForLocation, setDistributionPersonsForLocation] = useState<Record<string, DistributionPerson[]>>({})
+
+  const { data: personsData, error: personsError } = useSWR<{ persons: DistributionPerson[] }>(
+    "/api/admin/distribution-persons",
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      onError: (error) => {
+        console.error("[v0] Error loading distribution persons:", error)
+      }
+    }
+  )
+  const distributionPersons = personsData?.persons || []
+
+
   useEffect(() => {
     fetchLocations()
     fetchMappings()
@@ -136,7 +183,7 @@ export default function PickupLocationManagement() {
       const response = await fetch("/api/admin/pickup-locations")
       if (response.ok) {
         const data = await response.json()
-        setLocations(data)
+        setLocations(data.locations || data)
       } else {
         toast({
           title: "Fehler",
@@ -184,11 +231,15 @@ export default function PickupLocationManagement() {
   }
 
   const fetchIndividualOrders = async () => {
+    console.log("[v0] Fetching individual orders (ungrouped)...") // Added debug logging
     setLoadingMappings(true)
     try {
       const response = await fetch("/api/admin/pickup-location-mappings?includeUnmapped=true&grouped=false")
+      console.log("[v0] Individual orders response status:", response.status) // Added debug logging
+      
       if (response.ok) {
         const data = await response.json()
+        console.log("[v0] Individual orders data:", data) // Added debug logging
         setIndividualOrders(data.individual || [])
       } else {
         toast({
@@ -200,10 +251,10 @@ export default function PickupLocationManagement() {
     } catch (error) {
       console.error("Error fetching individual orders:", error)
       toast({
-        title: "Fehler",
-        description: "Verbindungsfehler beim Laden der Bestellungen",
-        variant: "destructive",
-      })
+          title: "Fehler",
+          description: "Verbindungsfehler beim Laden der Bestellungen",
+          variant: "destructive",
+        })
     } finally {
       setLoadingMappings(false)
     }
@@ -238,14 +289,16 @@ export default function PickupLocationManagement() {
     } catch (error) {
       console.error("Error toggling location:", error)
       toast({
-        title: "Fehler",
-        description: "Status konnte nicht geändert werden",
-        variant: "destructive",
-      })
+          title: "Fehler",
+          description: "Status konnte nicht geändert werden",
+          variant: "destructive",
+        })
     }
   }
 
   const handleCreate = async () => {
+    console.log("[v0] Creating pickup location with data:", formData)
+    
     try {
       const response = await fetch("/api/admin/pickup-locations", {
         method: "POST",
@@ -253,8 +306,14 @@ export default function PickupLocationManagement() {
         body: JSON.stringify(formData),
       })
 
+      console.log("[v0] Create pickup location response status:", response.status)
+
       if (response.ok) {
+        const newLocation = await response.json()
+        console.log("[v0] New location created with ID:", newLocation.id)
+        
         await fetchLocations()
+        
         setIsCreateDialogOpen(false)
         resetForm()
         toast({
@@ -263,15 +322,16 @@ export default function PickupLocationManagement() {
         })
       } else {
         const error = await response.json()
+        console.error("[v0] Error creating pickup location:", error)
         throw new Error(error.error || "Failed to create location")
       }
     } catch (error) {
       console.error("Error creating location:", error)
       toast({
-        title: "Fehler",
-        description: "Abholort konnte nicht erstellt werden",
-        variant: "destructive",
-      })
+          title: "Fehler",
+          description: "Abholort konnte nicht erstellt werden",
+          variant: "destructive",
+        })
     }
   }
 
@@ -288,18 +348,26 @@ export default function PickupLocationManagement() {
         }),
       })
 
-      if (response.ok) {
-        await fetchLocations()
-        setIsEditDialogOpen(false)
-        setSelectedLocation(null)
-        resetForm()
-        toast({
-          title: "Erfolg",
-          description: "Abholort wurde aktualisiert",
-        })
-      } else {
+      if (!response.ok) {
         throw new Error("Failed to update location")
       }
+
+      const updatedLocation = await response.json()
+      console.log("[v0] Location updated:", updatedLocation)
+      
+      await saveDistributionPersons(selectedLocation.id)
+      
+      await fetchLocations()
+      
+      setIsEditDialogOpen(false)
+      setSelectedLocation(null)
+      resetForm()
+      setSelectedPersonsForLocation({})
+      setPrimaryPerson(null)
+      toast({
+        title: "Erfolg",
+        description: "Abholort wurde aktualisiert",
+      })
     } catch (error) {
       console.error("Error updating location:", error)
       toast({
@@ -337,14 +405,14 @@ export default function PickupLocationManagement() {
     } catch (error) {
       console.error("Error deleting location:", error)
       toast({
-        title: "Fehler",
-        description: "Verbindungsfehler beim Löschen",
-        variant: "destructive",
-      })
+          title: "Fehler",
+          description: "Verbindungsfehler beim Löschen",
+          variant: "destructive",
+        })
     }
   }
 
-  const openEditDialog = (location: PickupLocation) => {
+  const openEditDialog = async (location: PickupLocation) => {
     setSelectedLocation(location)
     setFormData({
       name: location.name,
@@ -358,6 +426,9 @@ export default function PickupLocationManagement() {
       pickup_hours_end: location.pickup_hours_end || "",
       notes: location.notes || "",
     })
+    
+    await loadDistributionPersonsForLocation(location.id)
+    
     setIsEditDialogOpen(true)
   }
 
@@ -366,7 +437,88 @@ export default function PickupLocationManagement() {
     setIsDeleteDialogOpen(true)
   }
 
-  const createMapping = async (variant: string, canonicalLocationId: string) => {
+  const loadDistributionPersonsForLocation = async (locationId: string) => {
+    setLoadingPersons(true)
+    try {
+      const response = await fetch(`/api/admin/location-persons?locationId=${locationId}`)
+      if (response.ok) {
+        const data = await response.json()
+        const assignments: Record<string, boolean> = {}
+        let primary: string | null = null
+        
+        data.assignments.forEach((assignment: LocationPerson) => {
+          assignments[assignment.person_id] = true
+          if (assignment.is_primary) {
+            primary = assignment.person_id
+          }
+        })
+        
+        setSelectedPersonsForLocation(assignments)
+        setPrimaryPerson(primary)
+      }
+    } catch (error) {
+      console.error("[v0] Error loading distribution persons:", error)
+    } finally {
+      setLoadingPersons(false)
+    }
+  }
+
+  const saveDistributionPersons = async (locationId: string) => {
+    try {
+      const selectedIds = Object.keys(selectedPersonsForLocation).filter(
+        (id) => selectedPersonsForLocation[id]
+      )
+
+      console.log("[v0] Saving distribution persons for location:", locationId, "persons:", selectedIds)
+
+      const response = await fetch("/api/admin/location-persons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          locationId,
+          personIds: selectedIds,
+          primaryPersonId: primaryPerson,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to save distribution persons")
+      }
+
+      console.log("[v0] Distribution persons saved successfully")
+    } catch (error) {
+      console.error("[v0] Error saving distribution persons:", error)
+      console.error("Verteilpersonen konnten nicht gespeichert werden, aber Abholort wurde aktualisiert")
+    }
+  }
+
+  const loadDistributionPersonsForSelectedLocation = async (locationId: string) => {
+    try {
+      const response = await fetch(`/api/admin/location-persons?locationId=${locationId}`)
+      if (response.ok) {
+        const data = await response.json()
+        const personIds = data.assignments.map((a: LocationPerson) => a.person_id)
+        const personsForLocation = distributionPersons.filter(p => personIds.includes(p.id) && p.is_active)
+        setDistributionPersonsForLocation(prev => ({
+          ...prev,
+          [locationId]: personsForLocation
+        }))
+      }
+    } catch (error) {
+      console.error("[v0] Error loading distribution persons for location:", error)
+    }
+  }
+
+  const handleLocationSelect = (variantKey: string, locationId: string) => {
+    setSelectedMappings((prev) => ({ ...prev, [variantKey]: locationId }))
+    if (locationId) {
+      loadDistributionPersonsForSelectedLocation(locationId)
+    }
+  }
+
+  const createMapping = async (variant: string, canonicalLocationId: string, distributionPersonId?: string) => {
+    console.log("[v0] Creating mapping for variant:", variant, "to location:", canonicalLocationId, "person:", distributionPersonId)
     try {
       const response = await fetch("/api/admin/pickup-location-mappings", {
         method: "POST",
@@ -375,35 +527,48 @@ export default function PickupLocationManagement() {
           variant,
           canonical_location_id: canonicalLocationId,
           applyToExisting,
+          distribution_person_id: distributionPersonId || null,
         }),
       })
 
-      if (response.ok) {
-        await fetchMappings()
-        toast({
-          title: "Erfolg",
-          description: `Mapping für "${variant}" erstellt`,
-        })
-        setSelectedMappings((prev) => {
-          const updated = { ...prev }
-          delete updated[variant]
-          return updated
-        })
-      } else {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to create mapping")
+      console.log("[v0] Create mapping response status:", response.status)
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("[v0] Error creating mapping:", errorData)
+        throw new Error(errorData.error || "Failed to create mapping")
       }
+
+      const result = await response.json()
+      console.log("[v0] Mapping created successfully:", result)
+      
+      await fetchMappings()
+      toast({
+        title: "Erfolg",
+        description: `Mapping für "${variant}" erstellt`,
+      })
+      setSelectedMappings((prev) => {
+        const updated = { ...prev }
+        delete updated[variant]
+        return updated
+      })
+      setSelectedDistributionPersons((prev) => {
+        const updated = { ...prev }
+        delete updated[variant]
+        return updated
+      })
     } catch (error: any) {
-      console.error("Error creating mapping:", error)
+      console.error("[v0] Error creating mapping:", error)
       toast({
         title: "Fehler",
-        description: error.message || "Mapping konnte nicht erstellt werden",
+        description: String(error?.message || "Mapping konnte nicht erstellt werden"),
         variant: "destructive",
       })
     }
   }
 
   const createCommentMapping = async (comment: string, canonicalLocationId: string, orderId: string) => {
+    console.log("[v0] Creating comment mapping for order:", orderId, "comment:", comment, "to location:", canonicalLocationId) // Added debug logging
     try {
       const response = await fetch("/api/admin/pickup-location-mappings", {
         method: "POST",
@@ -416,6 +581,8 @@ export default function PickupLocationManagement() {
           orderId,
         }),
       })
+
+      console.log("[v0] Create comment mapping response status:", response.status) // Added debug logging
 
       if (response.ok) {
         await fetchIndividualOrders()
@@ -430,19 +597,21 @@ export default function PickupLocationManagement() {
         })
       } else {
         const error = await response.json()
+        console.error("[v0] Error creating comment mapping:", error) // Added debug logging
         throw new Error(error.error || "Failed to create mapping")
       }
     } catch (error: any) {
       console.error("Error creating comment mapping:", error)
       toast({
-        title: "Fehler",
-        description: error.message || "Kommentar-Mapping konnte nicht erstellt werden",
-        variant: "destructive",
-      })
+          title: "Fehler",
+          description: error.message || "Kommentar-Mapping konnte nicht erstellt werden",
+          variant: "destructive",
+        })
     }
   }
 
   const createPickupMapping = async (pickupLocation: string, canonicalLocationId: string, orderId: string) => {
+    console.log("[v0] Creating pickup mapping for order:", orderId, "pickup:", pickupLocation, "to location:", canonicalLocationId) // Added debug logging
     try {
       const response = await fetch("/api/admin/pickup-location-mappings", {
         method: "POST",
@@ -455,6 +624,8 @@ export default function PickupLocationManagement() {
           orderId,
         }),
       })
+
+      console.log("[v0] Create pickup mapping response status:", response.status) // Added debug logging
 
       if (response.ok) {
         await fetchIndividualOrders()
@@ -469,15 +640,16 @@ export default function PickupLocationManagement() {
         })
       } else {
         const error = await response.json()
+        console.error("[v0] Error creating pickup mapping:", error) // Added debug logging
         throw new Error(error.error || "Failed to create mapping")
       }
     } catch (error: any) {
       console.error("Error creating pickup mapping:", error)
       toast({
-        title: "Fehler",
-        description: error.message || "Abholort-Mapping konnte nicht erstellt werden",
-        variant: "destructive",
-      })
+          title: "Fehler",
+          description: error.message || "Abholort-Mapping konnte nicht erstellt werden",
+          variant: "destructive",
+        })
     }
   }
 
@@ -499,10 +671,10 @@ export default function PickupLocationManagement() {
     } catch (error) {
       console.error("Error deleting mapping:", error)
       toast({
-        title: "Fehler",
-        description: "Mapping konnte nicht gelöscht werden",
-        variant: "destructive",
-      })
+          title: "Fehler",
+          description: "Mapping konnte nicht gelöscht werden",
+          variant: "destructive",
+        })
     }
   }
 
@@ -525,10 +697,10 @@ export default function PickupLocationManagement() {
     } catch (error) {
       console.error("Error batch normalizing:", error)
       toast({
-        title: "Fehler",
-        description: "Batch-Normalisierung fehlgeschlagen",
-        variant: "destructive",
-      })
+          title: "Fehler",
+          description: "Batch-Normalisierung fehlgeschlagen",
+          variant: "destructive",
+        })
     } finally {
       setIsBatchNormalizing(false)
     }
@@ -642,7 +814,6 @@ export default function PickupLocationManagement() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Unmapped Variants Section */}
           {(unmappedVariants.length > 0 || individualOrders.length > 0) && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -686,103 +857,139 @@ export default function PickupLocationManagement() {
                         <TableHead>Variante (Original)</TableHead>
                         <TableHead className="text-right">Anzahl Bestellungen</TableHead>
                         <TableHead>Zuordnen zu</TableHead>
+                        <TableHead>Verteilperson</TableHead>
                         <TableHead className="w-[100px]"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {unmappedVariants.map((variant) => (
-                        <TableRow key={variant.variant} className="group">
-                          <TableCell className="align-top">
-                            <div className="space-y-2">
-                              <div className="font-mono font-medium">{variant.variant}</div>
-                              {variant.notes && variant.notes.length > 0 && (
-                                <Collapsible>
-                                  <CollapsibleTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-7 gap-1 text-muted-foreground hover:text-foreground"
-                                    >
-                                      <MessageSquare className="h-3 w-3" />
-                                      {variant.notes.length} Kommentar(e) anzeigen
-                                    </Button>
-                                  </CollapsibleTrigger>
-                                  <CollapsibleContent className="mt-2 space-y-2">
-                                    {variant.suggestion && (
-                                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                                        <p className="text-sm font-medium text-blue-900">
-                                          Automatischer Vorschlag: {variant.suggestion.locationName}
-                                        </p>
-                                        <p className="text-xs text-blue-700 mt-1">
-                                          In Kommentaren erkannt (Konfidenz: {variant.suggestion.confidence})
-                                        </p>
-                                      </div>
-                                    )}
-                                    <div className="space-y-2 pl-3 border-l-2 border-muted">
-                                      {variant.notes.slice(0, 5).map((note, idx) => (
-                                        <div key={idx} className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">
-                                          {note}
+                      {unmappedVariants.map((variant) => {
+                        const selectedLocation = selectedMappings[variant.variant] || variant.suggestion?.locationId || ""
+                        const personsForLoc = selectedLocation ? (distributionPersonsForLocation[selectedLocation] || []) : []
+                        
+                        return (
+                          <TableRow key={variant.variant} className="group">
+                            <TableCell className="align-top">
+                              <div className="space-y-2">
+                                <div className="font-mono font-medium">{variant.variant}</div>
+                                {variant.notes && variant.notes.length > 0 && (
+                                  <Collapsible>
+                                    <CollapsibleTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 gap-1 text-muted-foreground hover:text-foreground"
+                                      >
+                                        <MessageSquare className="h-3 w-3" />
+                                        {variant.notes.length} Kommentar(e) anzeigen
+                                      </Button>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent className="mt-2 space-y-2">
+                                      {variant.suggestion && (
+                                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                                          <p className="text-sm font-medium text-blue-900">
+                                            Automatischer Vorschlag: {variant.suggestion.locationName}
+                                          </p>
+                                          <p className="text-xs text-blue-700 mt-1">
+                                            In Kommentaren erkannt (Konfidenz: {variant.suggestion.confidence})
+                                          </p>
                                         </div>
-                                      ))}
-                                      {variant.notes.length > 5 && (
-                                        <p className="text-xs text-muted-foreground italic pl-2">
-                                          ... und {variant.notes.length - 5} weitere Kommentar(e)
-                                        </p>
                                       )}
-                                    </div>
-                                  </CollapsibleContent>
-                                </Collapsible>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right align-top">
-                            <Badge variant="secondary" className="font-mono">
-                              {variant.count}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <Select
-                              value={selectedMappings[variant.variant] || (variant.suggestion?.locationId || "")}
-                              onValueChange={(value) =>
-                                setSelectedMappings((prev) => ({ ...prev, [variant.variant]: value }))
-                              }
-                            >
-                              <SelectTrigger className="w-[280px]">
-                                <SelectValue placeholder="Abholort wählen..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {locations
-                                  .filter((loc) => loc.is_active)
-                                  .map((location) => (
-                                    <SelectItem key={location.id} value={location.id}>
-                                      {location.name}
-                                      {variant.suggestion?.locationId === location.id && " ⭐"}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                            {variant.suggestion && (
-                              <Badge variant="outline" className="mt-2 bg-blue-50 text-blue-700 border-blue-200">
-                                Vorschlag verfügbar
+                                      <div className="space-y-2 pl-3 border-l-2 border-muted">
+                                        {variant.notes.slice(0, 5).map((note, idx) => (
+                                          <div key={idx} className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">
+                                            {note}
+                                          </div>
+                                        ))}
+                                        {variant.notes.length > 5 && (
+                                          <p className="text-xs text-muted-foreground italic pl-2">
+                                            ... und {variant.notes.length - 5} weitere Kommentar(e)
+                                          </p>
+                                        )}
+                                      </div>
+                                    </CollapsibleContent>
+                                  </Collapsible>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right align-top">
+                              <Badge variant="secondary" className="font-mono">
+                                {variant.count}
                               </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <Button
-                              size="sm"
-                              disabled={!selectedMappings[variant.variant] && !variant.suggestion}
-                              onClick={() =>
-                                createMapping(
-                                  variant.variant,
-                                  selectedMappings[variant.variant] || variant.suggestion?.locationId
-                                )
-                              }
-                            >
-                              Zuordnen
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                            </TableCell>
+                            <TableCell className="align-top">
+                              <Select
+                                value={selectedLocation}
+                                onValueChange={(value) => handleLocationSelect(variant.variant, value)}
+                              >
+                                <SelectTrigger className="w-[280px]">
+                                  <SelectValue placeholder="Abholort wählen..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {locations
+                                    .filter((loc) => loc.is_active)
+                                    .map((location) => (
+                                      <SelectItem key={location.id} value={location.id}>
+                                        {location.name}
+                                        {variant.suggestion?.locationId === location.id && " ⭐"}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                              {variant.suggestion && (
+                                <Badge variant="outline" className="mt-2 bg-blue-50 text-blue-700 border-blue-200">
+                                  Vorschlag verfügbar
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="align-top">
+                              {personsForLoc.length > 0 ? (
+                                <Select
+                                  value={selectedDistributionPersons[variant.variant] || ""}
+                                  onValueChange={(value) =>
+                                    setSelectedDistributionPersons((prev) => ({ ...prev, [variant.variant]: value }))
+                                  }
+                                >
+                                  <SelectTrigger className="w-[200px]">
+                                    <SelectValue placeholder="Optional zuordnen..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Keine Verteilperson</SelectItem>
+                                    {personsForLoc.map((person) => (
+                                      <SelectItem key={person.id} value={person.id}>
+                                        <div className="flex items-center gap-2">
+                                          <User className="h-3 w-3" />
+                                          {person.name}
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <span className="text-sm text-muted-foreground italic">
+                                  {selectedLocation ? "Keine Verteilpersonen für diesen Ort" : "Erst Ort wählen"}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="align-top">
+                              <Button
+                                size="sm"
+                                disabled={!selectedLocation}
+                                onClick={() =>
+                                  createMapping(
+                                    variant.variant,
+                                    selectedLocation,
+                                    selectedDistributionPersons[variant.variant] === "none" 
+                                      ? undefined 
+                                      : selectedDistributionPersons[variant.variant]
+                                  )
+                                }
+                              >
+                                Zuordnen
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -914,7 +1121,6 @@ export default function PickupLocationManagement() {
             </div>
           )}
 
-          {/* Existing Mappings Section */}
           {mappings.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -959,243 +1165,306 @@ export default function PickupLocationManagement() {
               </Table>
             </div>
           )}
-
-          {(unmappedVariants.length === 0 && mappings.length === 0 && !loadingMappings && isGrouped) && (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>Keine Abholort-Varianten gefunden.</p>
-              <p className="text-sm mt-2">Varianten werden automatisch erkannt, sobald Bestellungen eingehen.</p>
-            </div>
-          )}
-
-          {(!isGrouped && individualOrders.length === 0 && mappings.length === 0 && !loadingMappings) && (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>Keine einzelnen Bestellungen zum Zuordnen gefunden.</p>
-              <p className="text-sm mt-2">
-                Varianten werden automatisch erkannt, sobald Bestellungen eingehen.
-              </p>
-            </div>
-          )}
-
-          {loadingMappings && <div className="text-center py-8 text-muted-foreground">Lade Mappings...</div>}
         </CardContent>
       </Card>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Neuer Abholort</DialogTitle>
-            <DialogDescription>Erstellen Sie einen neuen Abholstandort für Kunden</DialogDescription>
+            <DialogTitle>Neuen Abholort erstellen</DialogTitle>
+            <DialogDescription>Fügen Sie einen neuen Abholstandort hinzu</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="z.B. Hohenlohe Markt"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="address">Adresse</Label>
-              <Input
-                id="address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                placeholder="z.B. Marktplatz 1 (optional)"
-              />
-            </div>
+          <form onSubmit={(e) => {
+            e.preventDefault()
+            handleCreate()
+          }} className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
+              <div className="col-span-2">
+                <Label htmlFor="name">Name *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="z.B. Rathaus Schwäbisch Hall"
+                  required
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="address">Adresse</Label>
+                <Input
+                  id="address"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  placeholder="Straße und Hausnummer"
+                />
+              </div>
+              <div>
                 <Label htmlFor="postal_code">PLZ</Label>
                 <Input
                   id="postal_code"
                   value={formData.postal_code}
                   onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
-                  placeholder="z.B. 74613 (optional)"
+                  placeholder="74523"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="city">Stadt</Label>
+              <div>
+                <Label htmlFor="city">Ort</Label>
                 <Input
                   id="city"
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  placeholder="z.B. Öhringen (optional)"
+                  placeholder="Schwäbisch Hall"
                 />
               </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="contact_person">Kontaktperson</Label>
-              <Input
-                id="contact_person"
-                value={formData.contact_person}
-                onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
-                placeholder="Optional"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="contact_phone">Telefon</Label>
-              <Input
-                id="contact_phone"
-                value={formData.contact_phone}
-                onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-                placeholder="Optional"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="email">E-Mail</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="Optional"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
+              <div>
+                <Label htmlFor="contact_person">Kontaktperson</Label>
+                <Input
+                  id="contact_person"
+                  value={formData.contact_person}
+                  onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
+                  placeholder="Max Mustermann"
+                />
+              </div>
+              <div>
+                <Label htmlFor="contact_phone">Telefon</Label>
+                <Input
+                  id="contact_phone"
+                  value={formData.contact_phone}
+                  onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+                  placeholder="+49 123 456789"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="email">E-Mail</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="kontakt@beispiel.de"
+                />
+              </div>
+              <div>
                 <Label htmlFor="pickup_hours_start">Abholzeit von</Label>
                 <Input
                   id="pickup_hours_start"
+                  type="time"
                   value={formData.pickup_hours_start}
                   onChange={(e) => setFormData({ ...formData, pickup_hours_start: e.target.value })}
-                  placeholder="z.B. 09:00"
                 />
               </div>
-              <div className="grid gap-2">
+              <div>
                 <Label htmlFor="pickup_hours_end">Abholzeit bis</Label>
                 <Input
                   id="pickup_hours_end"
+                  type="time"
                   value={formData.pickup_hours_end}
                   onChange={(e) => setFormData({ ...formData, pickup_hours_end: e.target.value })}
-                  placeholder="z.B. 18:00"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="notes">Notizen</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="Zusätzliche Informationen..."
+                  rows={3}
                 />
               </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="notes">Hinweise</Label>
-              <Textarea
-                id="notes"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="z.B. Eingang auf der Rückseite"
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-              Abbrechen
-            </Button>
-            <Button onClick={handleCreate}>Erstellen</Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => {
+                setIsCreateDialogOpen(false)
+                resetForm()
+              }}>
+                Abbrechen
+              </Button>
+              <Button type="submit" disabled={!formData.name}>
+                Erstellen
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Abholort bearbeiten</DialogTitle>
-            <DialogDescription>Bearbeiten Sie die Details des Abholstandorts</DialogDescription>
+            <DialogDescription>Bearbeiten Sie die Informationen des Abholorts</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="edit-name">Name *</Label>
-              <Input
-                id="edit-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-address">Adresse</Label>
-              <Input
-                id="edit-address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              />
-            </div>
+          <form onSubmit={(e) => {
+            e.preventDefault()
+            handleUpdate()
+          }} className="space-y-6 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-postal_code">PLZ</Label>
+              <div className="col-span-2">
+                <Label htmlFor="edit_name">Name *</Label>
                 <Input
-                  id="edit-postal_code"
+                  id="edit_name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="edit_address">Adresse</Label>
+                <Input
+                  id="edit_address"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit_postal_code">PLZ</Label>
+                <Input
+                  id="edit_postal_code"
                   value={formData.postal_code}
                   onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-city">Stadt</Label>
+              <div>
+                <Label htmlFor="edit_city">Ort</Label>
                 <Input
-                  id="edit-city"
+                  id="edit_city"
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                 />
               </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-contact_person">Kontaktperson</Label>
-              <Input
-                id="edit-contact_person"
-                value={formData.contact_person}
-                onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-contact_phone">Telefon</Label>
-              <Input
-                id="edit-contact_phone"
-                value={formData.contact_phone}
-                onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-email">E-Mail</Label>
-              <Input
-                id="edit-email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-pickup_hours_start">Abholzeit von</Label>
+              <div>
+                <Label htmlFor="edit_contact_person">Kontaktperson</Label>
                 <Input
-                  id="edit-pickup_hours_start"
+                  id="edit_contact_person"
+                  value={formData.contact_person}
+                  onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit_contact_phone">Telefon</Label>
+                <Input
+                  id="edit_contact_phone"
+                  value={formData.contact_phone}
+                  onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="edit_email">E-Mail</Label>
+                <Input
+                  id="edit_email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit_pickup_hours_start">Abholzeit von</Label>
+                <Input
+                  id="edit_pickup_hours_start"
+                  type="time"
                   value={formData.pickup_hours_start}
                   onChange={(e) => setFormData({ ...formData, pickup_hours_start: e.target.value })}
-                  placeholder="z.B. 09:00"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-pickup_hours_end">Abholzeit bis</Label>
+              <div>
+                <Label htmlFor="edit_pickup_hours_end">Abholzeit bis</Label>
                 <Input
-                  id="edit-pickup_hours_end"
+                  id="edit_pickup_hours_end"
+                  type="time"
                   value={formData.pickup_hours_end}
                   onChange={(e) => setFormData({ ...formData, pickup_hours_end: e.target.value })}
-                  placeholder="z.B. 18:00"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="edit_notes">Notizen</Label>
+                <Textarea
+                  id="edit_notes"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  rows={3}
                 />
               </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-notes">Hinweise</Label>
-              <Textarea
-                id="edit-notes"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="z.B. Eingang auf der Rückseite"
-                rows={3}
-              />
+
+            <div className="space-y-4 pt-4 border-t">
+              <div>
+                <h3 className="text-lg font-medium mb-2">Verteilpersonen an diesem Abholort</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Wählen Sie die Verteilpersonen aus, die an diesem Abholort aktiv sind. Markieren Sie eine Person als Hauptansprechpartner.
+                </p>
+              </div>
+              
+              {loadingPersons ? (
+                <div className="text-center py-4">Lade Verteilpersonen...</div>
+              ) : distributionPersons.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  Keine Verteilpersonen verfügbar. Erstellen Sie erst Verteilpersonen im "Verteilpersonen"-Tab.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[200px] overflow-y-auto border rounded-lg p-4">
+                  {distributionPersons
+                    .filter(person => person.is_active)
+                    .map((person) => (
+                      <div key={person.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                        <div className="flex items-center space-x-3">
+                          <Checkbox
+                            id={`person-${person.id}`}
+                            checked={!!selectedPersonsForLocation[person.id]}
+                            onCheckedChange={(checked) => {
+                              setSelectedPersonsForLocation(prev => ({
+                                ...prev,
+                                [person.id]: checked as boolean
+                              }))
+                              if (!checked && primaryPerson === person.id) {
+                                setPrimaryPerson(null)
+                              }
+                            }}
+                          />
+                          <div>
+                            <Label htmlFor={`person-${person.id}`} className="cursor-pointer font-medium">
+                              {person.name}
+                            </Label>
+                            {person.phone && (
+                              <p className="text-xs text-muted-foreground">{person.phone}</p>
+                            )}
+                          </div>
+                        </div>
+                        {selectedPersonsForLocation[person.id] && (
+                          <div className="flex items-center space-x-2">
+                            <Label htmlFor={`primary-${person.id}`} className="text-sm text-muted-foreground">
+                              Hauptkontakt:
+                            </Label>
+                            <input
+                              type="radio"
+                              id={`primary-${person.id}`}
+                              name="primary-person"
+                              checked={primaryPerson === person.id}
+                              onChange={() => setPrimaryPerson(person.id)}
+                              className="cursor-pointer"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              )}
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Abbrechen
-            </Button>
-            <Button onClick={handleUpdate}>Speichern</Button>
-          </DialogFooter>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => {
+                setIsEditDialogOpen(false)
+                setSelectedLocation(null)
+                resetForm()
+                setSelectedPersonsForLocation({})
+                setPrimaryPerson(null)
+              }}>
+                Abbrechen
+              </Button>
+              <Button type="submit" disabled={!formData.name}>
+                Speichern
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -1204,15 +1473,13 @@ export default function PickupLocationManagement() {
           <AlertDialogHeader>
             <AlertDialogTitle>Abholort löschen?</AlertDialogTitle>
             <AlertDialogDescription>
-              Möchten Sie den Abholort "{selectedLocation?.name}" wirklich löschen? Diese Aktion kann nicht rückgängig
-              gemacht werden.
+              Sind Sie sicher, dass Sie den Abholort "{selectedLocation?.name}" löschen möchten? Diese Aktion kann nicht
+              rückgängig gemacht werden.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-              Löschen
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete}>Löschen</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -181,11 +181,8 @@ export async function mapProductToHelloCash(product: {
   let helloCashCategoryId: number | undefined
   if (product.category_id) {
     try {
-      const { createClient } = await import("@supabase/supabase-js")
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      )
+      const { createClient } = await import("@/lib/supabase/server")
+      const supabase = await createClient()
       
       const { data: category } = await supabase
         .from("categories")

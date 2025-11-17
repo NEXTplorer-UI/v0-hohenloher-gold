@@ -3,11 +3,11 @@
 import type React from "react"
 
 import { useEffect, useState, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { CheckCircle, XCircle, Loader2 } from "lucide-react"
+import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import Link from "next/link"
 
 function UnsubscribeContent() {
@@ -23,6 +23,14 @@ function UnsubscribeContent() {
     if (!email) {
       setStatus("error")
       setMessage("Bitte geben Sie Ihre E-Mail-Adresse ein")
+      return
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setStatus("error")
+      setMessage("Ungültige E-Mail-Adresse. Bitte überprüfen Sie Ihre Eingabe.")
       return
     }
 

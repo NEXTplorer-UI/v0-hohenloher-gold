@@ -292,7 +292,11 @@ export function RawStockManagement({ cachedData, onDataChange }: RawStockManagem
                         <div>Mindest: {formatStock(item.min_stock_grams, item.unit_type)}</div>
                         <div className="flex items-center gap-1 mt-1">
                           <span className="font-medium">{item.product_count} Produkte:</span>
-                          <span className="text-xs">{item.product_names.join(", ")}</span>
+                          <span className="text-xs">
+                            {item.product_names && item.product_names.length > 0 
+                              ? item.product_names.join(", ")
+                              : "Keine Produkte zugeordnet"}
+                          </span>
                         </div>
                       </div>
                     </div>
