@@ -23,6 +23,7 @@ const InventoryManagement = lazy(() => import("@/components/admin/inventory-mana
 const PickupLocationManagement = lazy(() => import("@/components/admin/pickup-management"))
 const DeliveryRouteManagement = lazy(() => import("@/components/admin/delivery-route-management"))
 const DistributionPersonManagement = lazy(() => import("@/components/admin/distribution-person-management"))
+const OrderNormalization = lazy(() => import("@/components/admin/order-normalization"))
 const SupplierOrderCalculator = lazy(() => import("@/components/admin/supplier-calculator"))
 const NewsletterSystem = lazy(() => import("@/components/admin/newsletter-system"))
 const ContentManagementSystem = lazy(() => import("@/components/admin/content-management"))
@@ -639,10 +640,11 @@ function AdminDashboardContent() {
           <Card>
             <CardContent className="pt-6">
               <Tabs defaultValue="locations" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="locations">Abholorte</TabsTrigger>
                   <TabsTrigger value="routes">Touren</TabsTrigger>
                   <TabsTrigger value="persons">Verteilpersonen</TabsTrigger>
+                  <TabsTrigger value="normalize">Normalisieren</TabsTrigger>
                 </TabsList>
                 <TabsContent value="locations" className="mt-6">
                   <Suspense fallback={<LoadingSpinner />}>
@@ -657,6 +659,11 @@ function AdminDashboardContent() {
                 <TabsContent value="persons" className="mt-6">
                   <Suspense fallback={<LoadingSpinner />}>
                     <DistributionPersonManagement />
+                  </Suspense>
+                </TabsContent>
+                <TabsContent value="normalize" className="mt-6">
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <OrderNormalization />
                   </Suspense>
                 </TabsContent>
               </Tabs>

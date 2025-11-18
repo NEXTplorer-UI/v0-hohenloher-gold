@@ -11,7 +11,7 @@
   --card-foreground: #374151;
   --popover: #ffffff;
   --popover-foreground: #374151;
-  --primary: #0f5132; /* Updated primary color to match the deeper green from the Hohenloher Gold logo */
+  --primary: #0f5132;
   --primary-foreground: #ffffff;
   --secondary: #84cc16;
   --secondary-foreground: #ffffff;
@@ -41,13 +41,32 @@
 
   /* Added comprehensive color system with gold accent and improved hover states */
   --gold: #d4af37;
-  --gold-foreground: #ffffff; /* Changed from #1f2937 to white for better contrast */
+  --gold-foreground: #ffffff;
   --gold-hover: #b8941f;
   --primary-hover: #0a3d26;
   --secondary-hover: #65a30d;
   --accent-hover: #65a30d;
   --muted-hover: #dcfce7;
   --card-hover: #dcfce7;
+
+  /* Hohenloher Gold Hauptfarben */
+  --hg-white: #ffffff;
+  --hg-light-green: #f0f5eb;
+  --hg-sand: #fffcdc;
+  --hg-green: #4d7621;
+  --hg-gold: #d4af37;
+  --hg-orange: #f7941d;
+  --hg-dark: #1a1a1a;
+  --hg-gray: #6b7280;
+  --hg-border: rgba(77, 118, 33, 0.2);
+  
+  --color-hg-sand: #fffcdc;
+  --color-hg-gold: #d4af37;
+  --color-hg-green: #4d7621;
+  --color-hg-orange: #f7941d;
+  --color-hg-text-primary: #333333;
+  --color-hg-icon-bg: #fffcdc;
+  --color-hg-icon-stroke: #f7941d;
 }
 
 .dark {
@@ -58,7 +77,7 @@
   --card-foreground: #f9fafb;
   --popover: #1f2937;
   --popover-foreground: #f9fafb;
-  --primary: #198754; /* Updated dark mode primary color to match logo green */
+  --primary: #198754;
   --primary-foreground: #1f2937;
   --secondary: #84cc16;
   --secondary-foreground: #1f2937;
@@ -87,7 +106,7 @@
 
   /* Added dark mode color system with gold accent and improved hover states */
   --gold: #f4d03f;
-  --gold-foreground: #1f2937; /* Keep dark text in dark mode since gold background is lighter */
+  --gold-foreground: #1f2937;
   --gold-hover: #f1c40f;
   --primary-hover: #145a32;
   --secondary-hover: #65a30d;
@@ -134,17 +153,14 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Added custom font variables for Space Grotesk and DM Sans */
   --font-space-grotesk: "Space Grotesk", sans-serif;
   --font-dm-sans: "DM Sans", sans-serif;
   --font-sans: var(--font-space-grotesk);
   --font-serif: var(--font-dm-sans);
-  /* Added Stalemate as script font variable */
   --font-stalemate: "Stalemate", cursive;
   --font-script: var(--font-stalemate);
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
-  /* Added gold and hover color variables for Tailwind */
   --color-gold: var(--gold);
   --color-gold-foreground: var(--gold-foreground);
   --color-gold-hover: var(--gold-hover);
@@ -164,7 +180,6 @@
   }
 }
 
-/* Fixed @layer utilities - properly closed and removed duplicate utility definitions */
 @layer utilities {
   .bg-gold {
     background-color: var(--color-gold);
@@ -194,7 +209,6 @@
     background-color: var(--color-card-hover);
   }
 
-  /* Adding scrollbar-hide utility for horizontal scrolling categories */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -203,67 +217,33 @@
     display: none;
   }
 
-  /* Icon Styles */
   .icon-bg-sand { background-color: var(--color-hg-icon-bg); }
   .icon-stroke-orange { color: var(--color-hg-icon-stroke); }
   .text-primary-dark { color: var(--color-hg-text-primary); }
 
-  /* Hover Effects */
   .hover\:icon-stroke-orange:hover { color: var(--color-hg-icon-stroke); }
+
+  /* Hohenloher Gold Utility Classes */
+  .bg-hg-white { background-color: var(--hg-white); }
+  .bg-hg-light-green { background-color: var(--hg-light-green); }
+  .bg-hg-sand { background-color: var(--hg-sand); }
+  .bg-hg-green { background-color: var(--hg-green); }
+  .bg-hg-gold { background-color: var(--hg-gold); }
+  .bg-hg-orange { background-color: var(--hg-orange); }
+
+  .text-hg-green { color: var(--hg-green); }
+  .text-hg-gold { color: var(--hg-gold); }
+  .text-hg-orange { color: var(--hg-orange); }
+  .text-hg-dark { color: var(--hg-dark); }
+  .text-hg-gray { color: var(--hg-gray); }
+
+  .border-hg-green { border-color: var(--hg-green); }
+  .border-hg-gold { border-color: var(--hg-gold); }
+  .border-hg-subtle { border-color: var(--hg-border); }
 }
 
-/* ========================================
-   HOHENLOHER GOLD FARBKONZEPT
-   ======================================== */
-
-:root {
-  /* Hauptfarben */
-  /* Weiß als Haupthintergrund, warmes helles Grün als Akzent */
-  --hg-white: #ffffff;       /* Haupthintergrund */
-  --hg-light-green: #f0f5eb; /* Warmer, heller Grün-Akzent für Sektionen */
-  --hg-sand: #fffcdc;        /* Optional für besondere Akzente */
-  --hg-green: #4d7621;       /* Primary - Überschriften, CTA */
-  --hg-gold: #d4af37;        /* Secondary - Highlights, Akzente */
-  --hg-orange: #f7941d;      /* Accent - Buttons, Badges */
-  --hg-dark: #1a1a1a;        /* Text */
-  --hg-gray: #6b7280;        /* Sekundärer Text */
-  --hg-border: rgba(77, 118, 33, 0.2); /* Borders (green mit 20% opacity) */
-  
-  /* Neue Design-Tokens für Design-Modus-Zugriff */
-  --color-hg-sand: #fffcdc;
-  --color-hg-gold: #d4af37;
-  --color-hg-green: #4d7621;
-  --color-hg-orange: #f7941d;
-  --color-hg-text-primary: #333333;
-  --color-hg-icon-bg: #fffcdc;
-  --color-hg-icon-stroke: #f7941d;
-}
-
-/* Script Fonts für Marken-Highlights */
 @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Allura&display=swap');
 
-/* Fixed utility classes - moved outside of duplicate @layer utilities */
-/* Backgrounds */
-.bg-hg-white { background-color: var(--hg-white); }
-.bg-hg-light-green { background-color: var(--hg-light-green); }
-.bg-hg-sand { background-color: var(--hg-sand); }
-.bg-hg-green { background-color: var(--hg-green); }
-.bg-hg-gold { background-color: var(--hg-gold); }
-.bg-hg-orange { background-color: var(--hg-orange); }
-
-/* Text Colors */
-.text-hg-green { color: var(--hg-green); }
-.text-hg-gold { color: var(--hg-gold); }
-.text-hg-orange { color: var(--hg-orange); }
-.text-hg-dark { color: var(--hg-dark); }
-.text-hg-gray { color: var(--hg-gray); }
-
-/* Borders */
-.border-hg-green { border-color: var(--hg-green); }
-.border-hg-gold { border-color: var(--hg-gold); }
-.border-hg-subtle { border-color: var(--hg-border); }
-
-/* Script fonts with !important to override body font-sans */
 .font-script-gold {
   font-family: 'Great Vibes', cursive !important;
   color: var(--hg-gold) !important;
@@ -275,7 +255,6 @@
   font-weight: 400 !important;
 }
 
-/* Adding script fonts to specific heading classes for global use */
 .heading-script-gold {
   font-family: 'Great Vibes', cursive !important;
   color: var(--hg-gold) !important;
@@ -285,7 +264,6 @@
   font-family: 'Allura', cursive !important;
 }
 
-/* Override for h2 elements with script class */
 h2.font-script-elegant {
   font-family: 'Allura', cursive !important;
 }

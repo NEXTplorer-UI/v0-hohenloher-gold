@@ -12,13 +12,20 @@ import { getAdminClient, createAdminClient } from "./admin"
  *
  * @returns Promise resolving to a Supabase client with user context
  */
+let cachedServerClient: SupabaseClient | null = null
+
 export async function getServerClient(): Promise<SupabaseClient> {
+  // Reuse existing client if available in same request
+  if (cachedServerClient) {
+    return cachedServerClient
+  }
+
   const cookieStore = await cookies()
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-  return createSupabaseServerClient(supabaseUrl, supabaseAnonKey, {
+  cachedServerClient = createSupabaseServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll()
@@ -33,6 +40,8 @@ export async function getServerClient(): Promise<SupabaseClient> {
       },
     },
   })
+
+  return cachedServerClient
 }
 
 /**
@@ -49,6 +58,9 @@ export const createClient = getServerClient
  * Checks if the current authenticated user has admin role.
  * Returns the user if admin, throws error if not authenticated or not admin.
  */
+let adminCheckCache: { userId: string; isAdmin: boolean; timestamp: number } | null = null
+const ADMIN_CHECK_CACHE_DURATION = 5000 // 5 seconds
+
 export async function requireAdmin() {
   const supabase = await getServerClient()
 
@@ -61,6 +73,15 @@ export async function requireAdmin() {
     throw new Error("Unauthorized: Not authenticated")
   }
 
+  // Check cache first
+  const now = Date.now()
+  if (adminCheckCache && adminCheckCache.userId === user.id && (now - adminCheckCache.timestamp) < ADMIN_CHECK_CACHE_DURATION) {
+    if (!adminCheckCache.isAdmin) {
+      throw new Error("Forbidden: Admin access required")
+    }
+    return user
+  }
+
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("role")
@@ -71,7 +92,16 @@ export async function requireAdmin() {
     throw new Error("Unauthorized: Profile not found")
   }
 
-  if (profile.role !== "admin") {
+  const isAdmin = profile.role === "admin"
+  
+  // Update cache
+  adminCheckCache = {
+    userId: user.id,
+    isAdmin,
+    timestamp: now
+  }
+
+  if (!isAdmin) {
     throw new Error("Forbidden: Admin access required")
   }
 

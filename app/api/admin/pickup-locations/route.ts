@@ -23,7 +23,13 @@ export async function GET(request: NextRequest) {
 
     const { data: locations, error } = await supabase
       .from("pickup_locations")
-      .select("*")
+      .select(`
+        *,
+        route_locations(
+          route_id,
+          delivery_routes(name)
+        )
+      `)
       .order("name", { ascending: true })
 
     if (error) {
@@ -31,7 +37,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch pickup locations" }, { status: 500 })
     }
 
-    return NextResponse.json({ locations })
+    const formattedLocations = locations.map((loc: any) => ({
+      ...loc,
+      route_name: loc.route_locations?.[0]?.delivery_routes?.name || null,
+      route_id: loc.route_locations?.[0]?.route_id || null,
+      route_locations: undefined, // Remove from output
+    }))
+
+    console.log("[v0] Fetched pickup locations count:", formattedLocations.length)
+    
+    return NextResponse.json({ locations: formattedLocations })
   } catch (error) {
     console.error("Error fetching pickup locations:", error)
     return NextResponse.json({ error: "Failed to fetch pickup locations" }, { status: 500 })
@@ -57,8 +72,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
 
     const { name, address, postal_code, city, contact_person, contact_phone, is_active } = body
-
-    // All fields are now optional
 
     const { data: location, error } = await supabase
       .from("pickup_locations")

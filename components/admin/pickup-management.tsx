@@ -159,14 +159,17 @@ export default function PickupLocationManagement() {
 
   const [selectedDistributionPersons, setSelectedDistributionPersons] = useState<Record<string, string>>({})
   const [distributionPersonsForLocation, setDistributionPersonsForLocation] = useState<Record<string, DistributionPerson[]>>({})
+  const [selectedOrderDistributionPersons, setSelectedOrderDistributionPersons] = useState<Record<string, string>>({})
+  const [orderDistributionPersonsForLocation, setOrderDistributionPersonsForLocation] = useState<Record<string, DistributionPerson[]>>({})
 
   const { data: personsData, error: personsError } = useSWR<{ persons: DistributionPerson[] }>(
     "/api/admin/distribution-persons",
     fetcher,
     {
       revalidateOnFocus: false,
+      dedupingInterval: 60000, // 1 minute
       onError: (error) => {
-        console.error("[v0] Error loading distribution persons:", error)
+        console.error("[pickup-management] Error loading distribution persons:", error)
       }
     }
   )
@@ -183,7 +186,9 @@ export default function PickupLocationManagement() {
       const response = await fetch("/api/admin/pickup-locations")
       if (response.ok) {
         const data = await response.json()
-        setLocations(data.locations || data)
+        const locationsArray = Array.isArray(data) ? data : (data.locations || [])
+        console.log("[v0] Fetched pickup locations count:", locationsArray.length) // Debug log
+        setLocations(locationsArray)
       } else {
         toast({
           title: "Fehler",
@@ -192,7 +197,7 @@ export default function PickupLocationManagement() {
         })
       }
     } catch (error) {
-      console.error("Error fetching locations:", error)
+      console.error("Error fetching pickup locations:", error)
       toast({
         title: "Fehler",
         description: "Verbindungsfehler beim Laden der Abholorte",
@@ -493,27 +498,67 @@ export default function PickupLocationManagement() {
     }
   }
 
-  const loadDistributionPersonsForSelectedLocation = async (locationId: string) => {
-    try {
-      const response = await fetch(`/api/admin/location-persons?locationId=${locationId}`)
-      if (response.ok) {
-        const data = await response.json()
-        const personIds = data.assignments.map((a: LocationPerson) => a.person_id)
-        const personsForLocation = distributionPersons.filter(p => personIds.includes(p.id) && p.is_active)
+  const handleLocationSelect = async (variantKey: string, locationId: string) => {
+    setSelectedMappings((prev) => ({ ...prev, [variantKey]: locationId }))
+    
+    if (locationId) {
+      try {
+        const response = await fetch(`/api/admin/location-persons?locationId=${locationId}`)
+        if (response.ok) {
+          const data = await response.json()
+          const personIds = data.assignments.map((a: LocationPerson) => a.person_id)
+          const personsForLocation = distributionPersons.filter(p => personIds.includes(p.id) && p.is_active)
+          setDistributionPersonsForLocation(prev => ({
+            ...prev,
+            [locationId]: personsForLocation
+          }))
+          
+          if (personsForLocation.length === 1) {
+            setSelectedDistributionPersons(prev => ({
+              ...prev,
+              [variantKey]: personsForLocation[0].id
+            }))
+          }
+        }
+      } catch (error) {
+        console.error("[pickup-management] Error loading distribution persons for location:", error)
         setDistributionPersonsForLocation(prev => ({
           ...prev,
-          [locationId]: personsForLocation
+          [locationId]: []
         }))
       }
-    } catch (error) {
-      console.error("[v0] Error loading distribution persons for location:", error)
     }
   }
 
-  const handleLocationSelect = (variantKey: string, locationId: string) => {
-    setSelectedMappings((prev) => ({ ...prev, [variantKey]: locationId }))
+  const handleOrderLocationSelect = async (orderId: string, locationId: string) => {
+    setSelectedPickupMappings((prev) => ({ ...prev, [orderId]: locationId }))
+    
     if (locationId) {
-      loadDistributionPersonsForSelectedLocation(locationId)
+      try {
+        const response = await fetch(`/api/admin/location-persons?locationId=${locationId}`)
+        if (response.ok) {
+          const data = await response.json()
+          const personIds = data.assignments.map((a: LocationPerson) => a.person_id)
+          const personsForLocation = distributionPersons.filter(p => personIds.includes(p.id) && p.is_active)
+          setOrderDistributionPersonsForLocation(prev => ({
+            ...prev,
+            [orderId]: personsForLocation
+          }))
+          
+          if (personsForLocation.length === 1) {
+            setSelectedOrderDistributionPersons(prev => ({
+              ...prev,
+              [orderId]: personsForLocation[0].id
+            }))
+          }
+        }
+      } catch (error) {
+        console.error("[pickup-management] Error loading distribution persons for order:", error)
+        setOrderDistributionPersonsForLocation(prev => ({
+          ...prev,
+          [orderId]: []
+        }))
+      }
     }
   }
 
@@ -610,8 +655,8 @@ export default function PickupLocationManagement() {
     }
   }
 
-  const createPickupMapping = async (pickupLocation: string, canonicalLocationId: string, orderId: string) => {
-    console.log("[v0] Creating pickup mapping for order:", orderId, "pickup:", pickupLocation, "to location:", canonicalLocationId) // Added debug logging
+  const createPickupMapping = async (pickupLocation: string, canonicalLocationId: string, orderId: string, distributionPersonId?: string) => {
+    console.log("[v0] Creating pickup mapping for order:", orderId, "pickup:", pickupLocation, "to location:", canonicalLocationId, "person:", distributionPersonId)
     try {
       const response = await fetch("/api/admin/pickup-location-mappings", {
         method: "POST",
@@ -622,10 +667,11 @@ export default function PickupLocationManagement() {
           applyToExisting: true,
           source: "pickup_location",
           orderId,
+          distribution_person_id: distributionPersonId && distributionPersonId !== "none" ? distributionPersonId : undefined,
         }),
       })
 
-      console.log("[v0] Create pickup mapping response status:", response.status) // Added debug logging
+      console.log("[v0] Create pickup mapping response status:", response.status)
 
       if (response.ok) {
         await fetchIndividualOrders()
@@ -638,10 +684,26 @@ export default function PickupLocationManagement() {
           delete updated[orderId]
           return updated
         })
+        setSelectedOrderDistributionPersons((prev) => {
+          const updated = { ...prev }
+          delete updated[orderId]
+          return updated
+        })
       } else {
         const error = await response.json()
-        console.error("[v0] Error creating pickup mapping:", error) // Added debug logging
-        throw new Error(error.error || "Failed to create mapping")
+        console.log("[v0] Error creating pickup mapping:", error)
+        
+        if (error.error?.includes("existiert bereits") || error.error?.includes("duplicate")) {
+          const shouldIgnore = confirm(
+            `Diese Variante existiert bereits. Möchten Sie diese Bestellung aus der Liste entfernen (ignorieren)?`
+          )
+          
+          if (shouldIgnore) {
+            await handleIgnoreOrder(orderId)
+          }
+        } else {
+          throw new Error(error.error || "Failed to create mapping")
+        }
       }
     } catch (error: any) {
       console.error("Error creating pickup mapping:", error)
@@ -650,6 +712,42 @@ export default function PickupLocationManagement() {
           description: error.message || "Abholort-Mapping konnte nicht erstellt werden",
           variant: "destructive",
         })
+    }
+  }
+
+  const handleIgnoreOrder = async (orderId: string) => {
+    try {
+      const response = await fetch(`/api/admin/orders/${orderId}/ignore`, {
+        method: "PATCH",
+      })
+
+      if (response.ok) {
+        await fetchIndividualOrders()
+        toast({
+          title: "Bestellung ignoriert",
+          description: "Die Bestellung wurde aus der Mapping-Liste entfernt",
+        })
+        setSelectedPickupMappings((prev) => {
+          const updated = { ...prev }
+          delete updated[orderId]
+          return updated
+        })
+        setSelectedOrderDistributionPersons((prev) => {
+          const updated = { ...prev }
+          delete updated[orderId]
+          return updated
+        })
+      } else {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to ignore order")
+      }
+    } catch (error: any) {
+      console.error("Error ignoring order:", error)
+      toast({
+        title: "Fehler",
+        description: error.message || "Bestellung konnte nicht ignoriert werden",
+        variant: "destructive",
+      })
     }
   }
 
@@ -727,77 +825,83 @@ export default function PickupLocationManagement() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
+      <Card className="flex flex-col max-h-[600px]">
+        <CardHeader className="flex-shrink-0">
           <CardTitle>Abholorte verwalten</CardTitle>
           <CardDescription>Verwaltung der Abholstandorte für Kunden</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex gap-4 mb-6">
+        <CardContent className="flex-1 overflow-hidden flex flex-col">
+          <div className="flex gap-4 mb-6 flex-shrink-0">
             <Button onClick={() => setIsCreateDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Neuer Abholort
             </Button>
           </div>
 
-          <div className="space-y-4">
-            {locations.map((location) => (
-              <Card key={location.id} className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-2 flex-1">
+          <div className="space-y-4 flex-1 overflow-y-auto pr-2">
+            {locations.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Keine Abholorte vorhanden
+              </div>
+            ) : (
+              locations.map((location) => (
+                <Card key={location.id} className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-2 flex-1">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{location.name}</span>
+                        <Badge variant={location.is_active ? "default" : "secondary"}>
+                          {location.is_active ? "Aktiv" : "Inaktiv"}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {location.address}, {location.postal_code} {location.city}
+                      </div>
+                      {location.contact_person && (
+                        <div className="text-sm">
+                          Kontakt: {location.contact_person}
+                          {location.contact_phone && ` (${location.contact_phone})`}
+                        </div>
+                      )}
+                      {location.email && (
+                        <div className="text-sm flex items-center gap-1">
+                          <Mail className="h-3 w-3" />
+                          {location.email}
+                        </div>
+                      )}
+                      {(location.pickup_hours_start || location.pickup_hours_end) && (
+                        <div className="text-sm flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          Abholzeiten: {location.pickup_hours_start || "?"} - {location.pickup_hours_end || "?"} Uhr
+                        </div>
+                      )}
+                      {location.notes && (
+                        <div className="text-sm flex items-start gap-1 text-muted-foreground">
+                          <Info className="h-3 w-3 mt-0.5" />
+                          <span>{location.notes}</span>
+                        </div>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">{location.name}</span>
-                      <Badge variant={location.is_active ? "default" : "secondary"}>
-                        {location.is_active ? "Aktiv" : "Inaktiv"}
-                      </Badge>
+                      <Button
+                        size="sm"
+                        variant={location.is_active ? "outline" : "default"}
+                        onClick={() => toggleLocation(location)}
+                      >
+                        {location.is_active ? "Deaktivieren" : "Aktivieren"}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openEditDialog(location)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => openDeleteDialog(location)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {location.address}, {location.postal_code} {location.city}
-                    </div>
-                    {location.contact_person && (
-                      <div className="text-sm">
-                        Kontakt: {location.contact_person}
-                        {location.contact_phone && ` (${location.contact_phone})`}
-                      </div>
-                    )}
-                    {location.email && (
-                      <div className="text-sm flex items-center gap-1">
-                        <Mail className="h-3 w-3" />
-                        {location.email}
-                      </div>
-                    )}
-                    {(location.pickup_hours_start || location.pickup_hours_end) && (
-                      <div className="text-sm flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        Abholzeiten: {location.pickup_hours_start || "?"} - {location.pickup_hours_end || "?"} Uhr
-                      </div>
-                    )}
-                    {location.notes && (
-                      <div className="text-sm flex items-start gap-1 text-muted-foreground">
-                        <Info className="h-3 w-3 mt-0.5" />
-                        <span>{location.notes}</span>
-                      </div>
-                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant={location.is_active ? "outline" : "default"}
-                      onClick={() => toggleLocation(location)}
-                    >
-                      {location.is_active ? "Deaktivieren" : "Aktivieren"}
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => openEditDialog(location)}>
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => openDeleteDialog(location)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              ))
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1000,120 +1104,123 @@ export default function PickupLocationManagement() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Bestellnummer</TableHead>
                         <TableHead>Abholort-Feld</TableHead>
                         <TableHead>Kommentar</TableHead>
                         <TableHead>Zuordnen zu</TableHead>
-                        <TableHead className="w-[140px]"></TableHead>
+                        <TableHead>Verteilperson</TableHead>
+                        <TableHead className="w-[140px]">Aktionen</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {individualOrders.map((order) => (
-                        <TableRow key={order.orderId}>
-                          <TableCell className="align-top">
-                            <div className="space-y-2">
-                              <div className="font-mono text-sm font-medium">{order.pickupLocation}</div>
-                              <Select
-                                value={selectedPickupMappings[order.orderId] || ""}
-                                onValueChange={(value) =>
-                                  setSelectedPickupMappings((prev) => ({ ...prev, [order.orderId]: value }))
-                                }
-                              >
-                                <SelectTrigger className="w-[200px]">
-                                  <SelectValue placeholder="Abholort wählen..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {locations
-                                    .filter((loc) => loc.is_active)
-                                    .map((location) => (
-                                      <SelectItem key={location.id} value={location.id}>
-                                        {location.name}
-                                      </SelectItem>
-                                    ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
+                      {individualOrders.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            Keine nicht zugeordneten Bestellungen gefunden
                           </TableCell>
-                          <TableCell className="align-top max-w-md">
-                            <div className="space-y-2">
-                              {order.comment ? (
-                                <>
+                        </TableRow>
+                      ) : (
+                        individualOrders.map((order) => {
+                          const selectedLocation = selectedPickupMappings[order.orderId] || ""
+                          const personsForOrder = selectedLocation ? (orderDistributionPersonsForLocation[order.orderId] || []) : []
+                          
+                          return (
+                            <TableRow key={order.orderId}>
+                              <TableCell className="font-mono text-sm">
+                                {order.orderNumber}
+                              </TableCell>
+                              <TableCell className="align-top">
+                                <div className="font-mono text-sm font-medium">{order.pickupLocation}</div>
+                              </TableCell>
+                              <TableCell className="align-top max-w-md">
+                                {order.comment ? (
                                   <div className="text-sm text-muted-foreground bg-muted/50 p-2 rounded max-h-20 overflow-y-auto">
                                     {order.comment}
                                   </div>
+                                ) : (
+                                  <span className="text-sm text-muted-foreground italic">Kein Kommentar</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="align-top">
+                                <Select
+                                  value={selectedLocation}
+                                  onValueChange={(value) => handleOrderLocationSelect(order.orderId, value)}
+                                >
+                                  <SelectTrigger className="w-[250px]">
+                                    <SelectValue placeholder="Abholort wählen..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {locations
+                                      .filter((loc) => loc.is_active)
+                                      .map((location) => (
+                                        <SelectItem key={location.id} value={location.id}>
+                                          {location.name}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell className="align-top">
+                                {personsForOrder.length > 0 ? (
                                   <Select
-                                    value={selectedCommentMappings[order.orderId] || ""}
+                                    value={selectedOrderDistributionPersons[order.orderId] || ""}
                                     onValueChange={(value) =>
-                                      setSelectedCommentMappings((prev) => ({ ...prev, [order.orderId]: value }))
+                                      setSelectedOrderDistributionPersons((prev) => ({ ...prev, [order.orderId]: value }))
                                     }
                                   >
                                     <SelectTrigger className="w-[200px]">
-                                      <SelectValue placeholder="Aus Kommentar mappen..." />
+                                      <SelectValue placeholder="Optional zuordnen..." />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {locations
-                                        .filter((loc) => loc.is_active)
-                                        .map((location) => (
-                                          <SelectItem key={location.id} value={location.id}>
-                                            {location.name}
-                                          </SelectItem>
-                                        ))}
+                                      <SelectItem value="none">Keine Verteilperson</SelectItem>
+                                      {personsForOrder.map((person) => (
+                                        <SelectItem key={person.id} value={person.id}>
+                                          <div className="flex items-center gap-2">
+                                            <User className="h-3 w-3" />
+                                            {person.name}
+                                          </div>
+                                        </SelectItem>
+                                      ))}
                                     </SelectContent>
                                   </Select>
-                                </>
-                              ) : (
-                                <span className="text-sm text-muted-foreground italic">Kein Kommentar</span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <div className="text-sm text-muted-foreground">
-                              Wählen Sie links das Dropdown für die gewünschte Quelle
-                            </div>
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <div className="flex flex-col gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={!selectedPickupMappings[order.orderId]}
-                                onClick={() =>
-                                  createPickupMapping(
-                                    order.pickupLocation,
-                                    selectedPickupMappings[order.orderId],
-                                    order.orderId
-                                  )
-                                }
-                                className="w-full"
-                              >
-                                <Badge variant="secondary" className="mr-2 text-xs">
-                                  Abholort
-                                </Badge>
-                                Zuordnen
-                              </Button>
-                              {order.comment && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={!selectedCommentMappings[order.orderId]}
-                                  onClick={() =>
-                                    createCommentMapping(
-                                      order.comment!,
-                                      selectedCommentMappings[order.orderId],
-                                      order.orderId
-                                    )
-                                  }
-                                  className="w-full"
-                                >
-                                  <Badge variant="secondary" className="mr-2 text-xs">
-                                    Kommentar
-                                  </Badge>
-                                  Zuordnen
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                                ) : (
+                                  <span className="text-sm text-muted-foreground italic">
+                                    {selectedLocation ? "Keine Verteilpersonen" : "Erst Ort wählen"}
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="align-top">
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    disabled={!selectedLocation}
+                                    onClick={() =>
+                                      createPickupMapping(
+                                        order.pickupLocation,
+                                        selectedLocation,
+                                        order.orderId,
+                                        selectedOrderDistributionPersons[order.orderId] === "none" 
+                                          ? undefined 
+                                          : selectedOrderDistributionPersons[order.orderId]
+                                      )
+                                    }
+                                  >
+                                    Zuordnen
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleIgnoreOrder(order.orderId)}
+                                    title="Bestellung aus Liste entfernen"
+                                  >
+                                    Ignorieren
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })
+                      )}
                     </TableBody>
                   </Table>
                 </div>

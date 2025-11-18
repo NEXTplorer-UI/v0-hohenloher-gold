@@ -49,6 +49,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Database error", details: error.message }, { status: 500 })
     }
 
+    if (!Array.isArray(data)) {
+      console.error("[v0] [/api/crm/customers] Data is not an array:", typeof data)
+      return NextResponse.json({ customers: [], total: 0 })
+    }
+
     if (data && data.length > 0) {
       console.log("[v0] [/api/crm/customers] First customer from RPC:", {
         email: data[0].email,
@@ -64,7 +69,7 @@ export async function GET(request: Request) {
 
       if (authError) {
         console.error("[v0] [/api/crm/customers] Auth error:", authError)
-      } else if (authData?.users) {
+      } else if (authData?.users && Array.isArray(authData.users)) {
         // Create a map of email -> user data for fast lookup
         authData.users.forEach((user) => {
           if (user.email) {
@@ -78,7 +83,7 @@ export async function GET(request: Request) {
       console.error("[v0] [/api/crm/customers] Error fetching auth users:", e)
     }
 
-    const customersWithAuthStatus = (data ?? []).map((customer) => {
+    const customersWithAuthStatus = data.map((customer) => {
       const authUser = authUsersMap.get(customer.email)
 
       return {

@@ -113,7 +113,8 @@ function DeliveryRouteManagement() {
       const response = await fetch("/api/admin/pickup-locations")
       if (response.ok) {
         const data = await response.json()
-        setPickupLocations(data.filter((loc: PickupLocation) => loc.is_active))
+        const locations = data.locations || data
+        setPickupLocations(Array.isArray(locations) ? locations.filter((loc: PickupLocation) => loc.is_active) : [])
       }
     } catch (error) {
       console.error("Error fetching pickup locations:", error)

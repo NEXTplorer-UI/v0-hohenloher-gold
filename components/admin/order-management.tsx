@@ -16,6 +16,7 @@ import { ExportOptionsDialog, type ExportOptions } from "@/components/admin/expo
 import { usePersistedState } from "@/hooks/use-persisted-state"
 import { useTestMode } from "./test-mode-toggle" // Import useTestMode hook
 import { useAdminCache } from "@/hooks/use-admin-cache"
+import { Combobox } from "@/components/ui/combobox" // Import Combobox
 
 interface OrderItem {
   id: string
@@ -36,6 +37,7 @@ interface Order {
   total: number
   delivery_method: string
   pickup_location: string | null
+  pickup_location_normalized?: string // Added for filter normalization
   payment_method: string
   payment_status: string
   notes: string | null
@@ -48,6 +50,7 @@ interface Order {
     last_name: string
     email: string
     phone: string | null
+    distribution_person_id?: string // Added distribution_person_id
   }
   order_items: OrderItem[]
   hellocash_invoice_id?: string | null // Added hellocash_invoice_id field
@@ -654,6 +657,18 @@ function OrderManagement() {
     defaultValue: "all",
     expirationHours: 12,
   })
+  const [pickupLocationFilter, setPickupLocationFilter] = usePersistedState({
+    key: "admin-orders-pickup-location-filter",
+    defaultValue: "all",
+    expirationHours: 12,
+  })
+
+  const [customerSearchQuery, setCustomerSearchQuery] = useState("")
+  const [customerSearchResults, setCustomerSearchResults] = useState<
+    Array<{ id: string; email: string; first_name: string; last_name: string }>
+  >([])
+  const [isSearchingCustomers, setIsSearchingCustomers] = useState(false)
+
   const [showFilters, setShowFilters] = useState(false)
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
   const [showManualOrderForm, setShowManualOrderForm] = useState(false)
@@ -687,33 +702,79 @@ function OrderManagement() {
   // Loading state for marking as paid
   const [isMarkingAsPaid, setIsMarkingAsPaid] = useState(false)
 
+  useEffect(() => {
+    if (!customerSearchQuery || customerSearchQuery.length < 2) {
+      setCustomerSearchResults([])
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingCustomers(true)
+      try {
+        const response = await fetch(`/api/admin/customers/search?q=${encodeURIComponent(customerSearchQuery)}`)
+        if (response.ok) {
+          const data = await response.json()
+          setCustomerSearchResults(data.customers || [])
+        }
+      } catch (error) {
+        console.error("[v0] Error searching customers:", error)
+      } finally {
+        setIsSearchingCustomers(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [customerSearchQuery])
 
   const fetchFormData = useCallback(async () => {
     try {
+      console.log("[v0] Fetching form data...")
       const [customersRes, productsRes, locationsRes] = await Promise.all([
-        fetch("/api/admin/customers"),
+        fetch("/api/crm/customers"),
         fetch("/api/products"),
-        fetch("/api/pickup-locations"),
+        fetch("/api/admin/pickup-locations"),
       ])
 
       if (customersRes.ok) {
         const customersData = await customersRes.json()
-        setCustomers(customersData)
+        const customersArray = customersData.customers || customersData
+        if (Array.isArray(customersArray)) {
+          setCustomers(customersArray)
+          console.log("[v0] Customers loaded:", customersArray.length)
+        } else {
+          console.error("[v0] Customers data is not an array:", customersData)
+          setCustomers([])
+        }
       }
 
       if (productsRes.ok) {
         const productsData = await productsRes.json()
         setProducts(productsData)
+        console.log("[v0] Products loaded:", productsData.length)
       }
 
       if (locationsRes.ok) {
         const locationsData = await locationsRes.json()
-        setPickupLocations(locationsData)
+        const locations = locationsData.locations || locationsData
+        if (Array.isArray(locations)) {
+          setPickupLocations(locations.map((loc: any) => ({
+            id: loc.id,
+            name: loc.name,
+          })))
+          console.log("[v0] Pickup locations loaded:", locations.length)
+        } else {
+          console.error("[v0] Pickup locations data is not an array:", locations)
+        }
       }
     } catch (error) {
       console.error("[v0] Error fetching form data:", error)
+      toast({
+        title: "Fehler",
+        description: "Formulardaten konnten nicht geladen werden",
+        variant: "destructive",
+      })
     }
-  }, [])
+  }, [toast])
 
   useEffect(() => {
     if (showManualOrderForm && customers.length === 0) {
@@ -752,7 +813,8 @@ function OrderManagement() {
         return
       }
 
-      const customer = customers.find((c) => c.id === manualOrderForm.customerId)
+      const customer = customers.find((c) => c.id === manualOrderForm.customerId) ||
+                      customerSearchResults.find((c) => c.id === manualOrderForm.customerId)
       if (!customer) {
         toast({
           title: "Fehler",
@@ -847,7 +909,7 @@ function OrderManagement() {
     } finally {
       setIsCreatingOrder(false)
     }
-  }, [manualOrderForm, customers, products, pickupLocations, toast, fetchOrders])
+  }, [manualOrderForm, customers, customerSearchResults, products, pickupLocations, toast, fetchOrders])
 
   const addOrderItem = useCallback(() => {
     setManualOrderForm((prev) => ({
@@ -893,16 +955,31 @@ function OrderManagement() {
         customerName.includes(searchLower) ||
         order.order_number.toLowerCase().includes(searchLower) ||
         order.customer.email.toLowerCase().includes(searchLower)
-      // </CHANGE>
+
       const matchesStatus = statusFilter === "all" || order.status === statusFilter
       const matchesComment =
         commentFilter === "all" ||
         (commentFilter === "with" && order.admin_notes && order.admin_notes.trim() !== "") ||
         (commentFilter === "without" && (!order.admin_notes || order.admin_notes.trim() === ""))
       const matchesDeliveryMethod = deliveryMethodFilter === "all" || order.delivery_method === deliveryMethodFilter
-      return matchesSearch && matchesStatus && matchesComment && matchesDeliveryMethod
+
+      const matchesPickupLocation =
+        pickupLocationFilter === "all" ||
+        order.pickup_location_normalized === pickupLocationFilter
+
+      return matchesSearch && matchesStatus && matchesComment && matchesDeliveryMethod && matchesPickupLocation
     })
-  }, [orders, searchTerm, statusFilter, commentFilter, deliveryMethodFilter])
+  }, [orders, searchTerm, statusFilter, commentFilter, deliveryMethodFilter, pickupLocationFilter])
+
+  const uniquePickupLocations = useMemo(() => {
+    const locations = new Set<string>()
+    orders.forEach((order) => {
+      if (order.pickup_location_normalized) {
+        locations.add(order.pickup_location_normalized)
+      }
+    })
+    return Array.from(locations).sort()
+  }, [orders])
 
   const exportOrders = useCallback(
     async (options: ExportOptions, orderIds?: string[]) => {
@@ -1394,31 +1471,28 @@ function OrderManagement() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Customer Selection */}
                     <div className="space-y-2">
                       <Label htmlFor="customer">Kunde *</Label>
-                      <Select
+                      <Combobox
                         value={manualOrderForm.customerId}
                         onValueChange={(value) => {
-                          const customer = customers.find((c) => c.id === value)
+                          const customer = customers.find((c) => c.id === value) ||
+                                          customerSearchResults.find((c) => c.id === value)
                           setManualOrderForm((prev) => ({
                             ...prev,
                             customerId: value,
                             customerEmail: customer?.email || "",
                           }))
                         }}
-                      >
-                        <SelectTrigger id="customer">
-                          <SelectValue placeholder="Kunde auswählen..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {customers.map((customer) => (
-                            <SelectItem key={customer.id} value={customer.id}>
-                              {customer.first_name} {customer.last_name} ({customer.email})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        onSearchChange={setCustomerSearchQuery}
+                        searchValue={customerSearchQuery}
+                        placeholder="Kunde suchen..."
+                        emptyText={isSearchingCustomers ? "Suche läuft..." : "Keine Kunden gefunden"}
+                        options={customerSearchResults.map((customer) => ({
+                          value: customer.id,
+                          label: `${customer.first_name} ${customer.last_name} (${customer.email})`,
+                        }))}
+                      />
                     </div>
 
                     {/* Delivery Method */}
@@ -1459,6 +1533,11 @@ function OrderManagement() {
                             ))}
                           </SelectContent>
                         </Select>
+                        {manualOrderForm.pickupLocationId && (
+                          <p className="text-xs text-muted-foreground">
+                            💡 Basierend auf zugeordneter Verteilperson vorgeschlagen
+                          </p>
+                        )}
                       </div>
                     )}
 
@@ -1644,7 +1723,7 @@ function OrderManagement() {
               <Button variant="outline" onClick={() => setShowFilters(!showFilters)} className="w-full sm:w-48">
                 <Filter className="h-4 w-4 mr-2" />
                 Filter
-                {(statusFilter !== "all" || deliveryMethodFilter !== "all" || commentFilter !== "all") && (
+                {(statusFilter !== "all" || deliveryMethodFilter !== "all" || commentFilter !== "all" || pickupLocationFilter !== "all") && (
                   <Badge variant="secondary" className="ml-2">
                     Aktiv
                   </Badge>
@@ -1667,6 +1746,25 @@ function OrderManagement() {
                           <SelectItem value="ready">Bereit</SelectItem>
                           <SelectItem value="picked_up">Abgeholt</SelectItem>
                           <SelectItem value="cancelled">Storniert</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="h-px bg-border" />
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Abholort</Label>
+                      <Select value={pickupLocationFilter} onValueChange={setPickupLocationFilter}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Alle Abholorte</SelectItem>
+                          {uniquePickupLocations.map((location) => (
+                            <SelectItem key={location} value={location}>
+                              {location}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -1711,6 +1809,7 @@ function OrderManagement() {
                           setStatusFilter("all")
                           setDeliveryMethodFilter("all")
                           setCommentFilter("all")
+                          setPickupLocationFilter("all")
                         }}
                         className="flex-1"
                       >

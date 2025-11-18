@@ -1,5 +1,6 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import { useCallback } from "react"
+import useSWR from "swr"
 import type { ExtendedCustomer, FavoriteProduct } from "@/types/customer"
 
 type RpcCustomerRow = {
@@ -59,60 +60,62 @@ function mapRpcToCustomer(row: RpcCustomerRow): ExtendedCustomer {
 
 type LoadOptions = { q?: string; limit?: number; offset?: number }
 
+const fetcher = async (url: string) => {
+  const res = await fetch(url, { method: "GET" })
+  const json = await res.json()
+
+  if (!res.ok) {
+    throw new Error(json?.error || "Fetch error")
+  }
+
+  const rows: RpcCustomerRow[] = Array.isArray(json?.customers)
+    ? json.customers
+    : Array.isArray(json?.data)
+      ? json.data
+      : Array.isArray(json)
+        ? json
+        : []
+
+  return {
+    customers: rows.map(mapRpcToCustomer),
+    total: json?.total || rows.length
+  }
+}
+
 export function useCustomerData() {
-  const [customers, setCustomers] = useState<ExtendedCustomer[]>([])
-  const [loading, setLoading] = useState(false)
-  const [lastQuery, setLastQuery] = useState<LoadOptions | null>(null)
-  const [totalCount, setTotalCount] = useState(0)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize] = useState(50) // 50 customers per page
+  const pageSize = 50
+  
+  const { data, error, mutate, isLoading } = useSWR(
+    `/api/crm/customers?limit=${pageSize}&offset=0`,
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 60000, // 1 minute
+      keepPreviousData: true,
+    }
+  )
+
+  const customers = data?.customers || []
+  const totalCount = data?.total || 0
+  const loading = isLoading
+  const currentPage = 1 // For now, we'll keep pagination simple
 
   const loadCustomers = useCallback(async (opts?: LoadOptions) => {
-    console.log("[v0] [useCustomerData] Loading customers with options:", opts)
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (opts?.q) {
-        params.set("q", opts.q)
-        params.set("limit", "999999") // No limit for search
-      } else {
-        if (opts?.limit) params.set("limit", String(opts.limit))
-        if (opts?.offset) params.set("offset", String(opts.offset))
-      }
-
-      const res = await fetch(`/api/crm/customers?${params.toString()}`, { method: "GET" })
-      const json = await res.json()
-
-      if (!res.ok) {
-        console.error("[v0] [useCustomerData] API error:", json)
-        throw new Error(json?.error || "Fetch error")
-      }
-
-      const rows: RpcCustomerRow[] = Array.isArray(json?.customers)
-        ? json.customers
-        : Array.isArray(json?.data)
-          ? json.data
-          : Array.isArray(json)
-            ? json
-            : []
-
-      const mapped = rows.map(mapRpcToCustomer)
-
-      console.log("[v0] [useCustomerData] Successfully loaded", mapped.length, "customers")
-      setCustomers(mapped)
-      setTotalCount(json?.total || mapped.length)
-      setLastQuery(opts || {})
-    } catch (e) {
-      console.error("[v0] [useCustomerData] Load error:", e)
-      setCustomers([])
-    } finally {
-      setLoading(false)
+    const params = new URLSearchParams()
+    if (opts?.q) {
+      params.set("q", opts.q)
+      params.set("limit", "999999")
+    } else {
+      if (opts?.limit) params.set("limit", String(opts.limit))
+      if (opts?.offset) params.set("offset", String(opts.offset))
     }
-  }, [])
+
+    await mutate(`/api/crm/customers?${params.toString()}`)
+  }, [mutate])
 
   const loadPage = useCallback(
     (page: number) => {
-      setCurrentPage(page)
       const offset = (page - 1) * pageSize
       loadCustomers({ limit: pageSize, offset })
     },
@@ -134,8 +137,6 @@ export function useCustomerData() {
 
   const saveCustomer = useCallback(
     async (customer: ExtendedCustomer) => {
-      console.log("[v0] [useCustomerData] Saving customer:", customer.id)
-
       const payload = {
         first_name: customer.first_name,
         last_name: customer.last_name,
@@ -158,20 +159,16 @@ export function useCustomerData() {
 
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
-        console.error("[v0] [useCustomerData] Save error:", j)
         throw new Error(j.error || "Update failed")
       }
 
-      console.log("[v0] [useCustomerData] Customer saved successfully")
-      await loadCustomers(lastQuery || undefined)
+      await mutate()
     },
-    [lastQuery, loadCustomers],
+    [mutate],
   )
 
   const deleteCustomer = useCallback(
     async (id: string) => {
-      console.log("[v0] [useCustomerData] Deleting customer:", id)
-
       const res = await fetch("/api/crm/customer", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
@@ -180,23 +177,18 @@ export function useCustomerData() {
 
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
-        console.error("[v0] [useCustomerData] Delete error:", j)
         throw new Error(j.error || "Delete failed")
       }
 
-      console.log("[v0] [useCustomerData] Customer deleted successfully")
-      await loadCustomers(lastQuery || undefined)
+      await mutate()
     },
-    [lastQuery, loadCustomers],
+    [mutate],
   )
-
-  useEffect(() => {
-    loadPage(1)
-  }, [loadPage])
 
   return {
     customers,
     loading,
+    error,
     loadCustomers,
     saveCustomer,
     deleteCustomer,
