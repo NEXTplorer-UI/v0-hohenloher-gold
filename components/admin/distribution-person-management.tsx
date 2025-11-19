@@ -39,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Combobox } from "@/components/ui/combobox"
 
 interface DistributionPerson {
   id: string
@@ -94,6 +95,11 @@ export default function DistributionPersonManagement() {
   const [isAssignCustomerDialogOpen, setIsAssignCustomerDialogOpen] = useState(false)
   const [selectedPersonForAssignment, setSelectedPersonForAssignment] = useState<DistributionPerson | null>(null)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("")
+  
+  const [customerSearchQuery, setCustomerSearchQuery] = useState("")
+  const [customerSearchResults, setCustomerSearchResults] = useState<Customer[]>([])
+  const [isSearchingCustomers, setIsSearchingCustomers] = useState(false)
+  
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -126,16 +132,6 @@ export default function DistributionPersonManagement() {
       dedupingInterval: 30000, // Cache for 30 seconds
     }
   )
-
-  const { data: customersData } = useSWR<{ customers: Customer[] }>(
-    "/api/admin/customers?limit=1000",
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 60000,
-    }
-  )
-  const allCustomers = customersData?.customers || []
 
   const { data: personsData, error, mutate, isLoading } = useSWR<{ persons: DistributionPerson[] }>(
     "/api/admin/distribution-persons",
@@ -338,6 +334,8 @@ export default function DistributionPersonManagement() {
   const openAssignCustomerDialog = (person: DistributionPerson) => {
     setSelectedPersonForAssignment(person)
     setSelectedCustomerId("")
+    setCustomerSearchQuery("")
+    setCustomerSearchResults([])
     setIsAssignCustomerDialogOpen(true)
   }
 
@@ -363,6 +361,8 @@ export default function DistributionPersonManagement() {
       setIsAssignCustomerDialogOpen(false)
       setSelectedPersonForAssignment(null)
       setSelectedCustomerId("")
+      setCustomerSearchQuery("")
+      setCustomerSearchResults([])
     } catch (error) {
       console.error("[v0] Error assigning customer:", error)
       toast({
@@ -373,13 +373,35 @@ export default function DistributionPersonManagement() {
     }
   }
 
-  const getCustomersForPerson = (personId: string) => {
-    return allCustomers.filter(c => c.default_distribution_person_id === personId)
-  }
+  useEffect(() => {
+    if (!customerSearchQuery || customerSearchQuery.length < 2) {
+      setCustomerSearchResults([])
+      return
+    }
 
-  const getUnassignedCustomers = () => {
-    return allCustomers.filter(c => !c.default_distribution_person_id)
-  }
+    const timer = setTimeout(async () => {
+      setIsSearchingCustomers(true)
+      try {
+        console.log("[v0] Searching for customers:", customerSearchQuery)
+        const response = await fetch(`/api/admin/customers/search?q=${encodeURIComponent(customerSearchQuery)}`)
+        if (response.ok) {
+          const data = await response.json()
+          console.log("[v0] Customer search results:", data.customers?.length || 0)
+          // Filter out customers already assigned to a person if needed
+          const unassignedCustomers = (data.customers || []).filter(
+            (c: Customer) => !c.default_distribution_person_id
+          )
+          setCustomerSearchResults(unassignedCustomers)
+        }
+      } catch (error) {
+        console.error("[v0] Error searching customers:", error)
+      } finally {
+        setIsSearchingCustomers(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [customerSearchQuery])
 
   return (
     <Card>
@@ -421,8 +443,6 @@ export default function DistributionPersonManagement() {
                 </TableRow>
               ) : (
                 persons.map((person) => {
-                  const assignedCustomers = getCustomersForPerson(person.id)
-                  
                   return (
                     <TableRow key={person.id}>
                       <TableCell className="font-medium">{person.name}</TableCell>
@@ -436,43 +456,15 @@ export default function DistributionPersonManagement() {
                           <PopoverTrigger asChild>
                             <Button variant="outline" size="sm" className="gap-2">
                               <Users className="h-4 w-4" />
-                              {assignedCustomers.length}
+                              <CustomersCount personId={person.id} />
                             </Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-80">
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                <h4 className="font-medium">Zugeordnete Kunden</h4>
-                                <Button
-                                  size="sm"
-                                  onClick={() => openAssignCustomerDialog(person)}
-                                >
-                                  <PlusIcon className="h-4 w-4 mr-1" />
-                                  Zuordnen
-                                </Button>
-                              </div>
-                              {assignedCustomers.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">
-                                  Keine Kunden zugeordnet
-                                </p>
-                              ) : (
-                                <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                                  {assignedCustomers.map((customer) => (
-                                    <div
-                                      key={customer.id}
-                                      className="flex flex-col gap-1 p-2 rounded-md bg-muted/50"
-                                    >
-                                      <div className="font-medium text-sm">
-                                        {customer.first_name} {customer.last_name}
-                                      </div>
-                                      <div className="text-xs text-muted-foreground">
-                                        {customer.email}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                            <AssignedCustomersList 
+                              personId={person.id}
+                              personName={person.name}
+                              onAssignClick={() => openAssignCustomerDialog(person)}
+                            />
                           </PopoverContent>
                         </Popover>
                       </TableCell>
@@ -813,25 +805,26 @@ export default function DistributionPersonManagement() {
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
-                <Label htmlFor="customer-select">Kunde auswählen</Label>
-                <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
-                  <SelectTrigger id="customer-select">
-                    <SelectValue placeholder="Kunde auswählen..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {getUnassignedCustomers().length === 0 ? (
-                      <div className="p-2 text-sm text-muted-foreground text-center">
-                        Alle Kunden sind bereits zugeordnet
-                      </div>
-                    ) : (
-                      getUnassignedCustomers().map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id}>
-                          {customer.first_name} {customer.last_name} ({customer.email})
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="customer-select">Kunde suchen</Label>
+                <Combobox
+                  value={selectedCustomerId}
+                  onValueChange={setSelectedCustomerId}
+                  onSearchChange={setCustomerSearchQuery}
+                  searchValue={customerSearchQuery}
+                  placeholder="Kunde suchen (min. 2 Zeichen)..."
+                  emptyText={
+                    customerSearchQuery.length < 2
+                      ? "Geben Sie mindestens 2 Zeichen ein"
+                      : isSearchingCustomers
+                      ? "Suche läuft..."
+                      : "Keine Kunden gefunden"
+                  }
+                  options={customerSearchResults.map((customer) => ({
+                    value: customer.id,
+                    label: `${customer.first_name} ${customer.last_name} (${customer.email})`,
+                  }))}
+                />
+                {/* */}
                 <p className="text-xs text-muted-foreground mt-2">
                   Nur Kunden ohne Verteilperson werden angezeigt
                 </p>
@@ -845,6 +838,8 @@ export default function DistributionPersonManagement() {
                   setIsAssignCustomerDialogOpen(false)
                   setSelectedPersonForAssignment(null)
                   setSelectedCustomerId("")
+                  setCustomerSearchQuery("")
+                  setCustomerSearchResults([])
                 }}
               >
                 Abbrechen
@@ -860,5 +855,83 @@ export default function DistributionPersonManagement() {
         </Dialog>
       </CardContent>
     </Card>
+  )
+}
+
+function CustomersCount({ personId }: { personId: string }) {
+  const { data } = useSWR<{ customers: Customer[] }>(
+    `/api/admin/customers?person_id=${personId}&limit=100`,
+    async (url) => {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error("Failed to fetch")
+      return res.json()
+    },
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+    }
+  )
+  
+  return <span>{data?.customers?.length || 0}</span>
+}
+
+// Helper component to show assigned customers list
+function AssignedCustomersList({ 
+  personId, 
+  personName,
+  onAssignClick 
+}: { 
+  personId: string
+  personName: string
+  onAssignClick: () => void
+}) {
+  const { data, isLoading } = useSWR<{ customers: Customer[] }>(
+    `/api/admin/customers?person_id=${personId}&limit=100`,
+    async (url) => {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error("Failed to fetch")
+      return res.json()
+    },
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+    }
+  )
+  
+  const customers = data?.customers || []
+  
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="font-medium">Zugeordnete Kunden</h4>
+        <Button size="sm" onClick={onAssignClick}>
+          <PlusIcon className="h-4 w-4 mr-1" />
+          Zuordnen
+        </Button>
+      </div>
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Lädt...</p>
+      ) : customers.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Keine Kunden zugeordnet
+        </p>
+      ) : (
+        <div className="space-y-2 max-h-[300px] overflow-y-auto">
+          {customers.map((customer) => (
+            <div
+              key={customer.id}
+              className="flex flex-col gap-1 p-2 rounded-md bg-muted/50"
+            >
+              <div className="font-medium text-sm">
+                {customer.first_name} {customer.last_name}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {customer.email}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
