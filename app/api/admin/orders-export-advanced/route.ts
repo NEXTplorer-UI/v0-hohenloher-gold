@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 interface ExportOptions {
-  format: "standard" | "by-customer" | "by-location" | "by-article" | "by-price-analysis"
+  format: "standard" | "by-customer" | "by-location" | "by-article" | "by-price-analysis" | "delivery-list"
   sorting: "order_number" | "customer_name" | "date" | "total" | "category" | "pickup_location" | "pickup_location_normalized"
   showSubtotals: boolean
   emptyLinesBetweenGroups: boolean
@@ -76,6 +76,9 @@ export async function GET(request: NextRequest) {
         break
       case "by-price-analysis":
         csv = generateByPriceAnalysisCSV(ordersToExport)
+        break
+      case "delivery-list":
+        csv = generateDeliveryListCSV(ordersToExport)
         break
       default:
         csv = generateStandardCSV(ordersToExport)
@@ -502,6 +505,89 @@ function generateByPriceAnalysisCSV(orders: any[]): string {
       "",
     ].join(";"),
   )
+
+  return csvRows.join("\n")
+}
+
+function generateDeliveryListCSV(orders: any[]): string {
+  const headers = [
+    "Bestellnummer",
+    "Kundendaten",
+    "Adresse",
+    "Bestellpositionen",
+    "Gesamtpreis",
+    "Zahlungsart",
+    "Bestellkommentar",
+    "Abholort",
+    "Verteilperson",
+  ]
+
+  const csvRows: string[] = [headers.join(";")]
+
+  const sortedOrders = [...orders].sort((a, b) => {
+    const nameA = `${a.customer?.last_name || ""} ${a.customer?.first_name || ""}`.trim().toLowerCase()
+    const nameB = `${b.customer?.last_name || ""} ${b.customer?.first_name || ""}`.trim().toLowerCase()
+    return nameA.localeCompare(nameB, "de")
+  })
+
+  sortedOrders.forEach((order: any) => {
+    const customer = order.customer || {}
+    const items = Array.isArray(order.order_items) ? order.order_items : []
+    
+    const customerData = [
+      `${customer.first_name || ""} ${customer.last_name || ""}`.trim(),
+      customer.phone || "",
+    ].filter(line => line.length > 0).join("\n")
+    
+    let address = ""
+    
+    if (customer.street || customer.house_number || customer.postal_code || customer.city) {
+      const streetLine = customer.street 
+        ? `${customer.street}${customer.house_number ? ' ' + customer.house_number : ''}` 
+        : ""
+      const cityLine = customer.postal_code && customer.city 
+        ? `${customer.postal_code} ${customer.city}` 
+        : (customer.city || customer.postal_code || "")
+      
+      address = [streetLine, cityLine].filter(line => line.length > 0).join("\n")
+    }
+    
+    if (!address && customer.address) {
+      address = customer.address
+    }
+    
+    const orderItems = items.map((item: any) => {
+      const size = item.product_size || (item.weight ? `${item.weight}g` : "")
+      const sizeStr = size ? ` (${size})` : ""
+      const quantity = item.quantity || 1
+      const price = (item.total_price || 0).toFixed(2)
+      return `${quantity}x ${item.product_name}${sizeStr} – ${price}€`
+    }).join("\n")
+    
+    const totalPrice = `${(order.total || 0).toFixed(2)}€`
+    const paymentMethod = order.payment_method || ""
+    const notes = order.notes || ""
+    const pickupLocation = order.pickup_location_normalized || order.pickup_location || "Lieferung"
+    
+    let distributionPerson = ""
+    if (order.distribution_person_id) {
+      distributionPerson = order.distribution_person?.name || order.distribution_person_id
+    }
+    
+    csvRows.push(
+      [
+        escapeCSV(order.order_number),
+        escapeCSV(customerData),
+        escapeCSV(address),
+        escapeCSV(orderItems),
+        escapeCSV(totalPrice),
+        escapeCSV(paymentMethod),
+        escapeCSV(notes),
+        escapeCSV(pickupLocation),
+        escapeCSV(distributionPerson),
+      ].join(";")
+    )
+  })
 
   return csvRows.join("\n")
 }

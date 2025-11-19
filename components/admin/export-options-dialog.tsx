@@ -16,7 +16,7 @@ interface ExportOptionsDialogProps {
 }
 
 export interface ExportOptions {
-  format: "standard" | "by-customer" | "by-location" | "by-article" | "by-price-analysis"
+  format: "standard" | "by-customer" | "by-location" | "by-article" | "by-price-analysis" | "delivery-list"
   sorting: "order_number" | "customer_name" | "date" | "total" | "category" | "pickup_location" | "pickup_location_normalized"
   showSubtotals: boolean
   emptyLinesBetweenGroups: boolean
@@ -94,11 +94,17 @@ export function ExportOptionsDialog({ open, onOpenChange, selectedOrderIds, onEx
                   Preisbasierte Analyse (kompakt)
                 </Label>
               </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="delivery-list" id="format-delivery-list" />
+                <Label htmlFor="format-delivery-list" className="font-normal cursor-pointer">
+                  Auslieferungsliste (nach Abholort sortiert, ohne Leerzeilen)
+                </Label>
+              </div>
             </RadioGroup>
           </div>
 
           {/* Sorting Selection */}
-          {format !== "by-price-analysis" && (
+          {format !== "by-price-analysis" && format !== "delivery-list" && (
             <div className="space-y-3">
               <Label className="text-base font-semibold">Sortierung:</Label>
               <RadioGroup value={sorting} onValueChange={(value) => setSorting(value as ExportOptions["sorting"])}>
@@ -149,7 +155,7 @@ export function ExportOptionsDialog({ open, onOpenChange, selectedOrderIds, onEx
           )}
 
           {/* Additional Options */}
-          {format !== "standard" && format !== "by-price-analysis" && (
+          {format !== "standard" && format !== "by-price-analysis" && format !== "delivery-list" && (
             <div className="space-y-3">
               <Label className="text-base font-semibold">Zusatzoptionen:</Label>
               <div className="space-y-2">

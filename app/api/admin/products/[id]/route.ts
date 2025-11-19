@@ -45,7 +45,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       attributes,
     } = body
 
-    // Validate required fields
     if (!name || !category_id || !price) {
       return NextResponse.json({ error: "Name, category_id, and price are required" }, { status: 400 })
     }

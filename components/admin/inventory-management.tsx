@@ -80,8 +80,17 @@ function InventoryManagementContent() {
     data: productStockData,
     loading: productStockLoading,
     refresh: refreshProductStock,
-  } = useAdminCache<any>("/api/admin/inventory", {
+    error: inventoryError,
+  } = useAdminCache<any>("/api/admin/inventory/current-stock", {
     revalidateOnFocus: false,
+    onError: (error) => {
+      console.error("[v0] Error loading inventory:", error)
+      toast({
+        title: "Fehler beim Laden des Inventars",
+        description: error instanceof Error ? error.message : "Unbekannter Fehler",
+        variant: "destructive",
+      })
+    },
   })
 
   const {
@@ -98,7 +107,6 @@ function InventoryManagementContent() {
     defaultTab: "products",
     preloadTabs: ["products"]
   })
-  // </CHANGE>
 
   const handleStockOperation = useCallback(
     async (itemId: number, type: "in" | "out", amount: number, reason: string) => {
@@ -303,7 +311,6 @@ function InventoryManagementContent() {
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={(tab) => loadTab(tab as "products" | "raw")} className="w-full">
-        {/* </CHANGE> */}
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="products">
             Produkt-Bestand (Stück)
@@ -321,7 +328,6 @@ function InventoryManagementContent() {
         
         <TabsContent value="products">
           {isTabLoaded("products") && (
-            // </CHANGE> */}
             <Card>
               <CardHeader>
                 <CardTitle>Lagerverwaltung (Alter Bestand)</CardTitle>
@@ -362,7 +368,6 @@ function InventoryManagementContent() {
                     )}
                     {productStockLoading ? "Lädt..." : "Aktualisieren"}
                   </Button>
-                  {/* </CHANGE> */}
                   <Button variant="outline">
                     <Upload className="h-4 w-4 mr-2" />
                     Import
@@ -608,7 +613,6 @@ function InventoryManagementContent() {
               </CardContent>
             </Card>
           )}
-          {/* </CHANGE> */}
         </TabsContent>
 
         <TabsContent value="raw">

@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Loader2, Sparkles, Save, MapPin } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Loader2, Sparkles, Save, MapPin, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
 
 interface Order {
@@ -51,35 +52,37 @@ interface AutoMatch {
   orderIds: string[]
 }
 
-const fetcher = (url: string) => {
-  console.log("[v0] [normalize-component] Fetching:", url)
-  return fetch(url).then((res) => {
-    console.log("[v0] [normalize-component] Response status:", res.status)
-    return res.json()
-  }).then((data) => {
-    console.log("[v0] [normalize-component] Data received:", data)
-    return data
-  })
-}
+const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 export default function OrderNormalization() {
   const { toast } = useToast()
   const [groupByLocation, setGroupByLocation] = useState(true)
+  const [includeIgnored, setIncludeIgnored] = useState(false)
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set())
   const [autoMatches, setAutoMatches] = useState<AutoMatch[]>([])
   const [isAutoMatching, setIsAutoMatching] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(50)
   
-  // State for each row's selections
   const [rowSelections, setRowSelections] = useState<Record<string, {
     locationId: string
     personId: string
   }>>({})
 
   const { data: ordersData, mutate: mutateOrders, isLoading: loadingOrders, error: ordersError } = useSWR<{ orders: Order[] }>(
-    "/api/admin/orders/normalize",
+    `/api/admin/orders/normalize?includeIgnored=${includeIgnored}`,
     fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60000 }
+    { 
+      revalidateOnFocus: false, 
+      dedupingInterval: 60000,
+      onSuccess: (data) => {
+        console.log("[v0] [normalize-component] Orders loaded:", data?.orders?.length || 0)
+      },
+      onError: (error) => {
+        console.error("[v0] [normalize-component] Error loading orders:", error)
+      }
+    }
   )
 
   const { data: locationsData } = useSWR<{ locations: PickupLocation[] }>(
@@ -105,7 +108,28 @@ export default function OrderNormalization() {
   const persons = personsData?.persons || []
   const locationPersons = locationPersonsData?.assignments || []
 
-  // Group orders by pickup_location text if grouping is enabled
+  const totalPages = groupByLocation 
+    ? Math.ceil(Object.keys(groupedOrders).length / itemsPerPage)
+    : Math.ceil(orders.length / itemsPerPage)
+  
+  const paginatedGroupedOrders = groupByLocation
+    ? Object.entries(groupedOrders).slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+      )
+    : []
+  
+  const paginatedOrders = !groupByLocation
+    ? orders.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+      )
+    : []
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [groupByLocation, includeIgnored])
+
   const groupedOrders = groupByLocation
     ? orders.reduce((acc, order) => {
         const key = order.pickup_location || "Unbekannt"
@@ -126,11 +150,10 @@ export default function OrderNormalization() {
   }
 
   const getAvailablePersonsForLocation = (locationId: string) => {
-    const assignedPersonIds = locationPersons
-      .filter((lp) => lp.location_id === locationId)
-      .map((lp) => lp.person_id)
-    
-    return persons.filter((p) => assignedPersonIds.includes(p.id))
+    console.log("[v0] [getAvailablePersons] Location ID:", locationId)
+    console.log("[v0] [getAvailablePersons] Returning all persons:", persons.length)
+    // Return all persons - location filtering removed for flexibility
+    return persons
   }
 
   const handleAutoMatch = async () => {
@@ -144,7 +167,6 @@ export default function OrderNormalization() {
       if (data.matches) {
         setAutoMatches(data.matches)
         
-        // Pre-fill row selections with auto-matched values
         const newSelections: Record<string, { locationId: string; personId: string }> = {}
         data.matches.forEach((match: AutoMatch) => {
           const key = match.originalText
@@ -153,7 +175,6 @@ export default function OrderNormalization() {
             personId: "",
           }
           
-          // Auto-select person if only one available
           const availablePersons = getAvailablePersonsForLocation(match.matchedLocationId)
           if (availablePersons.length === 1) {
             newSelections[key].personId = availablePersons[0].id
@@ -213,7 +234,6 @@ export default function OrderNormalization() {
         description: `${orderIds.length} Bestellung(en) aktualisiert${createMapping ? " und Mapping erstellt" : ""}`,
       })
 
-      // Refresh data and clear selection
       mutateOrders()
       setSelectedOrders(new Set())
     } catch (error) {
@@ -264,6 +284,8 @@ export default function OrderNormalization() {
   }
 
   const updateRowSelection = (key: string, field: "locationId" | "personId", value: string) => {
+    console.log("[v0] [updateRowSelection] Key:", key, "Field:", field, "Value:", value)
+    
     setRowSelections({
       ...rowSelections,
       [key]: {
@@ -272,9 +294,10 @@ export default function OrderNormalization() {
       },
     })
     
-    // Auto-select person if only one available and location was just selected
     if (field === "locationId") {
       const availablePersons = getAvailablePersonsForLocation(value)
+      console.log("[v0] [updateRowSelection] Available persons after location change:", availablePersons.length)
+      
       if (availablePersons.length === 1) {
         setRowSelections(prev => ({
           ...prev,
@@ -284,25 +307,41 @@ export default function OrderNormalization() {
             personId: availablePersons[0].id,
           },
         }))
+      } else {
+        setRowSelections(prev => ({
+          ...prev,
+          [key]: {
+            ...prev[key],
+            locationId: value,
+            personId: "",
+          },
+        }))
       }
     }
   }
-
-  useEffect(() => {
-    console.log("[v0] [normalize-component] Orders data:", ordersData)
-    console.log("[v0] [normalize-component] Loading:", loadingOrders)
-    console.log("[v0] [normalize-component] Error:", ordersError)
-  }, [ordersData, loadingOrders, ordersError])
-
-  useEffect(() => {
-    console.log("[v0] [normalize-component] Processed orders count:", orders.length)
-  }, [orders])
 
   if (loadingOrders) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2 text-muted-foreground">Lade Bestellungen...</span>
       </div>
+    )
+  }
+
+  if (ordersError) {
+    return (
+      <Card>
+        <CardContent className="p-8">
+          <div className="text-center text-destructive">
+            <p className="font-medium">Fehler beim Laden der Bestellungen</p>
+            <p className="text-sm text-muted-foreground mt-2">{ordersError.message}</p>
+            <Button onClick={() => mutateOrders()} className="mt-4" variant="outline">
+              Erneut versuchen
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     )
   }
 
@@ -313,10 +352,10 @@ export default function OrderNormalization() {
           <CardTitle>Bestellungen normalisieren</CardTitle>
           <CardDescription>
             Weisen Sie Abholorte und Verteilpersonen zu Bestellungen zu
+            {orders.length > 0 && ` (${orders.length} Bestellungen gefunden)`}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Controls */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="flex items-center space-x-2">
@@ -326,6 +365,14 @@ export default function OrderNormalization() {
                   onCheckedChange={setGroupByLocation}
                 />
                 <Label htmlFor="group-toggle">Gleiche Abholorte gruppieren</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="ignore-toggle"
+                  checked={includeIgnored}
+                  onCheckedChange={setIncludeIgnored}
+                />
+                <Label htmlFor="ignore-toggle">Ignorierte Bestellungen anzeigen</Label>
               </div>
               <Button
                 variant="outline"
@@ -373,186 +420,237 @@ export default function OrderNormalization() {
             )}
           </div>
 
-          {/* Orders List */}
           <div className="space-y-2">
             {orders.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">
                 Keine Bestellungen zur Normalisierung verfügbar
               </p>
             ) : groupByLocation ? (
-              // Grouped view
-              Object.entries(groupedOrders).map(([pickupText, groupOrders]) => {
-                const key = pickupText
-                const autoMatch = autoMatches.find(m => m.originalText === pickupText)
-                const selection = rowSelections[key] || { locationId: "", personId: "" }
-                const availablePersons = selection.locationId ? getAvailablePersonsForLocation(selection.locationId) : []
-                const allOrderIds = groupOrders.map(o => o.id)
-                const allSelected = allOrderIds.every(id => selectedOrders.has(id))
+              <>
+                {paginatedGroupedOrders.map(([pickupText, groupOrders]) => {
+                  const key = pickupText
+                  const autoMatch = autoMatches.find(m => m.originalText === pickupText)
+                  const selection = rowSelections[key] || { locationId: "", personId: "" }
+                  const availablePersons = selection.locationId ? getAvailablePersonsForLocation(selection.locationId) : []
+                  const allOrderIds = groupOrders.map(o => o.id)
+                  const allSelected = allOrderIds.every(id => selectedOrders.has(id))
 
-                return (
-                  <Card key={key} className="p-4">
-                    <div className="flex items-start gap-4">
-                      <Checkbox
-                        checked={allSelected}
-                        onCheckedChange={() => toggleGroupSelection(allOrderIds)}
-                      />
-                      <div className="flex-1 grid grid-cols-5 gap-4 items-center">
-                        <div>
-                          <p className="font-medium">{pickupText}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {groupOrders.length} Bestellung(en)
-                          </p>
-                          {autoMatch && getConfidenceBadge(autoMatch.confidence)}
-                        </div>
-                        <div>
-                          <Label className="text-xs">Abholort</Label>
-                          <Select
-                            value={selection.locationId}
-                            onValueChange={(value) => updateRowSelection(key, "locationId", value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Wählen..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {locations.map((loc) => (
-                                <SelectItem key={loc.id} value={loc.id}>
-                                  {loc.name} - {loc.address}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label className="text-xs">Verteilperson</Label>
-                          <Select
-                            value={selection.personId}
-                            onValueChange={(value) => updateRowSelection(key, "personId", value)}
-                            disabled={!selection.locationId}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Optional..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Keine</SelectItem>
-                              {availablePersons.map((person) => (
-                                <SelectItem key={person.id} value={person.id}>
-                                  {person.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleSave(allOrderIds, false)}
-                            disabled={!selection.locationId || isSaving}
-                          >
-                            Speichern
-                          </Button>
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => handleSave(allOrderIds, true)}
-                            disabled={!selection.locationId || isSaving}
-                          >
-                            Speichern & Mapping
-                          </Button>
+                  return (
+                    <Card key={key} className="p-4">
+                      <div className="flex items-start gap-4">
+                        <Checkbox
+                          checked={allSelected}
+                          onCheckedChange={() => toggleGroupSelection(allOrderIds)}
+                        />
+                        <div className="flex-1 grid grid-cols-5 gap-4 items-center">
+                          <div>
+                            <p className="font-medium">{pickupText}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {groupOrders.length} Bestellung(en)
+                            </p>
+                            {autoMatch && getConfidenceBadge(autoMatch.confidence)}
+                          </div>
+                          <div>
+                            <Label className="text-xs">Abholort</Label>
+                            <Select
+                              value={selection.locationId}
+                              onValueChange={(value) => updateRowSelection(key, "locationId", value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Wählen..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {locations.map((loc) => (
+                                  <SelectItem key={loc.id} value={loc.id}>
+                                    {loc.name} - {loc.address}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Verteilperson</Label>
+                            <Select
+                              value={selection.personId}
+                              onValueChange={(value) => updateRowSelection(key, "personId", value)}
+                              disabled={!selection.locationId}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Optional..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Keine</SelectItem>
+                                {availablePersons.map((person) => (
+                                  <SelectItem key={person.id} value={person.id}>
+                                    {person.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSave(allOrderIds, false)}
+                              disabled={!selection.locationId || isSaving}
+                            >
+                              Speichern
+                            </Button>
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => handleSave(allOrderIds, true)}
+                              disabled={!selection.locationId || isSaving}
+                            >
+                              Speichern & Mapping
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Card>
-                )
-              })
+                    </Card>
+                  )
+                })}
+              </>
             ) : (
-              // Ungrouped view
-              orders.map((order) => {
-                const key = order.id
-                const selection = rowSelections[key] || { locationId: "", personId: "" }
-                const availablePersons = selection.locationId ? getAvailablePersonsForLocation(selection.locationId) : []
+              <>
+                {paginatedOrders.map((order) => {
+                  const key = order.id
+                  const selection = rowSelections[key] || { locationId: "", personId: "" }
+                  const availablePersons = selection.locationId ? getAvailablePersonsForLocation(selection.locationId) : []
 
-                return (
-                  <Card key={order.id} className="p-4">
-                    <div className="flex items-start gap-4">
-                      <Checkbox
-                        checked={selectedOrders.has(order.id)}
-                        onCheckedChange={() => toggleOrderSelection(order.id)}
-                      />
-                      <div className="flex-1 grid grid-cols-6 gap-4 items-center">
-                        <div>
-                          <p className="font-medium">{order.order_number}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {order.customers?.name || "Unbekannt"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm">{order.pickup_location}</p>
-                          {order.notes && (
-                            <p className="text-xs text-muted-foreground truncate">{order.notes}</p>
-                          )}
-                        </div>
-                        <div>
-                          <Label className="text-xs">Abholort</Label>
-                          <Select
-                            value={selection.locationId}
-                            onValueChange={(value) => updateRowSelection(key, "locationId", value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Wählen..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {locations.map((loc) => (
-                                <SelectItem key={loc.id} value={loc.id}>
-                                  {loc.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label className="text-xs">Verteilperson</Label>
-                          <Select
-                            value={selection.personId}
-                            onValueChange={(value) => updateRowSelection(key, "personId", value)}
-                            disabled={!selection.locationId}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Optional..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">Keine</SelectItem>
-                              {availablePersons.map((person) => (
-                                <SelectItem key={person.id} value={person.id}>
-                                  {person.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleSave([order.id], false)}
-                            disabled={!selection.locationId || isSaving}
-                          >
-                            Speichern
-                          </Button>
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => handleSave([order.id], true)}
-                            disabled={!selection.locationId || isSaving}
-                          >
-                            Mapping
-                          </Button>
+                  return (
+                    <Card key={order.id} className="p-4">
+                      <div className="flex items-start gap-4">
+                        <Checkbox
+                          checked={selectedOrders.has(order.id)}
+                          onCheckedChange={() => toggleOrderSelection(order.id)}
+                        />
+                        <div className="flex-1 grid grid-cols-7 gap-4 items-center">
+                          <div>
+                            <p className="font-medium">{order.order_number}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {order.customers?.name || "Unbekannt"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-sm">{order.pickup_location}</p>
+                          </div>
+                          <div>
+                            {order.notes ? (
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button variant="outline" size="sm" className="h-8 gap-2">
+                                    <MessageSquare className="h-4 w-4" />
+                                    Kommentar
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-md">
+                                  <DialogHeader>
+                                    <DialogTitle>Bestellkommentar</DialogTitle>
+                                    <DialogDescription>
+                                      Bestellung {order.order_number}
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="py-4">
+                                    <p className="text-sm whitespace-pre-wrap">{order.notes}</p>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Kein Kommentar</span>
+                            )}
+                          </div>
+                          <div>
+                            <Label className="text-xs">Abholort</Label>
+                            <Select
+                              value={selection.locationId}
+                              onValueChange={(value) => updateRowSelection(key, "locationId", value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Wählen..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {locations.map((loc) => (
+                                  <SelectItem key={loc.id} value={loc.id}>
+                                    {loc.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Verteilperson</Label>
+                            <Select
+                              value={selection.personId}
+                              onValueChange={(value) => updateRowSelection(key, "personId", value)}
+                              disabled={!selection.locationId}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Optional..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Keine</SelectItem>
+                                {availablePersons.map((person) => (
+                                  <SelectItem key={person.id} value={person.id}>
+                                    {person.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex gap-2 col-span-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSave([order.id], false)}
+                              disabled={!selection.locationId || isSaving}
+                            >
+                              Speichern
+                            </Button>
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => handleSave([order.id], true)}
+                              disabled={!selection.locationId || isSaving}
+                            >
+                              Mapping
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Card>
-                )
-              })
+                    </Card>
+                  )
+                })}
+              </>
+            )}
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between pt-4">
+                <p className="text-sm text-muted-foreground">
+                  Seite {currentPage} von {totalPages} ({orders.length} Bestellungen insgesamt)
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Zurück
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Weiter
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
         </CardContent>
