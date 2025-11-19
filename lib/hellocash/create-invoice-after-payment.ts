@@ -41,10 +41,14 @@ export async function createInvoiceAfterPayment(
   orderId: string,
   manualPaymentMethod?: string,
   testMode?: boolean, // Added testMode parameter
+  discountPercent?: number, // Changed from discount (euro amount) to discountPercent
+  cashierId?: number, // Added cashierId parameter
 ): Promise<CreateInvoiceResult> {
   try {
     console.log("[v0] [create-invoice-after-payment] Creating invoice for order:", orderId)
     console.log("[v0] [create-invoice-after-payment] Test mode:", testMode ? "ENABLED" : "DISABLED")
+    console.log("[v0] [create-invoice-after-payment] Discount percent:", discountPercent ? `${discountPercent}%` : "None")
+    console.log("[v0] [create-invoice-after-payment] Cashier ID:", cashierId || "None")
 
     const supabase = getAdminClient()
 
@@ -81,6 +85,8 @@ export async function createInvoiceAfterPayment(
     console.log("[v0] [create-invoice-after-payment] Token starts with:", helloCashToken.substring(0, 15) + "...")
 
     let customerData = null
+    let helloCashUserId: number | null = null
+
     if (order.customer_id) {
       const { data: customer, error: customerError } = await supabase
         .from("customers")
@@ -91,6 +97,54 @@ export async function createInvoiceAfterPayment(
       if (!customerError && customer) {
         customerData = customer
         console.log("[v0] [create-invoice-after-payment] Customer data found:", customer.email)
+
+        if (customer.hellocash_user_id) {
+          helloCashUserId = customer.hellocash_user_id
+          console.log("[v0] [create-invoice-after-payment] Using existing HelloCash user ID:", helloCashUserId)
+        } else {
+          // Try to create HelloCash user
+          try {
+            console.log("[v0] [create-invoice-after-payment] Creating HelloCash user for customer...")
+            
+            const helloCashUserData: any = {
+              user_firstName: customer.first_name || "",
+              user_surName: customer.last_name || "",
+              user_email: customer.email || "",
+            }
+
+            if (customer.phone) helloCashUserData.user_phoneNumber = customer.phone
+            if (customer.street) helloCashUserData.user_street = customer.street
+            if (customer.house_number) helloCashUserData.user_houseNumber = customer.house_number
+            if (customer.postal_code) helloCashUserData.user_postalCode = customer.postal_code
+            if (customer.city) helloCashUserData.user_city = customer.city
+            if (customer.country) helloCashUserData.user_country = customer.country
+
+            const userResponse = await fetch("https://api.hellocash.business/api/v1/users", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${helloCashToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(helloCashUserData),
+            })
+
+            if (userResponse.ok) {
+              const userData = await userResponse.json()
+              helloCashUserId = userData.user_id
+              console.log("[v0] [create-invoice-after-payment] Created HelloCash user, ID:", helloCashUserId)
+
+              // Save user ID in database
+              await supabase
+                .from("customers")
+                .update({ hellocash_user_id: helloCashUserId })
+                .eq("id", order.customer_id)
+            } else {
+              console.warn("[v0] [create-invoice-after-payment] Failed to create HelloCash user:", userResponse.status)
+            }
+          } catch (userError) {
+            console.warn("[v0] [create-invoice-after-payment] Error creating HelloCash user:", userError)
+          }
+        }
       } else {
         console.log("[v0] [create-invoice-after-payment] No customer data found or error:", customerError?.message)
       }
@@ -122,7 +176,22 @@ export async function createInvoiceAfterPayment(
 
     if (testMode) {
       invoicePayload.invoice_testMode = true
-      console.log("[v0] [create-invoice-after-payment] Test mode enabled - creating TEST invoice")
+      console.log("[v0] [create-invoice-after-payment] Test mode enabled - invoice_testMode set to true")
+    }
+
+    if (discountPercent && discountPercent > 0) {
+      invoicePayload.invoice_discount_percent = discountPercent
+      console.log("[v0] [create-invoice-after-payment] Discount percent added:", discountPercent)
+    }
+
+    if (cashierId) {
+      invoicePayload.cashier_id = cashierId
+      console.log("[v0] [create-invoice-after-payment] Cashier ID added:", cashierId)
+    }
+
+    if (helloCashUserId) {
+      invoicePayload.invoice_user_id = helloCashUserId
+      console.log("[v0] [create-invoice-after-payment] Using HelloCash user ID for invoice:", helloCashUserId)
     }
 
     if (order.order_time) {
@@ -135,45 +204,6 @@ export async function createInvoiceAfterPayment(
 
     if (order.notes) {
       invoicePayload.invoice_notes = order.notes
-    }
-
-    if (customerData) {
-      invoicePayload.customer_id = "0" // HelloCash expects this for guest customers
-
-      if (customerData.first_name) {
-        invoicePayload.customer_firstName = customerData.first_name
-      }
-      if (customerData.last_name) {
-        invoicePayload.customer_surName = customerData.last_name
-      }
-      if (customerData.email) {
-        invoicePayload.customer_email = customerData.email
-      }
-      if (customerData.phone) {
-        invoicePayload.customer_phoneNumber = customerData.phone
-      }
-      if (customerData.street) {
-        invoicePayload.customer_street = customerData.street
-      }
-      if (customerData.house_number) {
-        invoicePayload.customer_houseNumber = customerData.house_number
-      }
-      if (customerData.postal_code) {
-        invoicePayload.customer_postalCode = customerData.postal_code
-      }
-      if (customerData.city) {
-        invoicePayload.customer_city = customerData.city
-      }
-      if (customerData.country) {
-        invoicePayload.customer_country = customerData.country
-      }
-
-      console.log(
-        "[v0] [create-invoice-after-payment] Customer data added to invoice:",
-        `${customerData.first_name} ${customerData.last_name}`,
-      )
-    } else {
-      console.log("[v0] [create-invoice-after-payment] No customer data available for this order")
     }
 
     console.log("[v0] [create-invoice-after-payment] Payload:", JSON.stringify(invoicePayload, null, 2))

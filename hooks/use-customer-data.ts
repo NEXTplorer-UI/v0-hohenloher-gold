@@ -1,5 +1,5 @@
 "use client"
-import { useCallback } from "react"
+import { useCallback, useState } from "react"
 import useSWR from "swr"
 import type { ExtendedCustomer, FavoriteProduct } from "@/types/customer"
 
@@ -84,9 +84,23 @@ const fetcher = async (url: string) => {
 
 export function useCustomerData() {
   const pageSize = 50
-  
+  const [currentPage, setCurrentPage] = useState(1)
+  const [searchTerm, setSearchTerm] = useState("")
+
+  const buildUrl = useCallback(() => {
+    const params = new URLSearchParams()
+    if (searchTerm) {
+      params.set("q", searchTerm)
+      params.set("limit", "999999")
+    } else {
+      params.set("limit", String(pageSize))
+      params.set("offset", String((currentPage - 1) * pageSize))
+    }
+    return `/api/crm/customers?${params.toString()}`
+  }, [currentPage, searchTerm, pageSize])
+
   const { data, error, mutate, isLoading } = useSWR(
-    `/api/crm/customers?limit=${pageSize}&offset=0`,
+    buildUrl(),
     fetcher,
     {
       revalidateOnFocus: false,
@@ -99,41 +113,40 @@ export function useCustomerData() {
   const customers = data?.customers || []
   const totalCount = data?.total || 0
   const loading = isLoading
-  const currentPage = 1 // For now, we'll keep pagination simple
 
   const loadCustomers = useCallback(async (opts?: LoadOptions) => {
-    const params = new URLSearchParams()
-    if (opts?.q) {
-      params.set("q", opts.q)
-      params.set("limit", "999999")
+    if (opts?.q !== undefined) {
+      setSearchTerm(opts.q)
+      setCurrentPage(1)
+    } else if (opts?.offset !== undefined && opts?.limit !== undefined) {
+      const page = Math.floor(opts.offset / opts.limit) + 1
+      setCurrentPage(page)
+      setSearchTerm("")
     } else {
-      if (opts?.limit) params.set("limit", String(opts.limit))
-      if (opts?.offset) params.set("offset", String(opts.offset))
+      await mutate()
     }
-
-    await mutate(`/api/crm/customers?${params.toString()}`)
   }, [mutate])
 
   const loadPage = useCallback(
     (page: number) => {
-      const offset = (page - 1) * pageSize
-      loadCustomers({ limit: pageSize, offset })
+      setCurrentPage(page)
+      setSearchTerm("")
     },
-    [pageSize, loadCustomers],
+    [],
   )
 
   const nextPage = useCallback(() => {
     const totalPages = Math.ceil(totalCount / pageSize)
     if (currentPage < totalPages) {
-      loadPage(currentPage + 1)
+      setCurrentPage(prev => prev + 1)
     }
-  }, [currentPage, totalCount, pageSize, loadPage])
+  }, [currentPage, totalCount, pageSize])
 
   const prevPage = useCallback(() => {
     if (currentPage > 1) {
-      loadPage(currentPage - 1)
+      setCurrentPage(prev => prev - 1)
     }
-  }, [currentPage, loadPage])
+  }, [currentPage])
 
   const saveCustomer = useCallback(
     async (customer: ExtendedCustomer) => {

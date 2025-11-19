@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   try {
     console.log("[v0] [mark-order-paid] Starting mark as paid process")
 
-    const { orderId, paymentMethod, testMode } = await request.json()
+    const { orderId, paymentMethod, createInvoice = true, discountPercent, testMode, cashierId } = await request.json()
 
     if (!orderId) {
       return NextResponse.json({ error: "Order ID required" }, { status: 400 })
@@ -25,6 +25,14 @@ export async function POST(request: NextRequest) {
 
     if (testMode) {
       console.log("[v0] [mark-order-paid] Test mode enabled - creating TEST invoice")
+    }
+
+    if (discountPercent) {
+      console.log("[v0] [mark-order-paid] Discount percent:", discountPercent)
+    }
+
+    if (cashierId) {
+      console.log("[v0] [mark-order-paid] Cashier ID:", cashierId)
     }
 
     const supabase = createAdminClient()
@@ -48,27 +56,33 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] [mark-order-paid] Order found:", order.order_number)
     console.log("[v0] [mark-order-paid] Payment method:", paymentMethod || order.payment_method)
+    console.log("[v0] [mark-order-paid] Create invoice:", createInvoice)
 
-    // STEP 1: Create HelloCash invoice FIRST
-    console.log("[v0] [mark-order-paid] Step 1: Creating HelloCash invoice...")
-    const invoiceResult = await createInvoiceAfterPayment(orderId, paymentMethod, testMode)
+    let invoiceResult = null
+    if (createInvoice) {
+      // STEP 1: Create HelloCash invoice FIRST
+      console.log("[v0] [mark-order-paid] Step 1: Creating HelloCash invoice...")
+      invoiceResult = await createInvoiceAfterPayment(orderId, paymentMethod, testMode, discountPercent, cashierId)
 
-    if (!invoiceResult.success) {
-      console.error("[v0] [mark-order-paid] Invoice creation failed:", invoiceResult.error)
-      return NextResponse.json(
-        {
-          error: "Failed to create invoice",
-          details: invoiceResult.error,
-        },
-        { status: 500 },
+      if (!invoiceResult.success) {
+        console.error("[v0] [mark-order-paid] Invoice creation failed:", invoiceResult.error)
+        return NextResponse.json(
+          {
+            error: "Failed to create invoice",
+            details: invoiceResult.error,
+          },
+          { status: 500 },
+        )
+      }
+
+      console.log(
+        "[v0] [mark-order-paid] Invoice created successfully:",
+        invoiceResult.invoiceId,
+        invoiceResult.invoiceNumber,
       )
+    } else {
+      console.log("[v0] [mark-order-paid] Skipping invoice creation (createInvoice=false)")
     }
-
-    console.log(
-      "[v0] [mark-order-paid] Invoice created successfully:",
-      invoiceResult.invoiceId,
-      invoiceResult.invoiceNumber,
-    )
 
     // STEP 2: Update payment status
     console.log("[v0] [mark-order-paid] Step 2: Updating payment status...")
@@ -86,14 +100,22 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] [mark-order-paid] Payment status updated to 'paid'")
 
+    if (!createInvoice) {
+      console.log("[v0] [mark-order-paid] Skipping email (no invoice created)")
+      return NextResponse.json({
+        success: true,
+        message: "Order marked as paid (no invoice created)",
+      })
+    }
+
     // STEP 3: Send payment receipt email with invoice attachment
     if (!order.customers?.email) {
       console.warn("[v0] [mark-order-paid] No customer email, skipping email")
       return NextResponse.json({
         success: true,
         message: "Order marked as paid, but no email sent (no customer email)",
-        invoiceId: invoiceResult.invoiceId,
-        invoiceNumber: invoiceResult.invoiceNumber,
+        invoiceId: invoiceResult?.invoiceId,
+        invoiceNumber: invoiceResult?.invoiceNumber,
       })
     }
 
@@ -120,7 +142,7 @@ export async function POST(request: NextRequest) {
       const attachments = []
       const helloCashToken = process.env.HELLOCASH_API_TOKEN
 
-      if (helloCashToken && invoiceResult.invoiceId) {
+      if (helloCashToken && invoiceResult?.invoiceId) {
         try {
           console.log("[v0] [mark-order-paid] Fetching invoice PDF...")
           const pdfResponse = await fetch(
@@ -173,8 +195,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: "Order marked as paid and payment receipt sent",
-        invoiceId: invoiceResult.invoiceId,
-        invoiceNumber: invoiceResult.invoiceNumber,
+        invoiceId: invoiceResult?.invoiceId,
+        invoiceNumber: invoiceResult?.invoiceNumber,
       })
     } catch (emailError) {
       console.error("[v0] [mark-order-paid] Error sending email:", emailError)
@@ -182,8 +204,8 @@ export async function POST(request: NextRequest) {
         {
           success: true,
           warning: "Order marked as paid but email failed",
-          invoiceId: invoiceResult.invoiceId,
-          invoiceNumber: invoiceResult.invoiceNumber,
+          invoiceId: invoiceResult?.invoiceId,
+          invoiceNumber: invoiceResult?.invoiceNumber,
           emailError: emailError instanceof Error ? emailError.message : "Unknown error",
         },
         { status: 200 },

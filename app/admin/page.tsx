@@ -15,6 +15,7 @@ import { RefreshCw } from 'lucide-react'
 import usePersistedState from "@/hooks/use-persisted-state"
 import { TestModeToggle } from "@/components/admin/test-mode-toggle"
 import { SettingsPanel } from "@/components/admin/settings-panel"
+import { HelloCashSyncButton } from "@/components/admin/hellocash-sync-button"
 
 const CustomerInput = lazy(() => import("@/components/admin/customer-input"))
 const CustomerTable = lazy(() => import("@/components/admin/customer-table"))
@@ -750,6 +751,22 @@ function AdminDashboardContent() {
                   </select>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg md:text-xl">HelloCash Integration</CardTitle>
+              <CardDescription className="text-sm">Kunden mit HelloCash synchronisieren</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Synchronisieren Sie alle Kunden ohne HelloCash-ID nacheinander mit HelloCash. Dies stellt sicher,
+                  dass alle Kundendaten inklusive Adressen auf Rechnungen angezeigt werden.
+                </p>
+                <HelloCashSyncButton />
+              </div>
             </CardContent>
           </Card>
 

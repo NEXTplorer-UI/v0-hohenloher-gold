@@ -108,6 +108,15 @@ export default function OrderNormalization() {
   const persons = personsData?.persons || []
   const locationPersons = locationPersonsData?.assignments || []
 
+  const groupedOrders = groupByLocation
+    ? orders.reduce((acc, order) => {
+        const key = order.pickup_location || "Unbekannt"
+        if (!acc[key]) acc[key] = []
+        acc[key].push(order)
+        return acc
+      }, {} as Record<string, Order[]>)
+    : {}
+
   const totalPages = groupByLocation 
     ? Math.ceil(Object.keys(groupedOrders).length / itemsPerPage)
     : Math.ceil(orders.length / itemsPerPage)
@@ -129,15 +138,6 @@ export default function OrderNormalization() {
   useEffect(() => {
     setCurrentPage(1)
   }, [groupByLocation, includeIgnored])
-
-  const groupedOrders = groupByLocation
-    ? orders.reduce((acc, order) => {
-        const key = order.pickup_location || "Unbekannt"
-        if (!acc[key]) acc[key] = []
-        acc[key].push(order)
-        return acc
-      }, {} as Record<string, Order[]>)
-    : {}
 
   const getConfidenceBadge = (confidence: number) => {
     if (confidence >= 0.9) {

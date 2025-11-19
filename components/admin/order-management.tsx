@@ -287,6 +287,11 @@ const OrderItem = memo(
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium">{order.order_number}</span>
                 <Badge variant={getStatusVariant(uiStatus)}>{getStatusDisplay(uiStatus)}</Badge>
+                {order.payment_status === "paid" && (
+                  <Badge className="bg-green-600 text-white hover:bg-green-700">
+                    ✓ Bezahlt
+                  </Badge>
+                )}
                 {isBulkOrder && (
                   <Badge variant="secondary" className="gap-1">
                     <Users className="h-3 w-3" />
@@ -699,6 +704,13 @@ function OrderManagement() {
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<string | null>(null)
   // Payment method selection for manual payment
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("cash")
+  const [createInvoice, setCreateInvoice] = useState<boolean>(true)
+  const [discountPercent, setDiscountPercent] = useState<string>("")
+  const [customDiscountPercent, setCustomDiscountPercent] = useState<string>("")
+  const [invoiceTestMode, setInvoiceTestMode] = useState<boolean>(false)
+  const [helloCashEmployees, setHelloCashEmployees] = useState<any[]>([])
+  const [selectedCashierId, setSelectedCashierId] = useState<string>("")
+  const [loadingEmployees, setLoadingEmployees] = useState(false)
   // Loading state for marking as paid
   const [isMarkingAsPaid, setIsMarkingAsPaid] = useState(false)
 
@@ -1308,17 +1320,43 @@ function OrderManagement() {
     [orders, fetchOrders, toast],
   )
 
+  const loadHelloCashEmployees = useCallback(async () => {
+    setLoadingEmployees(true)
+    try {
+      const response = await fetch("/api/admin/hellocash/employees")
+      if (response.ok) {
+        const data = await response.json()
+        setHelloCashEmployees(data.employees || [])
+        console.log("[v0] Loaded", data.employees?.length || 0, "HelloCash employees")
+      } else {
+        console.error("[v0] Failed to load HelloCash employees:", response.status)
+        toast({
+          title: "Warnung",
+          description: "Kassierer konnten nicht geladen werden",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Error loading HelloCash employees:", error)
+    } finally {
+      setLoadingEmployees(false)
+    }
+  }, [toast])
+
   const handleMarkAsPaid = useCallback((orderId: string) => {
     setSelectedOrderForPayment(orderId)
     setShowMarkAsPaidModal(true)
-  }, [])
+    loadHelloCashEmployees()
+  }, [loadHelloCashEmployees])
 
   const handleConfirmMarkAsPaid = useCallback(async () => {
     if (!selectedOrderForPayment) return
 
     setIsMarkingAsPaid(true)
     try {
-      console.log(`[v0] Marking order ${selectedOrderForPayment} as paid with payment method: ${selectedPaymentMethod}`)
+      const percent = discountPercent ? parseFloat(discountPercent) : (customDiscountPercent ? parseFloat(customDiscountPercent) : 0)
+
+      console.log(`[v0] Marking order ${selectedOrderForPayment} as paid with payment method: ${selectedPaymentMethod}, createInvoice: ${createInvoice}, discountPercent: ${percent}, testMode: ${invoiceTestMode}, cashierId: ${selectedCashierId}`)
 
       const response = await fetch("/api/admin/mark-order-paid", {
         method: "POST",
@@ -1328,7 +1366,10 @@ function OrderManagement() {
         body: JSON.stringify({
           orderId: selectedOrderForPayment,
           paymentMethod: selectedPaymentMethod,
-          testMode, // Pass test mode from hook
+          createInvoice,
+          discountPercent: percent > 0 ? percent : undefined, // Send percent instead of euro amount
+          testMode: invoiceTestMode,
+          cashierId: selectedCashierId ? parseInt(selectedCashierId) : undefined, // Added cashierId
         }),
       })
 
@@ -1338,14 +1379,20 @@ function OrderManagement() {
 
         toast({
           title: "Als bezahlt markiert",
-          description: result.message || "Rechnung wurde erstellt und per E-Mail versendet",
+          description: createInvoice
+            ? (result.message || "Rechnung wurde erstellt und per E-Mail versendet")
+            : "Bestellung wurde als bezahlt markiert",
         })
 
         setShowMarkAsPaidModal(false)
         setSelectedOrderForPayment(null)
         setSelectedPaymentMethod("cash")
+        setCreateInvoice(true)
+        setDiscountPercent("")
+        setCustomDiscountPercent("") // Reset custom discount percent
+        setInvoiceTestMode(false)
+        setSelectedCashierId("") // Reset cashier
 
-        // Reload orders
         await fetchOrders()
       } else {
         const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
@@ -1365,7 +1412,7 @@ function OrderManagement() {
     } finally {
       setIsMarkingAsPaid(false)
     }
-  }, [selectedOrderForPayment, selectedPaymentMethod, fetchOrders, toast, testMode])
+  }, [selectedOrderForPayment, selectedPaymentMethod, createInvoice, discountPercent, customDiscountPercent, invoiceTestMode, selectedCashierId, orders, fetchOrders, toast])
 
   const handleOrderSelection = useCallback((orderId: string, selected: boolean) => {
     setSelectedOrderIds((prev) => {
@@ -1912,8 +1959,7 @@ function OrderManagement() {
             <CardHeader>
               <CardTitle>Als bezahlt markieren</CardTitle>
               <CardDescription>
-                Wählen Sie die Zahlungsart und bestätigen Sie die Zahlung. Eine Rechnung wird automatisch erstellt und
-                versendet.
+                Wählen Sie die Zahlungsart und optionale Einstellungen.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1933,6 +1979,137 @@ function OrderManagement() {
                   </SelectContent>
                 </Select>
               </div>
+              
+              <div className="flex items-center space-x-2 p-3 border rounded-md bg-muted/50">
+                <Checkbox 
+                  id="createInvoice" 
+                  checked={createInvoice}
+                  onCheckedChange={(checked) => setCreateInvoice(checked as boolean)}
+                />
+                <div className="flex flex-col">
+                  <Label htmlFor="createInvoice" className="cursor-pointer font-medium">
+                    HelloCash-Rechnung erstellen
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Wenn aktiviert, wird eine Rechnung erstellt und per E-Mail versendet
+                  </p>
+                </div>
+              </div>
+
+              {createInvoice && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="cashierSelect">Kassierer</Label>
+                    <Select value={selectedCashierId} onValueChange={setSelectedCashierId} disabled={loadingEmployees}>
+                      <SelectTrigger id="cashierSelect">
+                        <SelectValue placeholder={loadingEmployees ? "Lädt..." : "Kassierer auswählen (optional)"}>
+                          {selectedCashierId && helloCashEmployees.length > 0 ? (
+                            (() => {
+                              const selected = helloCashEmployees.find(e => e.employee_id.toString() === selectedCashierId)
+                              return selected ? selected.employee_name : "Kassierer auswählen (optional)"
+                            })()
+                          ) : null}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {helloCashEmployees.map((employee) => (
+                          <SelectItem key={employee.employee_id} value={employee.employee_id.toString()}>
+                            {employee.employee_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-3 p-3 border rounded-md">
+                    <Label className="font-medium">Rabatt (optional)</Label>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant={discountPercent === "5" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setDiscountPercent("5")
+                          setCustomDiscountPercent("")
+                        }}
+                        className="flex-1"
+                      >
+                        5%
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={discountPercent === "8" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setDiscountPercent("8")
+                          setCustomDiscountPercent("")
+                        }}
+                        className="flex-1"
+                      >
+                        8%
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={discountPercent === "10" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setDiscountPercent("10")
+                          setCustomDiscountPercent("")
+                        }}
+                        className="flex-1"
+                      >
+                        10%
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="customDiscountPercent" className="text-sm text-muted-foreground">
+                        Oder eigener Prozentsatz
+                      </Label>
+                      <Input
+                        id="customDiscountPercent"
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        placeholder="0"
+                        value={customDiscountPercent}
+                        onChange={(e) => {
+                          setCustomDiscountPercent(e.target.value)
+                          setDiscountPercent("")
+                        }}
+                      />
+                    </div>
+                    {(discountPercent || customDiscountPercent) && selectedOrderForPayment && (() => {
+                      const order = orders.find(o => o.id === selectedOrderForPayment)
+                      if (!order) return null
+                      const percent = discountPercent ? parseFloat(discountPercent) : parseFloat(customDiscountPercent) || 0
+                      const amount = (order.total * percent) / 100
+                      return (
+                        <p className="text-sm text-muted-foreground">
+                          Rabatt: {percent}% ({amount.toFixed(2)} €)
+                        </p>
+                      )
+                    })()}
+                  </div>
+
+                  <div className="flex items-center space-x-2 p-3 border rounded-md bg-yellow-50">
+                    <Checkbox 
+                      id="invoiceTestMode" 
+                      checked={invoiceTestMode}
+                      onCheckedChange={(checked) => setInvoiceTestMode(checked as boolean)}
+                    />
+                    <div className="flex flex-col">
+                      <Label htmlFor="invoiceTestMode" className="cursor-pointer font-medium">
+                        Als Test-Rechnung erstellen
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Test-Rechnungen erscheinen nicht in der echten Buchhaltung
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
+
               <div className="flex gap-2 justify-end">
                 <Button
                   variant="outline"
@@ -1940,6 +2117,11 @@ function OrderManagement() {
                     setShowMarkAsPaidModal(false)
                     setSelectedOrderForPayment(null)
                     setSelectedPaymentMethod("cash")
+                    setCreateInvoice(true)
+                    setDiscountPercent("")
+                    setCustomDiscountPercent("")
+                    setInvoiceTestMode(false)
+                    setSelectedCashierId("")
                   }}
                   disabled={isMarkingAsPaid}
                 >
@@ -1952,7 +2134,7 @@ function OrderManagement() {
                       Wird verarbeitet...
                     </>
                   ) : (
-                    "Rechnung versenden"
+                    createInvoice ? "Rechnung versenden" : "Als bezahlt markieren"
                   )}
                 </Button>
               </div>
