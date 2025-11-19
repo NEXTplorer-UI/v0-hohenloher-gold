@@ -138,9 +138,10 @@ export async function POST(request: Request) {
     const {
       orderIds,
       normalizedLocation,
-      canonicalLocationId,
+      pickupLocationId,
       distributionPersonId,
       createMapping,
+      saveAsCustomerDefault, // New parameter
     } = body
 
     if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
@@ -151,6 +152,7 @@ export async function POST(request: Request) {
     }
 
     console.log(`[v0] [normalize] Updating ${orderIds.length} orders...`)
+    console.log(`[v0] [normalize] Save as customer default: ${saveAsCustomerDefault}`)
 
     const { error: updateError } = await supabase
       .from("orders")
@@ -162,7 +164,40 @@ export async function POST(request: Request) {
 
     if (updateError) throw updateError
 
-    if (createMapping && canonicalLocationId) {
+    if (saveAsCustomerDefault && (distributionPersonId || pickupLocationId)) {
+      console.log(`[v0] [normalize] Updating customer defaults...`)
+      
+      // Get customer IDs from orders
+      const { data: orderData } = await supabase
+        .from("orders")
+        .select("customer_id")
+        .in("id", orderIds)
+      
+      if (orderData && orderData.length > 0) {
+        const customerIds = [...new Set(orderData.map(o => o.customer_id).filter(Boolean))]
+        
+        const updateData: any = {}
+        if (distributionPersonId) {
+          updateData.default_distribution_person_id = distributionPersonId
+        }
+        if (pickupLocationId) {
+          updateData.default_pickup_location_id = pickupLocationId
+        }
+        
+        const { error: customerUpdateError } = await supabase
+          .from("customers")
+          .update(updateData)
+          .in("id", customerIds)
+        
+        if (customerUpdateError) {
+          console.error("[v0] [normalize] Error updating customer defaults:", customerUpdateError)
+        } else {
+          console.log(`[v0] [normalize] Updated defaults for ${customerIds.length} customers`)
+        }
+      }
+    }
+
+    if (createMapping && pickupLocationId) {
       const { data: firstOrder } = await supabase
         .from("orders")
         .select("pickup_location")
@@ -174,12 +209,14 @@ export async function POST(request: Request) {
           .from("pickup_location_mappings")
           .insert({
             variant: firstOrder.pickup_location,
-            canonical_location_id: canonicalLocationId,
+            canonical_location_id: pickupLocationId,
           })
           .select()
           .then(({ error }) => {
             if (error && !error.message.includes("duplicate key")) {
               console.error("[v0] [normalize] Mapping creation error:", error)
+            } else {
+              console.log("[v0] [normalize] Created pickup location mapping")
             }
           })
       }

@@ -23,10 +23,22 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { PlusIcon, Pencil, Trash2 } from 'lucide-react'
+import { PlusIcon, Pencil, Trash2, Users } from 'lucide-react'
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface DistributionPerson {
   id: string
@@ -41,6 +53,14 @@ interface DistributionPerson {
   notes: string | null
   location_count?: number
   created_at: string
+}
+
+interface Customer {
+  id: string
+  first_name: string
+  last_name: string
+  email: string
+  default_distribution_person_id: string | null
 }
 
 interface LocationPerson {
@@ -71,6 +91,9 @@ export default function DistributionPersonManagement() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingPerson, setEditingPerson] = useState<DistributionPerson | null>(null)
+  const [isAssignCustomerDialogOpen, setIsAssignCustomerDialogOpen] = useState(false)
+  const [selectedPersonForAssignment, setSelectedPersonForAssignment] = useState<DistributionPerson | null>(null)
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("")
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -104,6 +127,27 @@ export default function DistributionPersonManagement() {
     }
   )
 
+  const { data: customersData } = useSWR<{ customers: Customer[] }>(
+    "/api/admin/customers?limit=1000",
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 60000,
+    }
+  )
+  const allCustomers = customersData?.customers || []
+
+  const { data: personsData, error, mutate, isLoading } = useSWR<{ persons: DistributionPerson[] }>(
+    "/api/admin/distribution-persons",
+    fetcher,
+    {
+      revalidateOnFocus: false, // Prevent refetch on focus
+      dedupingInterval: 30000, // Cache for 30 seconds
+    }
+  )
+
+  const persons = personsData?.persons || []
+
   useEffect(() => {
     if (editingPerson && assignedLocationsData?.assignments) {
       const locationIds = assignedLocationsData.assignments.map(a => a.pickup_location_id)
@@ -121,17 +165,6 @@ export default function DistributionPersonManagement() {
       })
     }
   }, [editingPerson?.id, assignedLocationsData]) // Only watch editingPerson.id, not full object
-
-  const { data: personsData, error, mutate, isLoading } = useSWR<{ persons: DistributionPerson[] }>(
-    "/api/admin/distribution-persons",
-    fetcher,
-    {
-      revalidateOnFocus: false, // Prevent refetch on focus
-      dedupingInterval: 30000, // Cache for 30 seconds
-    }
-  )
-
-  const persons = personsData?.persons || []
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -302,6 +335,52 @@ export default function DistributionPersonManagement() {
     setPrimaryLocationId(locationId)
   }
 
+  const openAssignCustomerDialog = (person: DistributionPerson) => {
+    setSelectedPersonForAssignment(person)
+    setSelectedCustomerId("")
+    setIsAssignCustomerDialogOpen(true)
+  }
+
+  const handleAssignCustomer = async () => {
+    if (!selectedPersonForAssignment || !selectedCustomerId) return
+
+    try {
+      const res = await fetch(`/api/admin/customers/${selectedCustomerId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          default_distribution_person_id: selectedPersonForAssignment.id,
+        }),
+      })
+
+      if (!res.ok) throw new Error("Failed to assign customer")
+
+      toast({
+        title: "Kunde zugeordnet",
+        description: "Der Kunde wurde erfolgreich der Verteilperson zugeordnet.",
+      })
+
+      setIsAssignCustomerDialogOpen(false)
+      setSelectedPersonForAssignment(null)
+      setSelectedCustomerId("")
+    } catch (error) {
+      console.error("[v0] Error assigning customer:", error)
+      toast({
+        title: "Fehler",
+        description: "Kunde konnte nicht zugeordnet werden.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const getCustomersForPerson = (personId: string) => {
+    return allCustomers.filter(c => c.default_distribution_person_id === personId)
+  }
+
+  const getUnassignedCustomers = () => {
+    return allCustomers.filter(c => !c.default_distribution_person_id)
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -328,6 +407,7 @@ export default function DistributionPersonManagement() {
                 <TableHead>Telefon</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Abholorte</TableHead>
+                <TableHead>Kunden</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Aktionen</TableHead>
               </TableRow>
@@ -335,49 +415,97 @@ export default function DistributionPersonManagement() {
             <TableBody>
               {persons.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">
                     Keine Verteilpersonen vorhanden
                   </TableCell>
                 </TableRow>
               ) : (
-                persons.map((person) => (
-                  <TableRow key={person.id}>
-                    <TableCell className="font-medium">{person.name}</TableCell>
-                    <TableCell>{person.phone || "-"}</TableCell>
-                    <TableCell>{person.email || "-"}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{(person.location_count || 0)} Orte</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Switch
-                        checked={person.is_active}
-                        onCheckedChange={() => handleToggleActive(person)}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditDialog(person)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(person)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                persons.map((person) => {
+                  const assignedCustomers = getCustomersForPerson(person.id)
+                  
+                  return (
+                    <TableRow key={person.id}>
+                      <TableCell className="font-medium">{person.name}</TableCell>
+                      <TableCell>{person.phone || "-"}</TableCell>
+                      <TableCell>{person.email || "-"}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{(person.location_count || 0)} Orte</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="gap-2">
+                              <Users className="h-4 w-4" />
+                              {assignedCustomers.length}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80">
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-medium">Zugeordnete Kunden</h4>
+                                <Button
+                                  size="sm"
+                                  onClick={() => openAssignCustomerDialog(person)}
+                                >
+                                  <PlusIcon className="h-4 w-4 mr-1" />
+                                  Zuordnen
+                                </Button>
+                              </div>
+                              {assignedCustomers.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">
+                                  Keine Kunden zugeordnet
+                                </p>
+                              ) : (
+                                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                                  {assignedCustomers.map((customer) => (
+                                    <div
+                                      key={customer.id}
+                                      className="flex flex-col gap-1 p-2 rounded-md bg-muted/50"
+                                    >
+                                      <div className="font-medium text-sm">
+                                        {customer.first_name} {customer.last_name}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {customer.email}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </TableCell>
+                      <TableCell>
+                        <Switch
+                          checked={person.is_active}
+                          onCheckedChange={() => handleToggleActive(person)}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditDialog(person)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(person)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>
         )}
 
-        {/* Create Dialog */}
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleCreate}>
@@ -526,7 +654,6 @@ export default function DistributionPersonManagement() {
           </DialogContent>
         </Dialog>
 
-        {/* Edit Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleUpdate}>
@@ -673,6 +800,62 @@ export default function DistributionPersonManagement() {
                 </Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isAssignCustomerDialogOpen} onOpenChange={setIsAssignCustomerDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Kunde zuordnen</DialogTitle>
+              <DialogDescription>
+                Wählen Sie einen Kunden aus, der {selectedPersonForAssignment?.name} zugeordnet werden soll.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="customer-select">Kunde auswählen</Label>
+                <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+                  <SelectTrigger id="customer-select">
+                    <SelectValue placeholder="Kunde auswählen..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getUnassignedCustomers().length === 0 ? (
+                      <div className="p-2 text-sm text-muted-foreground text-center">
+                        Alle Kunden sind bereits zugeordnet
+                      </div>
+                    ) : (
+                      getUnassignedCustomers().map((customer) => (
+                        <SelectItem key={customer.id} value={customer.id}>
+                          {customer.first_name} {customer.last_name} ({customer.email})
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Nur Kunden ohne Verteilperson werden angezeigt
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsAssignCustomerDialogOpen(false)
+                  setSelectedPersonForAssignment(null)
+                  setSelectedCustomerId("")
+                }}
+              >
+                Abbrechen
+              </Button>
+              <Button
+                onClick={handleAssignCustomer}
+                disabled={!selectedCustomerId}
+              >
+                Zuordnen
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </CardContent>

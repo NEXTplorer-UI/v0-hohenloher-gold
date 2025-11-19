@@ -297,7 +297,7 @@ export async function POST(request: NextRequest) {
 
     const { data: customers, error: customerError } = await supabase
       .from("customers")
-      .select("id, user_id")
+      .select("id, user_id, default_distribution_person_id, default_pickup_location_id")
       .eq("email_normalized", orderData.email.toLowerCase().trim())
       .limit(1)
 
@@ -367,6 +367,32 @@ export async function POST(request: NextRequest) {
     const pickupToken = randomUUID()
     console.log("[/api/orders] Generated pickup token:", pickupToken)
 
+    let autoFilledDistributionPersonId = orderData.distributionPersonId || null
+    let autoFilledPickupLocationId = pickupLocationId
+
+    if (!autoFilledDistributionPersonId && customer.default_distribution_person_id) {
+      autoFilledDistributionPersonId = customer.default_distribution_person_id
+      console.log("[/api/orders] Auto-filled distribution_person_id from customer default:", autoFilledDistributionPersonId)
+    }
+
+    if (!autoFilledPickupLocationId && customer.default_pickup_location_id) {
+      autoFilledPickupLocationId = customer.default_pickup_location_id
+      console.log("[/api/orders] Auto-filled pickup_location_id from customer default:", autoFilledPickupLocationId)
+      
+      // Also update pickupLocationNormalized based on the default location
+      const { data: defaultLocation } = await supabase
+        .from("pickup_locations")
+        .select("name, address")
+        .eq("id", autoFilledPickupLocationId)
+        .single()
+      
+      if (defaultLocation) {
+        pickupLocationNormalized = `${defaultLocation.name}, ${defaultLocation.address}`
+        normalizedLocationId = autoFilledPickupLocationId
+        console.log("[/api/orders] Updated normalized location from customer default:", pickupLocationNormalized)
+      }
+    }
+
     const orderRecord = {
       customer_id: customer.id,
       user_id: customer.user_id,
@@ -378,6 +404,7 @@ export async function POST(request: NextRequest) {
       pickup_location: orderData.pickupLocation || null,
       pickup_location_normalized: pickupLocationNormalized,
       pickup_location_id: normalizedLocationId,
+      distribution_person_id: autoFilledDistributionPersonId, // Use auto-filled value
       payment_method: orderData.paymentMethod,
       payment_status: orderData.paymentMethod === "sumup" ? "paid" : "pending",
       status: "confirmed",

@@ -65,6 +65,9 @@ export default function OrderNormalization() {
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(50)
   
+  const [saveAsDefault, setSaveAsDefault] = useState<Record<string, boolean>>({})
+  const [createMapping, setCreateMapping] = useState<Record<string, boolean>>({})
+  
   const [rowSelections, setRowSelections] = useState<Record<string, {
     locationId: string
     personId: string
@@ -97,7 +100,7 @@ export default function OrderNormalization() {
     { revalidateOnFocus: false, dedupingInterval: 60000 }
   )
 
-  const { data: locationPersonsData } = useSWR<{ assignments: Array<{ location_id: string; person_id: string }> }>(
+  const { data: locationPersonsData } = useSWR<{ assignments: Array<{ pickup_location_id: string; person_id: string }> }>(
     "/api/admin/location-persons",
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 60000 }
@@ -156,6 +159,14 @@ export default function OrderNormalization() {
     return persons
   }
 
+  const getPickupLocationFromPerson = (personId: string): string | null => {
+    const assignment = locationPersons.find(lp => lp.person_id === personId)
+    if (assignment) {
+      return assignment.pickup_location_id
+    }
+    return null
+  }
+
   const handleAutoMatch = async () => {
     setIsAutoMatching(true)
     try {
@@ -199,14 +210,13 @@ export default function OrderNormalization() {
     }
   }
 
-  const handleSave = async (orderIds: string[], createMapping: boolean) => {
-    const key = groupByLocation ? orders.find(o => orderIds.includes(o.id))?.pickup_location || "" : orderIds[0]
+  const handleSave = async (orderIds: string[], key: string) => {
     const selection = rowSelections[key]
     
-    if (!selection?.locationId) {
+    if (!selection?.personId && !selection?.locationId) {
       toast({
         title: "Fehler",
-        description: "Bitte wählen Sie einen Abholort aus",
+        description: "Bitte wählen Sie mindestens eine Verteilperson oder einen Abholort aus",
         variant: "destructive",
       })
       return
@@ -214,28 +224,45 @@ export default function OrderNormalization() {
 
     setIsSaving(true)
     try {
-      const location = locations.find(l => l.id === selection.locationId)
+      let finalLocationId = selection.locationId
+      
+      if (selection.personId && !selection.locationId) {
+        const derivedLocationId = getPickupLocationFromPerson(selection.personId)
+        if (derivedLocationId) {
+          finalLocationId = derivedLocationId
+          console.log("[v0] Derived location from person:", derivedLocationId)
+        }
+      }
+
+      const location = locations.find(l => l.id === finalLocationId)
       const response = await fetch("/api/admin/orders/normalize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderIds,
           normalizedLocation: location ? `${location.name}, ${location.address}` : null,
-          pickupLocationId: selection.locationId,
+          pickupLocationId: finalLocationId,
           distributionPersonId: selection.personId || null,
-          createMapping,
+          createMapping: createMapping[key] || false,
+          saveAsCustomerDefault: saveAsDefault[key] !== false, // Default: true
         }),
       })
 
       if (!response.ok) throw new Error("Failed to save")
 
+      const createMappingText = createMapping[key] ? " und Schreibvarianten-Mapping erstellt" : ""
+      const saveDefaultText = saveAsDefault[key] !== false ? " (als Kundenstandard gespeichert)" : ""
+
       toast({
         title: "Erfolgreich gespeichert",
-        description: `${orderIds.length} Bestellung(en) aktualisiert${createMapping ? " und Mapping erstellt" : ""}`,
+        description: `${orderIds.length} Bestellung(en) aktualisiert${createMappingText}${saveDefaultText}`,
       })
 
       mutateOrders()
       setSelectedOrders(new Set())
+      
+      setSaveAsDefault(prev => ({ ...prev, [key]: true }))
+      setCreateMapping(prev => ({ ...prev, [key]: false }))
     } catch (error) {
       console.error("[save] Error:", error)
       toast({
@@ -248,7 +275,7 @@ export default function OrderNormalization() {
     }
   }
 
-  const handleBulkSave = async (createMapping: boolean) => {
+  const handleBulkSave = async () => {
     if (selectedOrders.size === 0) {
       toast({
         title: "Keine Auswahl",
@@ -258,7 +285,8 @@ export default function OrderNormalization() {
       return
     }
 
-    await handleSave(Array.from(selectedOrders), createMapping)
+    const key = Array.from(selectedOrders)[0]
+    await handleSave(Array.from(selectedOrders), key)
   }
 
   const toggleOrderSelection = (orderId: string) => {
@@ -294,29 +322,24 @@ export default function OrderNormalization() {
       },
     })
     
-    if (field === "locationId") {
-      const availablePersons = getAvailablePersonsForLocation(value)
-      console.log("[v0] [updateRowSelection] Available persons after location change:", availablePersons.length)
-      
-      if (availablePersons.length === 1) {
+    if (field === "personId" && value) {
+      const derivedLocationId = getPickupLocationFromPerson(value)
+      if (derivedLocationId) {
+        console.log("[v0] [updateRowSelection] Auto-filling location from person:", derivedLocationId)
         setRowSelections(prev => ({
           ...prev,
           [key]: {
             ...prev[key],
-            locationId: value,
-            personId: availablePersons[0].id,
-          },
-        }))
-      } else {
-        setRowSelections(prev => ({
-          ...prev,
-          [key]: {
-            ...prev[key],
-            locationId: value,
-            personId: "",
+            personId: value,
+            locationId: derivedLocationId,
           },
         }))
       }
+    }
+    
+    if (!saveAsDefault.hasOwnProperty(key)) {
+      setSaveAsDefault(prev => ({ ...prev, [key]: true })) // Default: ON
+      setCreateMapping(prev => ({ ...prev, [key]: false })) // Default: OFF
     }
   }
 
@@ -391,9 +414,9 @@ export default function OrderNormalization() {
             {selectedOrders.size > 0 && (
               <div className="flex gap-2">
                 <Button
-                  variant="outline"
+                  variant="default"
                   size="sm"
-                  onClick={() => handleBulkSave(false)}
+                  onClick={() => handleBulkSave()}
                   disabled={isSaving}
                 >
                   {isSaving ? (
@@ -402,19 +425,6 @@ export default function OrderNormalization() {
                     <Save className="h-4 w-4 mr-2" />
                   )}
                   {selectedOrders.size} Speichern
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => handleBulkSave(true)}
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <MapPin className="h-4 w-4 mr-2" />
-                  )}
-                  {selectedOrders.size} Speichern & Mapping
                 </Button>
               </div>
             )}
@@ -431,7 +441,7 @@ export default function OrderNormalization() {
                   const key = pickupText
                   const autoMatch = autoMatches.find(m => m.originalText === pickupText)
                   const selection = rowSelections[key] || { locationId: "", personId: "" }
-                  const availablePersons = selection.locationId ? getAvailablePersonsForLocation(selection.locationId) : []
+                  const availablePersons = persons
                   const allOrderIds = groupOrders.map(o => o.id)
                   const allSelected = allOrderIds.every(id => selectedOrders.has(id))
 
@@ -442,68 +452,83 @@ export default function OrderNormalization() {
                           checked={allSelected}
                           onCheckedChange={() => toggleGroupSelection(allOrderIds)}
                         />
-                        <div className="flex-1 grid grid-cols-5 gap-4 items-center">
-                          <div>
-                            <p className="font-medium">{pickupText}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {groupOrders.length} Bestellung(en)
-                            </p>
-                            {autoMatch && getConfidenceBadge(autoMatch.confidence)}
-                          </div>
-                          <div>
-                            <Label className="text-xs">Abholort</Label>
-                            <Select
-                              value={selection.locationId}
-                              onValueChange={(value) => updateRowSelection(key, "locationId", value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Wählen..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {locations.map((loc) => (
-                                  <SelectItem key={loc.id} value={loc.id}>
-                                    {loc.name} - {loc.address}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label className="text-xs">Verteilperson</Label>
-                            <Select
-                              value={selection.personId}
-                              onValueChange={(value) => updateRowSelection(key, "personId", value)}
-                              disabled={!selection.locationId}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Optional..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">Keine</SelectItem>
-                                {availablePersons.map((person) => (
-                                  <SelectItem key={person.id} value={person.id}>
-                                    {person.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                        <div className="flex-1 space-y-3">
+                          <div className="grid grid-cols-5 gap-4 items-center">
+                            <div>
+                              <p className="font-medium">{pickupText}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {groupOrders.length} Bestellung(en)
+                              </p>
+                              {autoMatch && getConfidenceBadge(autoMatch.confidence)}
+                            </div>
+                            <div>
+                              <Label className="text-xs">Verteilperson</Label>
+                              <Select
+                                value={selection.personId}
+                                onValueChange={(value) => updateRowSelection(key, "personId", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Wählen..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availablePersons.map((person) => (
+                                    <SelectItem key={person.id} value={person.id}>
+                                      {person.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label className="text-xs">Abholort (optional)</Label>
+                              <Select
+                                value={selection.locationId}
+                                onValueChange={(value) => updateRowSelection(key, "locationId", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Auto..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {locations.map((loc) => (
+                                    <SelectItem key={loc.id} value={loc.id}>
+                                      {loc.name} - {loc.address}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="col-span-2 space-y-2">
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`save-default-${key}`}
+                                  checked={saveAsDefault[key] !== false}
+                                  onCheckedChange={(checked) => setSaveAsDefault(prev => ({ ...prev, [key]: !!checked }))}
+                                />
+                                <Label htmlFor={`save-default-${key}`} className="text-sm cursor-pointer">
+                                  Als Standard für Kunden speichern
+                                </Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`create-mapping-${key}`}
+                                  checked={createMapping[key] || false}
+                                  onCheckedChange={(checked) => setCreateMapping(prev => ({ ...prev, [key]: !!checked }))}
+                                />
+                                <Label htmlFor={`create-mapping-${key}`} className="text-sm cursor-pointer">
+                                  Schreibvariante als Mapping speichern
+                                </Label>
+                              </div>
+                            </div>
                           </div>
                           <div className="flex gap-2">
                             <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleSave(allOrderIds, false)}
-                              disabled={!selection.locationId || isSaving}
-                            >
-                              Speichern
-                            </Button>
-                            <Button
                               variant="default"
                               size="sm"
-                              onClick={() => handleSave(allOrderIds, true)}
-                              disabled={!selection.locationId || isSaving}
+                              onClick={() => handleSave(allOrderIds, key)}
+                              disabled={(!selection.locationId && !selection.personId) || isSaving}
                             >
-                              Speichern & Mapping
+                              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                              Speichern
                             </Button>
                           </div>
                         </div>
@@ -517,7 +542,7 @@ export default function OrderNormalization() {
                 {paginatedOrders.map((order) => {
                   const key = order.id
                   const selection = rowSelections[key] || { locationId: "", personId: "" }
-                  const availablePersons = selection.locationId ? getAvailablePersonsForLocation(selection.locationId) : []
+                  const availablePersons = persons
 
                   return (
                     <Card key={order.id} className="p-4">
@@ -526,95 +551,109 @@ export default function OrderNormalization() {
                           checked={selectedOrders.has(order.id)}
                           onCheckedChange={() => toggleOrderSelection(order.id)}
                         />
-                        <div className="flex-1 grid grid-cols-7 gap-4 items-center">
-                          <div>
-                            <p className="font-medium">{order.order_number}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {order.customers?.name || "Unbekannt"}
-                            </p>
+                        <div className="flex-1 space-y-3">
+                          <div className="grid grid-cols-6 gap-4 items-center">
+                            <div>
+                              <p className="font-medium">{order.order_number}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {order.customers?.name || "Unbekannt"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm">{order.pickup_location}</p>
+                            </div>
+                            <div>
+                              {order.notes ? (
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-8 gap-2">
+                                      <MessageSquare className="h-4 w-4" />
+                                      Kommentar
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent className="max-w-md">
+                                    <DialogHeader>
+                                      <DialogTitle>Bestellkommentar</DialogTitle>
+                                      <DialogDescription>
+                                        Bestellung {order.order_number}
+                                      </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="py-4">
+                                      <p className="text-sm whitespace-pre-wrap">{order.notes}</p>
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Kein Kommentar</span>
+                              )}
+                            </div>
+                            <div>
+                              <Label className="text-xs">Verteilperson</Label>
+                              <Select
+                                value={selection.personId}
+                                onValueChange={(value) => updateRowSelection(key, "personId", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Wählen..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availablePersons.map((person) => (
+                                    <SelectItem key={person.id} value={person.id}>
+                                      {person.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label className="text-xs">Abholort (optional)</Label>
+                              <Select
+                                value={selection.locationId}
+                                onValueChange={(value) => updateRowSelection(key, "locationId", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Auto..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {locations.map((loc) => (
+                                    <SelectItem key={loc.id} value={loc.id}>
+                                      {loc.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`save-default-${key}`}
+                                  checked={saveAsDefault[key] !== false}
+                                  onCheckedChange={(checked) => setSaveAsDefault(prev => ({ ...prev, [key]: !!checked }))}
+                                />
+                                <Label htmlFor={`save-default-${key}`} className="text-xs cursor-pointer">
+                                  Als Standard
+                                </Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`create-mapping-${key}`}
+                                  checked={createMapping[key] || false}
+                                  onCheckedChange={(checked) => setCreateMapping(prev => ({ ...prev, [key]: !!checked }))}
+                                />
+                                <Label htmlFor={`create-mapping-${key}`} className="text-xs cursor-pointer">
+                                  Mapping
+                                </Label>
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm">{order.pickup_location}</p>
-                          </div>
-                          <div>
-                            {order.notes ? (
-                              <Dialog>
-                                <DialogTrigger asChild>
-                                  <Button variant="outline" size="sm" className="h-8 gap-2">
-                                    <MessageSquare className="h-4 w-4" />
-                                    Kommentar
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent className="max-w-md">
-                                  <DialogHeader>
-                                    <DialogTitle>Bestellkommentar</DialogTitle>
-                                    <DialogDescription>
-                                      Bestellung {order.order_number}
-                                    </DialogDescription>
-                                  </DialogHeader>
-                                  <div className="py-4">
-                                    <p className="text-sm whitespace-pre-wrap">{order.notes}</p>
-                                  </div>
-                                </DialogContent>
-                              </Dialog>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Kein Kommentar</span>
-                            )}
-                          </div>
-                          <div>
-                            <Label className="text-xs">Abholort</Label>
-                            <Select
-                              value={selection.locationId}
-                              onValueChange={(value) => updateRowSelection(key, "locationId", value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Wählen..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {locations.map((loc) => (
-                                  <SelectItem key={loc.id} value={loc.id}>
-                                    {loc.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label className="text-xs">Verteilperson</Label>
-                            <Select
-                              value={selection.personId}
-                              onValueChange={(value) => updateRowSelection(key, "personId", value)}
-                              disabled={!selection.locationId}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Optional..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">Keine</SelectItem>
-                                {availablePersons.map((person) => (
-                                  <SelectItem key={person.id} value={person.id}>
-                                    {person.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="flex gap-2 col-span-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleSave([order.id], false)}
-                              disabled={!selection.locationId || isSaving}
-                            >
-                              Speichern
-                            </Button>
+                          <div className="flex gap-2">
                             <Button
                               variant="default"
                               size="sm"
-                              onClick={() => handleSave([order.id], true)}
-                              disabled={!selection.locationId || isSaving}
+                              onClick={() => handleSave([order.id], key)}
+                              disabled={(!selection.locationId && !selection.personId) || isSaving}
                             >
-                              Mapping
+                              Speichern
                             </Button>
                           </div>
                         </div>
