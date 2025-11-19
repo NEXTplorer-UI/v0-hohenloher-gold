@@ -9,8 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Loader2, Sparkles, Save, MapPin, MessageSquare, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Loader2, Sparkles, Save, MessageSquare, ChevronLeft, ChevronRight, Filter, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface Order {
@@ -58,89 +65,98 @@ export default function OrderNormalization() {
   const { toast } = useToast()
   const [groupByLocation, setGroupByLocation] = useState(true)
   const [includeIgnored, setIncludeIgnored] = useState(false)
+
+  const [hideWithLocation, setHideWithLocation] = useState(false)
+  const [hideWithPerson, setHideWithPerson] = useState(false)
+
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set())
   const [autoMatches, setAutoMatches] = useState<AutoMatch[]>([])
   const [isAutoMatching, setIsAutoMatching] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(50)
-  
+
   const [saveAsDefault, setSaveAsDefault] = useState<Record<string, boolean>>({})
   const [createMapping, setCreateMapping] = useState<Record<string, boolean>>({})
-  
-  const [rowSelections, setRowSelections] = useState<Record<string, {
-    locationId: string
-    personId: string
-  }>>({})
 
-  const { data: ordersData, mutate: mutateOrders, isLoading: loadingOrders, error: ordersError } = useSWR<{ orders: Order[] }>(
-    `/api/admin/orders/normalize?includeIgnored=${includeIgnored}`,
-    fetcher,
-    { 
-      revalidateOnFocus: false, 
-      dedupingInterval: 60000,
-      onSuccess: (data) => {
-        console.log("[v0] [normalize-component] Orders loaded:", data?.orders?.length || 0)
-      },
-      onError: (error) => {
-        console.error("[v0] [normalize-component] Error loading orders:", error)
+  const [rowSelections, setRowSelections] = useState<
+    Record<
+      string,
+      {
+        locationId: string
+        personId: string
       }
-    }
-  )
+    >
+  >({})
 
-  const { data: locationsData } = useSWR<{ locations: PickupLocation[] }>(
-    "/api/admin/pickup-locations",
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60000 }
-  )
+  const {
+    data: ordersData,
+    mutate: mutateOrders,
+    isLoading: loadingOrders,
+    error: ordersError,
+  } = useSWR<{ orders: Order[] }>(`/api/admin/orders/normalize?includeIgnored=${includeIgnored}`, fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60000,
+    onSuccess: (data) => {
+      console.log("[v0] [normalize-component] Orders loaded:", data?.orders?.length || 0)
+    },
+    onError: (error) => {
+      console.error("[v0] [normalize-component] Error loading orders:", error)
+    },
+  })
 
-  const { data: personsData } = useSWR<{ persons: DistributionPerson[] }>(
-    "/api/admin/distribution-persons",
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60000 }
-  )
+  const { data: locationsData } = useSWR<{ locations: PickupLocation[] }>("/api/admin/pickup-locations", fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60000,
+  })
 
-  const { data: locationPersonsData } = useSWR<{ assignments: Array<{ pickup_location_id: string; person_id: string }> }>(
-    "/api/admin/location-persons",
-    fetcher,
-    { revalidateOnFocus: false, dedupingInterval: 60000 }
-  )
+  const { data: personsData } = useSWR<{ persons: DistributionPerson[] }>("/api/admin/distribution-persons", fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60000,
+  })
+
+  const { data: locationPersonsData } = useSWR<{
+    assignments: Array<{ pickup_location_id: string; person_id: string }>
+  }>("/api/admin/location-persons", fetcher, { revalidateOnFocus: false, dedupingInterval: 60000 })
 
   const orders = ordersData?.orders || []
   const locations = Array.isArray(locationsData?.locations) ? locationsData.locations : []
   const persons = personsData?.persons || []
   const locationPersons = locationPersonsData?.assignments || []
 
+  const filteredOrders = orders.filter((order) => {
+    if (hideWithLocation && order.pickup_location_normalized) return false
+    if (hideWithPerson && order.distribution_person_id) return false
+    return true
+  })
+
   const groupedOrders = groupByLocation
-    ? orders.reduce((acc, order) => {
-        const key = order.pickup_location || "Unbekannt"
-        if (!acc[key]) acc[key] = []
-        acc[key].push(order)
-        return acc
-      }, {} as Record<string, Order[]>)
+    ? filteredOrders.reduce(
+        (acc, order) => {
+          const key = order.pickup_location || "Unbekannt"
+          if (!acc[key]) acc[key] = []
+          acc[key].push(order)
+          return acc
+        },
+        {} as Record<string, Order[]>,
+      )
     : {}
 
-  const totalPages = groupByLocation 
+  const totalPages = groupByLocation
     ? Math.ceil(Object.keys(groupedOrders).length / itemsPerPage)
-    : Math.ceil(orders.length / itemsPerPage)
-  
+    : Math.ceil(filteredOrders.length / itemsPerPage)
+
   const paginatedGroupedOrders = groupByLocation
-    ? Object.entries(groupedOrders).slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-      )
+    ? Object.entries(groupedOrders).slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
     : []
-  
+
   const paginatedOrders = !groupByLocation
-    ? orders.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-      )
+    ? filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
     : []
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [groupByLocation, includeIgnored])
+  }, [groupByLocation, includeIgnored, hideWithLocation, hideWithPerson])
 
   const getConfidenceBadge = (confidence: number) => {
     if (confidence >= 0.9) {
@@ -160,7 +176,7 @@ export default function OrderNormalization() {
   }
 
   const getPickupLocationFromPerson = (personId: string): string | null => {
-    const assignment = locationPersons.find(lp => lp.person_id === personId)
+    const assignment = locationPersons.find((lp) => lp.person_id === personId)
     if (assignment) {
       return assignment.pickup_location_id
     }
@@ -174,10 +190,10 @@ export default function OrderNormalization() {
         method: "POST",
       })
       const data = await response.json()
-      
+
       if (data.matches) {
         setAutoMatches(data.matches)
-        
+
         const newSelections: Record<string, { locationId: string; personId: string }> = {}
         data.matches.forEach((match: AutoMatch) => {
           const key = match.originalText
@@ -185,14 +201,14 @@ export default function OrderNormalization() {
             locationId: match.matchedLocationId,
             personId: "",
           }
-          
+
           const availablePersons = getAvailablePersonsForLocation(match.matchedLocationId)
           if (availablePersons.length === 1) {
             newSelections[key].personId = availablePersons[0].id
           }
         })
         setRowSelections({ ...rowSelections, ...newSelections })
-        
+
         toast({
           title: "Auto-Matching abgeschlossen",
           description: `${data.matches.length} Zuordnungen gefunden`,
@@ -212,7 +228,7 @@ export default function OrderNormalization() {
 
   const handleSave = async (orderIds: string[], key: string) => {
     const selection = rowSelections[key]
-    
+
     if (!selection?.personId && !selection?.locationId) {
       toast({
         title: "Fehler",
@@ -225,7 +241,7 @@ export default function OrderNormalization() {
     setIsSaving(true)
     try {
       let finalLocationId = selection.locationId
-      
+
       if (selection.personId && !selection.locationId) {
         const derivedLocationId = getPickupLocationFromPerson(selection.personId)
         if (derivedLocationId) {
@@ -234,7 +250,7 @@ export default function OrderNormalization() {
         }
       }
 
-      const location = locations.find(l => l.id === finalLocationId)
+      const location = locations.find((l) => l.id === finalLocationId)
       const response = await fetch("/api/admin/orders/normalize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -260,9 +276,9 @@ export default function OrderNormalization() {
 
       mutateOrders()
       setSelectedOrders(new Set())
-      
-      setSaveAsDefault(prev => ({ ...prev, [key]: true }))
-      setCreateMapping(prev => ({ ...prev, [key]: false }))
+
+      setSaveAsDefault((prev) => ({ ...prev, [key]: true }))
+      setCreateMapping((prev) => ({ ...prev, [key]: false }))
     } catch (error) {
       console.error("[save] Error:", error)
       toast({
@@ -301,19 +317,19 @@ export default function OrderNormalization() {
 
   const toggleGroupSelection = (orderIds: string[]) => {
     const newSelected = new Set(selectedOrders)
-    const allSelected = orderIds.every(id => newSelected.has(id))
-    
+    const allSelected = orderIds.every((id) => newSelected.has(id))
+
     if (allSelected) {
-      orderIds.forEach(id => newSelected.delete(id))
+      orderIds.forEach((id) => newSelected.delete(id))
     } else {
-      orderIds.forEach(id => newSelected.add(id))
+      orderIds.forEach((id) => newSelected.add(id))
     }
     setSelectedOrders(newSelected)
   }
 
   const updateRowSelection = (key: string, field: "locationId" | "personId", value: string) => {
     console.log("[v0] [updateRowSelection] Key:", key, "Field:", field, "Value:", value)
-    
+
     setRowSelections({
       ...rowSelections,
       [key]: {
@@ -321,12 +337,12 @@ export default function OrderNormalization() {
         [field]: value,
       },
     })
-    
+
     if (field === "personId" && value) {
       const derivedLocationId = getPickupLocationFromPerson(value)
       if (derivedLocationId) {
         console.log("[v0] [updateRowSelection] Auto-filling location from person:", derivedLocationId)
-        setRowSelections(prev => ({
+        setRowSelections((prev) => ({
           ...prev,
           [key]: {
             ...prev[key],
@@ -336,11 +352,21 @@ export default function OrderNormalization() {
         }))
       }
     }
-    
+
     if (!saveAsDefault.hasOwnProperty(key)) {
-      setSaveAsDefault(prev => ({ ...prev, [key]: true })) // Default: ON
-      setCreateMapping(prev => ({ ...prev, [key]: false })) // Default: OFF
+      setSaveAsDefault((prev) => ({ ...prev, [key]: true })) // Default: ON
+      setCreateMapping((prev) => ({ ...prev, [key]: false })) // Default: OFF
     }
+  }
+
+  const clearRowSelection = (key: string, field: "locationId" | "personId") => {
+    setRowSelections({
+      ...rowSelections,
+      [key]: {
+        ...rowSelections[key],
+        [field]: "",
+      },
+    })
   }
 
   if (loadingOrders) {
@@ -375,33 +401,50 @@ export default function OrderNormalization() {
           <CardTitle>Bestellungen normalisieren</CardTitle>
           <CardDescription>
             Weisen Sie Abholorte und Verteilpersonen zu Bestellungen zu
-            {orders.length > 0 && ` (${orders.length} Bestellungen gefunden)`}
+            {filteredOrders.length > 0 && ` (${filteredOrders.length} von ${orders.length} Bestellungen)`}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center space-x-2">
-                <Switch
-                  id="group-toggle"
-                  checked={groupByLocation}
-                  onCheckedChange={setGroupByLocation}
-                />
+                <Switch id="group-toggle" checked={groupByLocation} onCheckedChange={setGroupByLocation} />
                 <Label htmlFor="group-toggle">Gleiche Abholorte gruppieren</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <Switch
-                  id="ignore-toggle"
-                  checked={includeIgnored}
-                  onCheckedChange={setIncludeIgnored}
-                />
+                <Switch id="ignore-toggle" checked={includeIgnored} onCheckedChange={setIncludeIgnored} />
                 <Label htmlFor="ignore-toggle">Ignorierte Bestellungen anzeigen</Label>
               </div>
+
+              <div className="flex items-center gap-2 pl-4 border-l">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="hide-location"
+                    checked={hideWithLocation}
+                    onCheckedChange={(checked) => setHideWithLocation(!!checked)}
+                  />
+                  <Label htmlFor="hide-location" className="text-sm cursor-pointer">
+                    Mit Abholort ausblenden
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="hide-person"
+                    checked={hideWithPerson}
+                    onCheckedChange={(checked) => setHideWithPerson(!!checked)}
+                  />
+                  <Label htmlFor="hide-person" className="text-sm cursor-pointer">
+                    Mit Verteilperson ausblenden
+                  </Label>
+                </div>
+              </div>
+
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleAutoMatch}
-                disabled={isAutoMatching || orders.length === 0}
+                disabled={isAutoMatching || filteredOrders.length === 0}
               >
                 {isAutoMatching ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -413,17 +456,8 @@ export default function OrderNormalization() {
             </div>
             {selectedOrders.size > 0 && (
               <div className="flex gap-2">
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => handleBulkSave()}
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
+                <Button variant="default" size="sm" onClick={() => handleBulkSave()} disabled={isSaving}>
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                   {selectedOrders.size} Speichern
                 </Button>
               </div>
@@ -431,78 +465,101 @@ export default function OrderNormalization() {
           </div>
 
           <div className="space-y-2">
-            {orders.length === 0 ? (
+            {filteredOrders.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">
-                Keine Bestellungen zur Normalisierung verfügbar
+                {orders.length > 0
+                  ? "Keine Bestellungen entsprechen den Filterkriterien"
+                  : "Keine Bestellungen zur Normalisierung verfügbar"}
               </p>
             ) : groupByLocation ? (
               <>
                 {paginatedGroupedOrders.map(([pickupText, groupOrders]) => {
                   const key = pickupText
-                  const autoMatch = autoMatches.find(m => m.originalText === pickupText)
+                  const autoMatch = autoMatches.find((m) => m.originalText === pickupText)
                   const selection = rowSelections[key] || { locationId: "", personId: "" }
                   const availablePersons = persons
-                  const allOrderIds = groupOrders.map(o => o.id)
-                  const allSelected = allOrderIds.every(id => selectedOrders.has(id))
+                  const allOrderIds = groupOrders.map((o) => o.id)
+                  const allSelected = allOrderIds.every((id) => selectedOrders.has(id))
 
                   return (
                     <Card key={key} className="p-4">
                       <div className="flex items-start gap-4">
-                        <Checkbox
-                          checked={allSelected}
-                          onCheckedChange={() => toggleGroupSelection(allOrderIds)}
-                        />
+                        <Checkbox checked={allSelected} onCheckedChange={() => toggleGroupSelection(allOrderIds)} />
                         <div className="flex-1 space-y-3">
                           <div className="grid grid-cols-5 gap-4 items-center">
                             <div>
                               <p className="font-medium">{pickupText}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {groupOrders.length} Bestellung(en)
-                              </p>
+                              <p className="text-sm text-muted-foreground">{groupOrders.length} Bestellung(en)</p>
                               {autoMatch && getConfidenceBadge(autoMatch.confidence)}
                             </div>
                             <div>
                               <Label className="text-xs">Verteilperson</Label>
-                              <Select
-                                value={selection.personId}
-                                onValueChange={(value) => updateRowSelection(key, "personId", value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Wählen..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {availablePersons.map((person) => (
-                                    <SelectItem key={person.id} value={person.id}>
-                                      {person.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <div className="flex gap-1">
+                                <Select
+                                  value={selection.personId}
+                                  onValueChange={(value) => updateRowSelection(key, "personId", value)}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Wählen..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {availablePersons.map((person) => (
+                                      <SelectItem key={person.id} value={person.id}>
+                                        {person.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {selection.personId && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-10 w-10 shrink-0"
+                                    onClick={() => clearRowSelection(key, "personId")}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                             <div>
                               <Label className="text-xs">Abholort (optional)</Label>
-                              <Select
-                                value={selection.locationId}
-                                onValueChange={(value) => updateRowSelection(key, "locationId", value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Auto..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {locations.map((loc) => (
-                                    <SelectItem key={loc.id} value={loc.id}>
-                                      {loc.name} - {loc.address}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <div className="flex gap-1">
+                                <Select
+                                  value={selection.locationId}
+                                  onValueChange={(value) => updateRowSelection(key, "locationId", value)}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Auto..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {locations.map((loc) => (
+                                      <SelectItem key={loc.id} value={loc.id}>
+                                        {loc.name} - {loc.address}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {selection.locationId && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-10 w-10 shrink-0"
+                                    onClick={() => clearRowSelection(key, "locationId")}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                             <div className="col-span-2 space-y-2">
                               <div className="flex items-center space-x-2">
                                 <Checkbox
                                   id={`save-default-${key}`}
                                   checked={saveAsDefault[key] !== false}
-                                  onCheckedChange={(checked) => setSaveAsDefault(prev => ({ ...prev, [key]: !!checked }))}
+                                  onCheckedChange={(checked) =>
+                                    setSaveAsDefault((prev) => ({ ...prev, [key]: !!checked }))
+                                  }
                                 />
                                 <Label htmlFor={`save-default-${key}`} className="text-sm cursor-pointer">
                                   Als Standard für Kunden speichern
@@ -512,7 +569,9 @@ export default function OrderNormalization() {
                                 <Checkbox
                                   id={`create-mapping-${key}`}
                                   checked={createMapping[key] || false}
-                                  onCheckedChange={(checked) => setCreateMapping(prev => ({ ...prev, [key]: !!checked }))}
+                                  onCheckedChange={(checked) =>
+                                    setCreateMapping((prev) => ({ ...prev, [key]: !!checked }))
+                                  }
                                 />
                                 <Label htmlFor={`create-mapping-${key}`} className="text-sm cursor-pointer">
                                   Schreibvariante als Mapping speichern
@@ -527,7 +586,11 @@ export default function OrderNormalization() {
                               onClick={() => handleSave(allOrderIds, key)}
                               disabled={(!selection.locationId && !selection.personId) || isSaving}
                             >
-                              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                              {isSaving ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              ) : (
+                                <Save className="h-4 w-4 mr-2" />
+                              )}
                               Speichern
                             </Button>
                           </div>
@@ -555,9 +618,7 @@ export default function OrderNormalization() {
                           <div className="grid grid-cols-6 gap-4 items-center">
                             <div>
                               <p className="font-medium">{order.order_number}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {order.customers?.name || "Unbekannt"}
-                              </p>
+                              <p className="text-sm text-muted-foreground">{order.customers?.name || "Unbekannt"}</p>
                             </div>
                             <div>
                               <p className="text-sm">{order.pickup_location}</p>
@@ -566,7 +627,7 @@ export default function OrderNormalization() {
                               {order.notes ? (
                                 <Dialog>
                                   <DialogTrigger asChild>
-                                    <Button variant="outline" size="sm" className="h-8 gap-2">
+                                    <Button variant="outline" size="sm" className="h-8 gap-2 bg-transparent">
                                       <MessageSquare className="h-4 w-4" />
                                       Kommentar
                                     </Button>
@@ -574,9 +635,7 @@ export default function OrderNormalization() {
                                   <DialogContent className="max-w-md">
                                     <DialogHeader>
                                       <DialogTitle>Bestellkommentar</DialogTitle>
-                                      <DialogDescription>
-                                        Bestellung {order.order_number}
-                                      </DialogDescription>
+                                      <DialogDescription>Bestellung {order.order_number}</DialogDescription>
                                     </DialogHeader>
                                     <div className="py-4">
                                       <p className="text-sm whitespace-pre-wrap">{order.notes}</p>
@@ -589,48 +648,74 @@ export default function OrderNormalization() {
                             </div>
                             <div>
                               <Label className="text-xs">Verteilperson</Label>
-                              <Select
-                                value={selection.personId}
-                                onValueChange={(value) => updateRowSelection(key, "personId", value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Wählen..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {availablePersons.map((person) => (
-                                    <SelectItem key={person.id} value={person.id}>
-                                      {person.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <div className="flex gap-1">
+                                <Select
+                                  value={selection.personId}
+                                  onValueChange={(value) => updateRowSelection(key, "personId", value)}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Wählen..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {availablePersons.map((person) => (
+                                      <SelectItem key={person.id} value={person.id}>
+                                        {person.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {selection.personId && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-10 w-10 shrink-0"
+                                    onClick={() => clearRowSelection(key, "personId")}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                             <div>
                               <Label className="text-xs">Abholort (optional)</Label>
-                              <Select
-                                value={selection.locationId}
-                                onValueChange={(value) => updateRowSelection(key, "locationId", value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Auto..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {locations.map((loc) => (
-                                    <SelectItem key={loc.id} value={loc.id}>
-                                      {loc.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <div className="flex gap-1">
+                                <Select
+                                  value={selection.locationId}
+                                  onValueChange={(value) => updateRowSelection(key, "locationId", value)}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Auto..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {locations.map((loc) => (
+                                      <SelectItem key={loc.id} value={loc.id}>
+                                        {loc.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {selection.locationId && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-10 w-10 shrink-0"
+                                    onClick={() => clearRowSelection(key, "locationId")}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                             <div className="space-y-2">
                               <div className="flex items-center space-x-2">
                                 <Checkbox
                                   id={`save-default-${key}`}
                                   checked={saveAsDefault[key] !== false}
-                                  onCheckedChange={(checked) => setSaveAsDefault(prev => ({ ...prev, [key]: !!checked }))}
+                                  onCheckedChange={(checked) =>
+                                    setSaveAsDefault((prev) => ({ ...prev, [key]: !!checked }))
+                                  }
                                 />
-                                <Label htmlFor={`save-default-${key}`} className="text-xs cursor-pointer">
+                                <Label htmlFor={`save-default-${key}`} className="text-sm cursor-pointer">
                                   Als Standard
                                 </Label>
                               </div>
@@ -638,9 +723,11 @@ export default function OrderNormalization() {
                                 <Checkbox
                                   id={`create-mapping-${key}`}
                                   checked={createMapping[key] || false}
-                                  onCheckedChange={(checked) => setCreateMapping(prev => ({ ...prev, [key]: !!checked }))}
+                                  onCheckedChange={(checked) =>
+                                    setCreateMapping((prev) => ({ ...prev, [key]: !!checked }))
+                                  }
                                 />
-                                <Label htmlFor={`create-mapping-${key}`} className="text-xs cursor-pointer">
+                                <Label htmlFor={`create-mapping-${key}`} className="text-sm cursor-pointer">
                                   Mapping
                                 </Label>
                               </div>
@@ -667,13 +754,13 @@ export default function OrderNormalization() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between pt-4">
                 <p className="text-sm text-muted-foreground">
-                  Seite {currentPage} von {totalPages} ({orders.length} Bestellungen insgesamt)
+                  Seite {currentPage} von {totalPages} ({filteredOrders.length} von {orders.length} Bestellungen)
                 </p>
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
                   >
                     <ChevronLeft className="h-4 w-4" />
@@ -682,7 +769,7 @@ export default function OrderNormalization() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
                   >
                     Weiter

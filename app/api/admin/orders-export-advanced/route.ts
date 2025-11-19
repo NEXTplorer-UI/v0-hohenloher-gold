@@ -5,8 +5,23 @@ export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 interface ExportOptions {
-  format: "standard" | "by-customer" | "by-location" | "by-article" | "by-price-analysis" | "delivery-list"
-  sorting: "order_number" | "customer_name" | "date" | "total" | "category" | "pickup_location" | "pickup_location_normalized"
+  format:
+    | "standard"
+    | "by-customer"
+    | "by-location"
+    | "by-article"
+    | "by-price-analysis"
+    | "delivery-list"
+    | "picking-list"
+    | "packing-list"
+  sorting:
+    | "order_number"
+    | "customer_name"
+    | "date"
+    | "total"
+    | "category"
+    | "pickup_location"
+    | "pickup_location_normalized"
   showSubtotals: boolean
   emptyLinesBetweenGroups: boolean
   showGroupHeaders: boolean
@@ -79,6 +94,12 @@ export async function GET(request: NextRequest) {
         break
       case "delivery-list":
         csv = generateDeliveryListCSV(ordersToExport)
+        break
+      case "picking-list":
+        csv = generatePickingListCSV(ordersToExport)
+        break
+      case "packing-list":
+        csv = generatePackingListCSV(ordersToExport)
         break
       default:
         csv = generateStandardCSV(ordersToExport)
@@ -335,7 +356,17 @@ function generateByLocationCSV(orders: any[], options: Partial<ExportOptions>): 
 }
 
 function generateByArticleCSV(orders: any[], options: Partial<ExportOptions>): string {
-  const headers = ["Artikel", "Größe/Gewicht", "Preis", "Gesamtmenge", "Bestellnummer", "Kunde", "Menge", "Abholort (Original)", "Abholort (Normalisiert)"]
+  const headers = [
+    "Artikel",
+    "Größe/Gewicht",
+    "Preis",
+    "Gesamtmenge",
+    "Bestellnummer",
+    "Kunde",
+    "Menge",
+    "Abholort (Original)",
+    "Abholort (Normalisiert)",
+  ]
 
   const csvRows: string[] = [headers.join(";")]
 
@@ -533,47 +564,49 @@ function generateDeliveryListCSV(orders: any[]): string {
   sortedOrders.forEach((order: any) => {
     const customer = order.customer || {}
     const items = Array.isArray(order.order_items) ? order.order_items : []
-    
-    const customerData = [
-      `${customer.first_name || ""} ${customer.last_name || ""}`.trim(),
-      customer.phone || "",
-    ].filter(line => line.length > 0).join("\n")
-    
+
+    const customerData = [`${customer.first_name || ""} ${customer.last_name || ""}`.trim(), customer.phone || ""]
+      .filter((line) => line.length > 0)
+      .join("\n")
+
     let address = ""
-    
+
     if (customer.street || customer.house_number || customer.postal_code || customer.city) {
-      const streetLine = customer.street 
-        ? `${customer.street}${customer.house_number ? ' ' + customer.house_number : ''}` 
+      const streetLine = customer.street
+        ? `${customer.street}${customer.house_number ? " " + customer.house_number : ""}`
         : ""
-      const cityLine = customer.postal_code && customer.city 
-        ? `${customer.postal_code} ${customer.city}` 
-        : (customer.city || customer.postal_code || "")
-      
-      address = [streetLine, cityLine].filter(line => line.length > 0).join("\n")
+      const cityLine =
+        customer.postal_code && customer.city
+          ? `${customer.postal_code} ${customer.city}`
+          : customer.city || customer.postal_code || ""
+
+      address = [streetLine, cityLine].filter((line) => line.length > 0).join("\n")
     }
-    
+
     if (!address && customer.address) {
       address = customer.address
     }
-    
-    const orderItems = items.map((item: any) => {
-      const size = item.product_size || (item.weight ? `${item.weight}g` : "")
-      const sizeStr = size ? ` (${size})` : ""
-      const quantity = item.quantity || 1
-      const price = (item.total_price || 0).toFixed(2)
-      return `${quantity}x ${item.product_name}${sizeStr} – ${price}€`
-    }).join("\n")
-    
+
+    const orderItems = items
+      .map((item: any) => {
+        const size = item.product_size || (item.weight ? `${item.weight}g` : "")
+        const sizeStr = size ? ` (${size})` : ""
+        const quantity = item.quantity || 1
+        const price = (item.total_price || 0).toFixed(2)
+        return `${quantity}x ${item.product_name}${sizeStr} – ${price}€`
+      })
+      .join("\n")
+
     const totalPrice = `${(order.total || 0).toFixed(2)}€`
     const paymentMethod = order.payment_method || ""
     const notes = order.notes || ""
     const pickupLocation = order.pickup_location_normalized || order.pickup_location || "Lieferung"
-    
+
     let distributionPerson = ""
     if (order.distribution_person_id) {
       distributionPerson = order.distribution_person?.name || order.distribution_person_id
     }
-    
+
     csvRows.push(
       [
         escapeCSV(order.order_number),
@@ -585,8 +618,259 @@ function generateDeliveryListCSV(orders: any[]): string {
         escapeCSV(notes),
         escapeCSV(pickupLocation),
         escapeCSV(distributionPerson),
-      ].join(";")
+      ].join(";"),
     )
+  })
+
+  return csvRows.join("\n")
+}
+
+function generatePickingListCSV(orders: any[]): string {
+  const headers = ["Abholort", "Verteilperson", "Artikel", "Größe", "Gesamtmenge", "Bestellnummern"]
+  const csvRows: string[] = [headers.join(";")]
+
+  // Group by pickup location (normalized) and distribution person
+  const byLocationAndPerson = new Map<
+    string,
+    Map<
+      string,
+      Map<
+        string,
+        {
+          productName: string
+          productSize: string
+          totalQuantity: number
+          orderNumbers: string[]
+        }
+      >
+    >
+  >()
+
+  orders.forEach((order: any) => {
+    const location = order.pickup_location_normalized || order.pickup_location || "Lieferung"
+    const personName = order.distribution_person?.name || "Nicht zugeordnet"
+    const items = Array.isArray(order.order_items) ? order.order_items : []
+
+    if (!byLocationAndPerson.has(location)) {
+      byLocationAndPerson.set(location, new Map())
+    }
+
+    const locationMap = byLocationAndPerson.get(location)!
+
+    if (!locationMap.has(personName)) {
+      locationMap.set(personName, new Map())
+    }
+
+    const personMap = locationMap.get(personName)!
+
+    items.forEach((item: any) => {
+      const productKey = `${item.product_name}-${item.product_size || item.weight || ""}`
+
+      if (!personMap.has(productKey)) {
+        personMap.set(productKey, {
+          productName: item.product_name,
+          productSize: item.product_size || (item.weight ? `${item.weight}g` : "Standard"),
+          totalQuantity: 0,
+          orderNumbers: [],
+        })
+      }
+
+      const product = personMap.get(productKey)!
+      product.totalQuantity += item.quantity || 0
+      if (!product.orderNumbers.includes(order.order_number)) {
+        product.orderNumbers.push(order.order_number)
+      }
+    })
+  })
+
+  // Sort locations alphabetically
+  const sortedLocations = Array.from(byLocationAndPerson.keys()).sort((a, b) => a.localeCompare(b, "de"))
+
+  sortedLocations.forEach((location) => {
+    const locationMap = byLocationAndPerson.get(location)!
+
+    // Add location header
+    csvRows.push(`\n"=== ${location.toUpperCase()} ===";;;;`)
+    csvRows.push("")
+
+    // Sort persons alphabetically
+    const sortedPersons = Array.from(locationMap.keys()).sort((a, b) => a.localeCompare(b, "de"))
+
+    sortedPersons.forEach((personName) => {
+      const personMap = locationMap.get(personName)!
+
+      // Add person subheader
+      csvRows.push(`;"Verteilperson: ${personName}";;;`)
+      csvRows.push("")
+
+      // Sort products alphabetically
+      const sortedProducts = Array.from(personMap.values()).sort((a, b) =>
+        a.productName.localeCompare(b.productName, "de"),
+      )
+
+      sortedProducts.forEach((product) => {
+        csvRows.push(
+          [
+            "",
+            "",
+            escapeCSV(product.productName),
+            escapeCSV(product.productSize),
+            product.totalQuantity.toString(),
+            escapeCSV(product.orderNumbers.join(", ")),
+          ].join(";"),
+        )
+      })
+
+      csvRows.push("")
+    })
+  })
+
+  // Add summary
+  csvRows.push('\n"=== ZUSAMMENFASSUNG ===";;;;')
+  csvRows.push("")
+
+  sortedLocations.forEach((location) => {
+    const locationMap = byLocationAndPerson.get(location)!
+    const personCount = locationMap.size
+
+    let totalOrders = 0
+    let totalProducts = 0
+
+    locationMap.forEach((personMap) => {
+      personMap.forEach((product) => {
+        totalOrders += product.orderNumbers.length
+        totalProducts += 1
+      })
+    })
+
+    csvRows.push(
+      [escapeCSV(`${location}:`), `${personCount} Verteilperson(en)`, `${totalProducts} Produkttypen`, "", "", ""].join(
+        ";",
+      ),
+    )
+  })
+
+  return csvRows.join("\n")
+}
+
+function generatePackingListCSV(orders: any[]): string {
+  const headers = [
+    "Verteilperson",
+    "Abholort",
+    "Kunde",
+    "Bestellnr.",
+    "Telefon",
+    "Artikel",
+    "Menge",
+    "Einzelpreis",
+    "Gesamtpreis",
+    "Zahlungsart",
+    "Notizen",
+  ]
+  const csvRows: string[] = [headers.join(";")]
+
+  // Group by distribution person
+  const byPerson = new Map<string, any[]>()
+
+  orders.forEach((order: any) => {
+    const personName = order.distribution_person?.name || "Nicht zugeordnet"
+
+    if (!byPerson.has(personName)) {
+      byPerson.set(personName, [])
+    }
+
+    byPerson.get(personName)!.push(order)
+  })
+
+  // Sort persons alphabetically
+  const sortedPersons = Array.from(byPerson.keys()).sort((a, b) => a.localeCompare(b, "de"))
+
+  sortedPersons.forEach((personName) => {
+    const personOrders = byPerson.get(personName)!
+    const location = personOrders[0]?.pickup_location_normalized || personOrders[0]?.pickup_location || "Lieferung"
+
+    let totalValue = 0
+
+    // Add person header
+    csvRows.push(`\n"=== PACKLISTE: ${personName.toUpperCase()} ===";;;;;;;;;;`)
+    csvRows.push(`"Abholort: ${location}";;;;;;;;;;`)
+    csvRows.push(`"Anzahl Bestellungen: ${personOrders.length}";;;;;;;;;;`)
+    csvRows.push("")
+
+    // Sort orders by customer name
+    const sortedOrders = personOrders.sort((a, b) => {
+      const nameA = `${a.customer?.last_name || ""} ${a.customer?.first_name || ""}`.trim()
+      const nameB = `${b.customer?.last_name || ""} ${b.customer?.first_name || ""}`.trim()
+      return nameA.localeCompare(nameB, "de")
+    })
+
+    sortedOrders.forEach((order: any) => {
+      const customer = order.customer || {}
+      const customerName = `${customer.last_name || ""}, ${customer.first_name || ""}`.trim()
+      const items = Array.isArray(order.order_items) ? order.order_items : []
+
+      totalValue += order.total || 0
+
+      items.forEach((item: any, index: number) => {
+        const size = item.product_size || (item.weight ? `${item.weight}g` : "")
+        const productNameWithSize = size ? `${item.product_name} (${size})` : item.product_name
+
+        csvRows.push(
+          [
+            index === 0 ? "" : "", // Verteilperson (empty for items after first)
+            index === 0 ? "" : "", // Abholort (empty for items after first)
+            index === 0 ? escapeCSV(customerName) : "",
+            index === 0 ? escapeCSV(order.order_number) : "",
+            index === 0 ? escapeCSV(customer.phone) : "",
+            escapeCSV(productNameWithSize),
+            (item.quantity || 0).toString(),
+            `€${(item.unit_price || 0).toFixed(2)}`,
+            `€${(item.total_price || 0).toFixed(2)}`,
+            index === 0 ? escapeCSV(order.payment_method || "") : "",
+            index === 0 ? escapeCSV(order.notes || "") : "",
+          ].join(";"),
+        )
+      })
+
+      // Add order subtotal
+      csvRows.push(
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          `"Summe Bestellung ${order.order_number}:"`,
+          "",
+          "",
+          `€${(order.total || 0).toFixed(2)}`,
+          order.payment_status === "paid" ? "✓ Bezahlt" : "",
+          "",
+        ].join(";"),
+      )
+
+      csvRows.push("") // Empty line between orders
+    })
+
+    // Add person total
+    csvRows.push(
+      [
+        "",
+        "",
+        "",
+        "",
+        "",
+        `"=== GESAMT ${personName}: ==="`,
+        `${personOrders.length} Bestellungen`,
+        "",
+        `€${totalValue.toFixed(2)}`,
+        "",
+        "",
+      ].join(";"),
+    )
+
+    csvRows.push("")
+    csvRows.push("")
   })
 
   return csvRows.join("\n")
