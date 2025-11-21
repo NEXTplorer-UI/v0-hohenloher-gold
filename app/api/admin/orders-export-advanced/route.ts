@@ -683,7 +683,6 @@ function generatePickingListCSV(orders: any[]): string {
     })
   })
 
-  // Sort locations alphabetically
   const sortedLocations = Array.from(byLocationAndPerson.keys()).sort((a, b) => a.localeCompare(b, "de"))
 
   sortedLocations.forEach((location) => {
@@ -755,123 +754,160 @@ function generatePickingListCSV(orders: any[]): string {
 
 function generatePackingListCSV(orders: any[]): string {
   const headers = [
-    "Verteilperson",
     "Abholort",
-    "Kunde",
-    "Bestellnr.",
-    "Telefon",
     "Artikel",
-    "Menge",
+    "Größe",
+    "Gesamtmenge",
     "Einzelpreis",
     "Gesamtpreis",
-    "Zahlungsart",
-    "Notizen",
+    "Bestellnummern (Kunden)",
   ]
   const csvRows: string[] = [headers.join(";")]
 
-  // Group by distribution person
-  const byPerson = new Map<string, any[]>()
+  const byLocation = new Map<
+    string,
+    Map<
+      string,
+      {
+        productName: string
+        productSize: string
+        totalQuantity: number
+        unitPrice: number
+        totalPrice: number
+        orderDetails: string[]
+      }
+    >
+  >()
 
   orders.forEach((order: any) => {
-    const personName = order.distribution_person?.name || "Nicht zugeordnet"
+    const location = order.pickup_location_normalized || order.pickup_location || "Lieferung"
+    const items = Array.isArray(order.order_items) ? order.order_items : []
+    const customer = order.customer || {}
+    const customerName = `${customer.last_name || ""}, ${customer.first_name || ""}`.trim()
 
-    if (!byPerson.has(personName)) {
-      byPerson.set(personName, [])
+    if (!byLocation.has(location)) {
+      byLocation.set(location, new Map())
     }
 
-    byPerson.get(personName)!.push(order)
+    const locationMap = byLocation.get(location)!
+
+    items.forEach((item: any) => {
+      const productKey = `${item.product_name}-${item.product_size || item.weight || ""}-${item.unit_price || 0}`
+
+      if (!locationMap.has(productKey)) {
+        locationMap.set(productKey, {
+          productName: item.product_name,
+          productSize: item.product_size || (item.weight ? `${item.weight}g` : "Standard"),
+          totalQuantity: 0,
+          unitPrice: item.unit_price || 0,
+          totalPrice: 0,
+          orderDetails: [],
+        })
+      }
+
+      const product = locationMap.get(productKey)!
+      product.totalQuantity += item.quantity || 0
+      product.totalPrice += item.total_price || 0
+      product.orderDetails.push(`${order.order_number} (${customerName})`)
+    })
   })
 
-  // Sort persons alphabetically
-  const sortedPersons = Array.from(byPerson.keys()).sort((a, b) => a.localeCompare(b, "de"))
+  const sortedLocations = Array.from(byLocation.keys()).sort((a, b) => a.localeCompare(b, "de"))
 
-  sortedPersons.forEach((personName) => {
-    const personOrders = byPerson.get(personName)!
-    const location = personOrders[0]?.pickup_location_normalized || personOrders[0]?.pickup_location || "Lieferung"
+  sortedLocations.forEach((location) => {
+    const locationMap = byLocation.get(location)!
 
-    let totalValue = 0
-
-    // Add person header
-    csvRows.push(`\n"=== PACKLISTE: ${personName.toUpperCase()} ===";;;;;;;;;;`)
-    csvRows.push(`"Abholort: ${location}";;;;;;;;;;`)
-    csvRows.push(`"Anzahl Bestellungen: ${personOrders.length}";;;;;;;;;;`)
+    // Add location header
+    csvRows.push(`\n"=== ABHOLORT: ${location.toUpperCase()} ===";;;;;;`)
     csvRows.push("")
 
-    // Sort orders by customer name
-    const sortedOrders = personOrders.sort((a, b) => {
-      const nameA = `${a.customer?.last_name || ""} ${a.customer?.first_name || ""}`.trim()
-      const nameB = `${b.customer?.last_name || ""} ${b.customer?.first_name || ""}`.trim()
-      return nameA.localeCompare(nameB, "de")
-    })
+    // Sort products alphabetically
+    const sortedProducts = Array.from(locationMap.values()).sort((a, b) =>
+      a.productName.localeCompare(b.productName, "de"),
+    )
 
-    sortedOrders.forEach((order: any) => {
-      const customer = order.customer || {}
-      const customerName = `${customer.last_name || ""}, ${customer.first_name || ""}`.trim()
-      const items = Array.isArray(order.order_items) ? order.order_items : []
+    let locationTotal = 0
 
-      totalValue += order.total || 0
-
-      items.forEach((item: any, index: number) => {
-        const size = item.product_size || (item.weight ? `${item.weight}g` : "")
-        const productNameWithSize = size ? `${item.product_name} (${size})` : item.product_name
-
-        csvRows.push(
-          [
-            index === 0 ? "" : "", // Verteilperson (empty for items after first)
-            index === 0 ? "" : "", // Abholort (empty for items after first)
-            index === 0 ? escapeCSV(customerName) : "",
-            index === 0 ? escapeCSV(order.order_number) : "",
-            index === 0 ? escapeCSV(customer.phone) : "",
-            escapeCSV(productNameWithSize),
-            (item.quantity || 0).toString(),
-            `€${(item.unit_price || 0).toFixed(2)}`,
-            `€${(item.total_price || 0).toFixed(2)}`,
-            index === 0 ? escapeCSV(order.payment_method || "") : "",
-            index === 0 ? escapeCSV(order.notes || "") : "",
-          ].join(";"),
-        )
-      })
-
-      // Add order subtotal
+    sortedProducts.forEach((product) => {
+      locationTotal += product.totalPrice
       csvRows.push(
         [
           "",
-          "",
-          "",
-          "",
-          "",
-          `"Summe Bestellung ${order.order_number}:"`,
-          "",
-          "",
-          `€${(order.total || 0).toFixed(2)}`,
-          order.payment_status === "paid" ? "✓ Bezahlt" : "",
-          "",
+          escapeCSV(product.productName),
+          escapeCSV(product.productSize),
+          product.totalQuantity.toString(),
+          `€${product.unitPrice.toFixed(2)}`,
+          `€${product.totalPrice.toFixed(2)}`,
+          escapeCSV(product.orderDetails.join(", ")),
         ].join(";"),
       )
-
-      csvRows.push("") // Empty line between orders
     })
 
-    // Add person total
+    csvRows.push("")
+    // Add location subtotal
     csvRows.push(
       [
         "",
+        `"Zwischensumme ${location}:"`,
         "",
         "",
         "",
-        "",
-        `"=== GESAMT ${personName}: ==="`,
-        `${personOrders.length} Bestellungen`,
-        "",
-        `€${totalValue.toFixed(2)}`,
-        "",
-        "",
+        `€${locationTotal.toFixed(2)}`,
+        `${sortedProducts.reduce((sum, p) => sum + p.orderDetails.length, 0)} Bestellungen`,
       ].join(";"),
     )
 
     csvRows.push("")
-    csvRows.push("")
   })
+
+  // Add grand total
+  csvRows.push('\n"=== GESAMTÜBERSICHT ===";;;;;;')
+  csvRows.push("")
+
+  let grandTotal = 0
+  let grandOrderCount = 0
+
+  sortedLocations.forEach((location) => {
+    const locationMap = byLocation.get(location)!
+    let locationTotal = 0
+    const locationOrders = new Set<string>()
+
+    locationMap.forEach((product) => {
+      locationTotal += product.totalPrice
+      product.orderDetails.forEach((detail) => {
+        const orderNum = detail.split(" ")[0]
+        locationOrders.add(orderNum)
+      })
+    })
+
+    grandTotal += locationTotal
+    grandOrderCount += locationOrders.size
+
+    csvRows.push(
+      [
+        escapeCSV(`${location}:`),
+        `${locationMap.size} Produkttypen`,
+        "",
+        "",
+        "",
+        `€${locationTotal.toFixed(2)}`,
+        `${locationOrders.size} Bestellungen`,
+      ].join(";"),
+    )
+  })
+
+  csvRows.push("")
+  csvRows.push(
+    [
+      '"GESAMT:"',
+      `${sortedLocations.length} Abholorte`,
+      "",
+      "",
+      "",
+      `€${grandTotal.toFixed(2)}`,
+      `${grandOrderCount} Bestellungen`,
+    ].join(";"),
+  )
 
   return csvRows.join("\n")
 }

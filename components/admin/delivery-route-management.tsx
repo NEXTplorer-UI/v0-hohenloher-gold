@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -26,15 +28,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, Edit, Trash2, MapPin, GripVertical } from 'lucide-react'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd"
+import { Plus, Edit, Trash2, GripVertical, X } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd"
 
 interface DeliveryRoute {
   id: string
@@ -67,6 +63,19 @@ interface PickupLocation {
   is_active: boolean
 }
 
+interface RoutePerson {
+  id: string
+  person_id: string
+  pickup_location_id: string
+  stop_order: number
+  distribution_persons: {
+    id: string
+    name: string
+    email: string | null
+    phone: string | null
+  }
+}
+
 function DeliveryRouteManagement() {
   const [routes, setRoutes] = useState<DeliveryRoute[]>([])
   const [pickupLocations, setPickupLocations] = useState<PickupLocation[]>([])
@@ -82,12 +91,20 @@ function DeliveryRouteManagement() {
     color: "#FF5733",
     notes: "",
   })
+  const [locationPersons, setLocationPersons] = useState<Record<string, any[]>>({})
+  const [routePersons, setRoutePersons] = useState<Record<string, RoutePerson[]>>({})
   const { toast } = useToast()
 
   useEffect(() => {
     fetchRoutes()
     fetchPickupLocations()
   }, [])
+
+  useEffect(() => {
+    routes.forEach((route) => {
+      loadRoutePersons(route.id)
+    })
+  }, [routes])
 
   const fetchRoutes = async () => {
     try {
@@ -219,35 +236,37 @@ function DeliveryRouteManagement() {
     }
   }
 
-  const handleAddLocation = async (routeId: string, locationId: string) => {
+  const addLocationToRoute = async (routeId: string, locationId: string) => {
     try {
-      const route = routes.find((r) => r.id === routeId)
-      const stopOrder = route?.route_locations?.length || 0
-
       const response = await fetch("/api/admin/route-locations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          route_id: routeId,
-          pickup_location_id: locationId,
-          stop_order: stopOrder,
-        }),
+        body: JSON.stringify({ routeId, locationId }),
       })
 
       if (response.ok) {
         await fetchRoutes()
+
+        const personsResponse = await fetch(`/api/admin/location-persons?locationId=${locationId}`)
+        if (personsResponse.ok) {
+          const personsData = await personsResponse.json()
+
+          setLocationPersons((prev) => ({
+            ...prev,
+            [locationId]: personsData.assignments || [],
+          }))
+        }
+
         toast({
           title: "Erfolg",
           description: "Abholort zur Tour hinzugefügt",
         })
-      } else {
-        throw new Error("Failed to add location")
       }
     } catch (error) {
-      console.error("Error adding location:", error)
+      console.error("[v0] Error adding location:", error)
       toast({
         title: "Fehler",
-        description: "Abholort konnte nicht hinzugefügt werden",
+        description: "Fehler beim Hinzufügen des Abholortes",
         variant: "destructive",
       })
     }
@@ -293,7 +312,6 @@ function DeliveryRouteManagement() {
       stop_order: index,
     }))
 
-    // Optimistically update UI
     setRoutes((prev) =>
       prev.map((r) =>
         r.id === routeId
@@ -304,13 +322,29 @@ function DeliveryRouteManagement() {
                 stop_order: index,
               })),
             }
-          : r
-      )
+          : r,
+      ),
     )
 
-    // TODO: Implement batch update endpoint for stop_order
-    // For now, we'll just refetch
-    await fetchRoutes()
+    try {
+      const response = await fetch("/api/admin/route-locations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update order")
+      }
+    } catch (error) {
+      console.error("Error updating stop order:", error)
+      await fetchRoutes()
+      toast({
+        title: "Fehler",
+        description: "Reihenfolge konnte nicht gespeichert werden",
+        variant: "destructive",
+      })
+    }
   }
 
   const openEditDialog = (route: DeliveryRoute) => {
@@ -372,6 +406,95 @@ function DeliveryRouteManagement() {
     return pickupLocations.filter((loc) => !assignedLocationIds.includes(loc.id))
   }
 
+  const loadRoutePersons = async (routeId: string) => {
+    try {
+      const response = await fetch(`/api/admin/route-persons?routeId=${routeId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setRoutePersons((prev) => ({
+          ...prev,
+          [routeId]: data.persons || [],
+        }))
+      }
+    } catch (error) {
+      console.error("[v0] Error loading route persons:", error)
+    }
+  }
+
+  const removePersonFromTour = async (locationPersonId: string, routeId: string, locationId: string) => {
+    try {
+      const response = await fetch("/api/admin/location-persons", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: locationPersonId,
+          is_active: false,
+        }),
+      })
+
+      if (response.ok) {
+        // Reload persons for this location
+        const personsResponse = await fetch(`/api/admin/location-persons?locationId=${locationId}`)
+        if (personsResponse.ok) {
+          const personsData = await personsResponse.json()
+          setLocationPersons((prev) => ({
+            ...prev,
+            [locationId]: personsData.assignments || [],
+          }))
+        }
+
+        toast({
+          title: "Erfolg",
+          description: "Verteilperson aus Tour entfernt",
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Error removing person from tour:", error)
+      toast({
+        title: "Fehler",
+        description: "Fehler beim Entfernen der Verteilperson",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const addPersonToTour = async (locationPersonId: string, locationId: string) => {
+    try {
+      const response = await fetch("/api/admin/location-persons", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: locationPersonId,
+          is_active: true,
+        }),
+      })
+
+      if (response.ok) {
+        // Reload persons for this location
+        const personsResponse = await fetch(`/api/admin/location-persons?locationId=${locationId}`)
+        if (personsResponse.ok) {
+          const personsData = await personsResponse.json()
+          setLocationPersons((prev) => ({
+            ...prev,
+            [locationId]: personsData.assignments || [],
+          }))
+        }
+
+        toast({
+          title: "Erfolg",
+          description: "Verteilperson zur Tour hinzugefügt",
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Error adding person to tour:", error)
+      toast({
+        title: "Fehler",
+        description: "Fehler beim Hinzufügen der Verteilperson",
+        variant: "destructive",
+      })
+    }
+  }
+
   if (loading) {
     return <div>Lade Touren...</div>
   }
@@ -400,7 +523,7 @@ function DeliveryRouteManagement() {
                       {route.color && (
                         <div
                           className="w-4 h-4 rounded-full border"
-                          style={{ backgroundColor: route.color || '#cccccc' }}
+                          style={{ backgroundColor: route.color || "#cccccc" }}
                         />
                       )}
                       <div>
@@ -448,7 +571,7 @@ function DeliveryRouteManagement() {
                     <div className="space-y-4 pt-4 border-t">
                       <div className="flex items-center justify-between">
                         <h4 className="font-medium">Abholorte auf dieser Tour</h4>
-                        <Select onValueChange={(value) => handleAddLocation(route.id, value)}>
+                        <Select onValueChange={(value) => addLocationToRoute(route.id, value)}>
                           <SelectTrigger className="w-[280px]">
                             <SelectValue placeholder="Abholort hinzufügen..." />
                           </SelectTrigger>
@@ -466,60 +589,107 @@ function DeliveryRouteManagement() {
                         <DragDropContext onDragEnd={(result) => handleDragEnd(result, route.id)}>
                           <Droppable droppableId={`route-${route.id}`}>
                             {(provided) => (
-                              <div
-                                {...provided.droppableProps}
-                                ref={provided.innerRef}
-                                className="space-y-2"
-                              >
+                              <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
                                 {route.route_locations
                                   .sort((a, b) => a.stop_order - b.stop_order)
-                                  .map((routeLocation, index) => (
-                                    <Draggable
-                                      key={routeLocation.id}
-                                      draggableId={routeLocation.id}
-                                      index={index}
-                                    >
-                                      {(provided) => (
-                                        <div
-                                          ref={provided.innerRef}
-                                          {...provided.draggableProps}
-                                          className="flex items-center gap-3 p-3 border rounded-lg bg-white"
-                                        >
-                                          <div {...provided.dragHandleProps} className="cursor-grab">
-                                            <GripVertical className="h-4 w-4 text-muted-foreground" />
-                                          </div>
-                                          <Badge variant="outline" className="font-mono">
-                                            {index + 1}
-                                          </Badge>
-                                          <MapPin className="h-4 w-4 text-muted-foreground" />
-                                          <div className="flex-1">
-                                            <div className="font-medium">
-                                              {routeLocation.pickup_location.name}
-                                            </div>
-                                            <div className="text-sm text-muted-foreground">
-                                              {routeLocation.pickup_location.address},{" "}
-                                              {routeLocation.pickup_location.city}
-                                            </div>
-                                          </div>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleRemoveLocation(routeLocation.id)}
+                                  .map((routeLocation, index) => {
+                                    const allPersons = locationPersons[routeLocation.pickup_location.id] || []
+                                    const activePersons = allPersons.filter((lp: any) => lp.is_active)
+                                    const inactivePersons = allPersons.filter((lp: any) => !lp.is_active)
+
+                                    return (
+                                      <Draggable key={routeLocation.id} draggableId={routeLocation.id} index={index}>
+                                        {(provided) => (
+                                          <div
+                                            ref={provided.innerRef}
+                                            {...provided.draggableProps}
+                                            {...provided.dragHandleProps}
+                                            className="flex items-start gap-3 rounded-lg border bg-card p-4"
                                           >
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                        </div>
-                                      )}
-                                    </Draggable>
-                                  ))}
+                                            <GripVertical className="mt-1 h-5 w-5 text-muted-foreground" />
+                                            <div className="flex-1">
+                                              <div className="flex items-center justify-between">
+                                                <div>
+                                                  <span className="font-medium">{index + 1}.</span>{" "}
+                                                  {routeLocation.pickup_location.name}
+                                                  <span className="ml-2 text-sm text-muted-foreground">
+                                                    {routeLocation.pickup_location.city}
+                                                  </span>
+                                                </div>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => handleRemoveLocation(routeLocation.id)}
+                                                >
+                                                  <X className="h-4 w-4" />
+                                                </Button>
+                                              </div>
+
+                                              {activePersons.length > 0 && (
+                                                <div className="mt-2 space-y-1">
+                                                  <div className="text-sm font-medium text-muted-foreground">
+                                                    Verteilpersonen:
+                                                  </div>
+                                                  {activePersons.map((lp: any) => (
+                                                    <div
+                                                      key={lp.id}
+                                                      className="flex items-center justify-between rounded bg-muted/50 p-2"
+                                                    >
+                                                      <span className="text-sm">
+                                                        {lp.distribution_persons?.name || "Unbekannt"}
+                                                      </span>
+                                                      <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                          removePersonFromTour(
+                                                            lp.id,
+                                                            route.id,
+                                                            routeLocation.pickup_location.id,
+                                                          )
+                                                        }
+                                                      >
+                                                        <X className="h-4 w-4" />
+                                                      </Button>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+
+                                              {inactivePersons.length > 0 && (
+                                                <div className="mt-2">
+                                                  <Select
+                                                    onValueChange={(value) =>
+                                                      addPersonToTour(value, routeLocation.pickup_location.id)
+                                                    }
+                                                  >
+                                                    <SelectTrigger className="w-full">
+                                                      <SelectValue placeholder="Verteilperson hinzufügen..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                      {inactivePersons.map((lp: any) => (
+                                                        <SelectItem key={lp.id} value={lp.id}>
+                                                          {lp.distribution_persons?.name || "Unbekannt"}
+                                                        </SelectItem>
+                                                      ))}
+                                                    </SelectContent>
+                                                  </Select>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </Draggable>
+                                    )
+                                  })}
                                 {provided.placeholder}
                               </div>
                             )}
                           </Droppable>
                         </DragDropContext>
                       ) : (
-                        <p className="text-sm text-muted-foreground text-center py-4">
-                          Keine Abholorte auf dieser Tour. Fügen Sie welche hinzu.
+                        <p className="text-sm text-muted-foreground">
+                          Noch keine Abholorte auf dieser Tour. Fügen Sie einen hinzu, um zu beginnen.
                         </p>
                       )}
                     </div>
@@ -671,8 +841,8 @@ function DeliveryRouteManagement() {
           <AlertDialogHeader>
             <AlertDialogTitle>Tour löschen?</AlertDialogTitle>
             <AlertDialogDescription>
-              Sind Sie sicher, dass Sie die Tour "{selectedRoute?.name}" löschen möchten? Diese
-              Aktion kann nicht rückgängig gemacht werden.
+              Sind Sie sicher, dass Sie die Tour "{selectedRoute?.name}" löschen möchten? Diese Aktion kann nicht
+              rückgängig gemacht werden.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server"
+import { getAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 
 async function getNextDeliverySchedule(supabase: any) {
@@ -51,7 +51,7 @@ async function getNextDeliveryScheduleRegardlessOfDeadline(supabase: any) {
 export async function GET() {
   try {
     console.log("[v0] Products API called")
-    const supabase = createAdminClient()
+    const supabase = getAdminClient()
 
     const { data: products, error: productsError } = await supabase
       .from("products")

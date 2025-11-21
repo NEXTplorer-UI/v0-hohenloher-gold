@@ -10,7 +10,30 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { Mail, Send, Users, Eye, RefreshCw, TrendingUp, ImageIcon, Paperclip, X, Upload, HelpCircle, Save, FolderOpen, Trash2, TestTube, History, AlertCircle, CheckCircle, Clock, Filter } from 'lucide-react'
+import { Separator } from "@/components/ui/separator"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Mail,
+  Send,
+  Users,
+  Eye,
+  RefreshCw,
+  TrendingUp,
+  ImageIcon,
+  Paperclip,
+  X,
+  Upload,
+  HelpCircle,
+  Save,
+  FolderOpen,
+  Trash2,
+  TestTube,
+  History,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  Filter,
+} from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import NewsletterConfirmationDialog from "./newsletter-confirmation-dialog"
 import { buildEmail } from "@/lib/email/build"
@@ -97,6 +120,23 @@ export default function NewsletterSystem() {
     mutate: mutateSendHistory,
   } = useAdminCache<SendHistory[]>("/api/newsletter/send-history", [])
 
+  const { data: pickupLocationsData, isLoading: isLoadingLocations } = useAdminCache<{
+    locations: Array<{ id: string; name: string; is_active: boolean }>
+  }>("/api/admin/pickup-locations", { locations: [] })
+
+  const pickupLocations = Array.isArray(pickupLocationsData?.locations)
+    ? pickupLocationsData.locations.filter((loc) => loc.is_active)
+    : []
+
+  // Extract and filter only active distribution persons
+  const { data: distributionPersonsData, isLoading: isLoadingPersons } = useAdminCache<{
+    persons: Array<{ id: string; name: string; is_active: boolean }>
+  }>("/api/admin/distribution-persons", { persons: [] })
+
+  const distributionPersons = Array.isArray(distributionPersonsData?.persons)
+    ? distributionPersonsData.persons.filter((p) => p.is_active)
+    : []
+
   const [subject, setSubject] = useState("")
   const [content, setContent] = useState("")
   const [imageUrl, setImageUrl] = useState("")
@@ -109,6 +149,10 @@ export default function NewsletterSystem() {
     newsletterConsent: true, // Default to newsletter subscribers
     marketingConsent: false,
     reminderConsent: false,
+    pickupLocationNames: [] as string[],
+    distributionPersonIds: [] as string[],
+    activeOrdersOnly: false,
+    orderStatuses: ["confirmed", "ready"] as string[],
   })
   const [recipientCount, setRecipientCount] = useState(0)
   const [isLoadingRecipients, setIsLoadingRecipients] = useState(false)
@@ -417,7 +461,7 @@ export default function NewsletterSystem() {
 
       if (currentDraftId) {
         mutateDrafts((prevDrafts) =>
-          prevDrafts.map((d) => (d.id === currentDraftId ? { ...d, ...savedDraft.draft } : d))
+          prevDrafts.map((d) => (d.id === currentDraftId ? { ...d, ...savedDraft.draft } : d)),
         )
       } else {
         mutateDrafts((prevDrafts) => [...prevDrafts, savedDraft.draft])
@@ -441,7 +485,6 @@ export default function NewsletterSystem() {
     setAttachment(draft.attachment)
     setDraftTitle(draft.title)
     setCurrentDraftId(draft.id)
-    setShowDrafts(false)
     setSelectedTemplate("custom") // Reset template selection when loading a draft
 
     toast({
@@ -637,6 +680,17 @@ Entdecken Sie unsere aktuellen Sonderangebote auf frische Südfrüchte.
     }
   }
 
+  const toggleFilterValue = (filterKey: "pickupLocationNames" | "distributionPersonIds", value: string) => {
+    setRecipientFilters((prev) => {
+      const currentArray = prev[filterKey]
+      const newArray = currentArray.includes(value) ? currentArray.filter((v) => v !== value) : [...currentArray, value]
+      return {
+        ...prev,
+        [filterKey]: newArray,
+      }
+    })
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -768,6 +822,155 @@ Entdecken Sie unsere aktuellen Sonderangebote auf frische Südfrüchte.
                   Nur Erinnerungs-Einwilligung (reminder_notifications)
                 </Label>
               </div>
+
+              <Separator className="my-4" />
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Filter nach Abholort</Label>
+                <ScrollArea className="h-32 rounded border p-2">
+                  <div className="space-y-2">
+                    {Array.isArray(pickupLocations) && pickupLocations.length > 0 ? (
+                      pickupLocations.map((location) => (
+                        <div key={location.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`location-${location.id}`}
+                            checked={recipientFilters.pickupLocationNames.includes(location.name)}
+                            onCheckedChange={() => toggleFilterValue("pickupLocationNames", location.name)}
+                          />
+                          <Label htmlFor={`location-${location.id}`} className="text-sm cursor-pointer font-normal">
+                            {location.name}
+                          </Label>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        {isLoadingLocations ? "Lädt..." : "Keine Abholorte verfügbar"}
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+                {recipientFilters.pickupLocationNames.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {recipientFilters.pickupLocationNames.length} Abholort(e) ausgewählt
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Filtert Kunden die an diesem Abholort eine Bestellung haben
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Filter nach Verteilperson</Label>
+                <ScrollArea className="h-32 rounded border p-2">
+                  <div className="space-y-2">
+                    {distributionPersons.length > 0 ? (
+                      distributionPersons.map((person) => (
+                        <div key={person.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`person-${person.id}`}
+                            checked={recipientFilters.distributionPersonIds.includes(person.id)}
+                            onCheckedChange={() => toggleFilterValue("distributionPersonIds", person.id)}
+                          />
+                          <Label htmlFor={`person-${person.id}`} className="text-sm cursor-pointer font-normal">
+                            {person.name}
+                          </Label>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        {isLoadingPersons ? "Lädt..." : "Keine Verteilpersonen verfügbar"}
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+                {recipientFilters.distributionPersonIds.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {recipientFilters.distributionPersonIds.length} Person(en) ausgewählt
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">Filtert Kunden dieser Verteilperson</p>
+              </div>
+
+              <Separator className="my-4" />
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="activeOrdersOnly"
+                  checked={recipientFilters.activeOrdersOnly}
+                  onCheckedChange={(checked) =>
+                    setRecipientFilters({
+                      ...recipientFilters,
+                      activeOrdersOnly: checked as boolean,
+                    })
+                  }
+                />
+                <Label htmlFor="activeOrdersOnly" className="text-sm font-normal cursor-pointer">
+                  Nur Kunden mit aktiven Bestellungen
+                </Label>
+              </div>
+
+              {recipientFilters.activeOrdersOnly && (
+                <div className="ml-6 space-y-2 border-l-2 border-muted pl-4">
+                  <Label className="text-xs text-muted-foreground">Als "aktiv" gelten folgende Status:</Label>
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="status-pending"
+                        checked={recipientFilters.orderStatuses.includes("pending")}
+                        onCheckedChange={(checked) => {
+                          const newStatuses = checked
+                            ? [...recipientFilters.orderStatuses, "pending"]
+                            : recipientFilters.orderStatuses.filter((s) => s !== "pending")
+                          setRecipientFilters({
+                            ...recipientFilters,
+                            orderStatuses: newStatuses,
+                          })
+                        }}
+                      />
+                      <Label htmlFor="status-pending" className="text-sm font-normal cursor-pointer">
+                        Ausstehend (pending)
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="status-confirmed"
+                        checked={recipientFilters.orderStatuses.includes("confirmed")}
+                        onCheckedChange={(checked) => {
+                          const newStatuses = checked
+                            ? [...recipientFilters.orderStatuses, "confirmed"]
+                            : recipientFilters.orderStatuses.filter((s) => s !== "confirmed")
+                          setRecipientFilters({
+                            ...recipientFilters,
+                            orderStatuses: newStatuses,
+                          })
+                        }}
+                      />
+                      <Label htmlFor="status-confirmed" className="text-sm font-normal cursor-pointer">
+                        Bestätigt (confirmed)
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="status-ready"
+                        checked={recipientFilters.orderStatuses.includes("ready")}
+                        onCheckedChange={(checked) => {
+                          const newStatuses = checked
+                            ? [...recipientFilters.orderStatuses, "ready"]
+                            : recipientFilters.orderStatuses.filter((s) => s !== "ready")
+                          setRecipientFilters({
+                            ...recipientFilters,
+                            orderStatuses: newStatuses,
+                          })
+                        }}
+                      />
+                      <Label htmlFor="status-ready" className="text-sm font-normal cursor-pointer">
+                        Bereit zur Abholung (ready)
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="pt-2 border-t">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Gefilterte Empfänger:</span>
@@ -785,7 +988,7 @@ Entdecken Sie unsere aktuellen Sonderangebote auf frische Südfrüchte.
                 <Users className="h-4 w-4 text-blue-600" />
                 <span className="text-sm font-medium">Abonnenten</span>
               </div>
-              <div className="text-2xl font-bold">{stats.subscribers}</div>
+              <div className="text-2xl font-bold">{stats?.subscribers ?? 0}</div>
               <p className="text-xs text-muted-foreground mt-1">Aktive Abonnenten</p>
             </Card>
             <Card className="p-4">
@@ -793,7 +996,7 @@ Entdecken Sie unsere aktuellen Sonderangebote auf frische Südfrüchte.
                 <Mail className="h-4 w-4 text-green-600" />
                 <span className="text-sm font-medium">Versendet</span>
               </div>
-              <div className="text-2xl font-bold">{stats.newslettersSent}</div>
+              <div className="text-2xl font-bold">{stats?.newslettersSent ?? 0}</div>
               <p className="text-xs text-muted-foreground mt-1">Newsletter gesamt</p>
             </Card>
             <Card className="p-4">
@@ -801,7 +1004,7 @@ Entdecken Sie unsere aktuellen Sonderangebote auf frische Südfrüchte.
                 <TrendingUp className="h-4 w-4 text-purple-600" />
                 <span className="text-sm font-medium">Öffnungsrate</span>
               </div>
-              <div className="text-2xl font-bold">{stats.openRate > 0 ? `${stats.openRate}%` : "N/A"}</div>
+              <div className="text-2xl font-bold">{stats?.openRate > 0 ? `${stats.openRate}%` : "N/A"}</div>
               <p className="text-xs text-muted-foreground mt-1">Durchschnittlich</p>
             </Card>
           </div>
@@ -1010,7 +1213,7 @@ Entdecken Sie unsere aktuellen Sonderangebote auf frische Südfrüchte.
               </Button>
               <Button variant="outline" onClick={() => setShowDrafts(true)} disabled={isLoading}>
                 <FolderOpen className="h-4 w-4 mr-2" />
-                Entwürfe laden ({drafts.length})
+                Entwürfe laden ({drafts?.length ?? 0})
               </Button>
               <Button
                 variant="outline"
@@ -1039,7 +1242,7 @@ Entdecken Sie unsere aktuellen Sonderangebote auf frische Südfrüchte.
             <DialogDescription>Übersicht aller versendeten Newsletter</DialogDescription>
           </DialogHeader>
           <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-            {sendHistory.length === 0 ? (
+            {!sendHistory || !Array.isArray(sendHistory) || sendHistory.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">Keine Versandhistorie vorhanden</p>
             ) : (
               sendHistory.map((send) => (
@@ -1207,7 +1410,7 @@ Entdecken Sie unsere aktuellen Sonderangebote auf frische Südfrüchte.
             <DialogDescription>Wählen Sie einen Entwurf zum Laden oder Löschen</DialogDescription>
           </DialogHeader>
           <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-            {drafts.length === 0 ? (
+            {!Array.isArray(drafts) || drafts.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">Keine Entwürfe vorhanden</p>
             ) : (
               drafts.map((draft) => (

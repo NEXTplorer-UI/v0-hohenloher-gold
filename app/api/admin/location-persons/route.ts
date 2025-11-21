@@ -1,20 +1,18 @@
 import { createServerClient } from "@/lib/supabase/server"
-import { NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createServerClient()
-    
-    const { data: { user } } = await supabase.auth.getUser()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
 
     if (!profile || profile.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
@@ -22,13 +20,20 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const personId = searchParams.get("person_id")
+    const locationId = searchParams.get("locationId")
 
-    let query = supabase
-      .from("location_persons")
-      .select("*, pickup_locations(name)")
+    let query = supabase.from("location_persons").select(`
+      *,
+      pickup_locations(name),
+      distribution_persons(id, name, email, phone)
+    `)
 
     if (personId) {
       query = query.eq("person_id", personId)
+    }
+
+    if (locationId) {
+      query = query.eq("pickup_location_id", locationId)
     }
 
     const { data: assignments, error } = await query
@@ -45,17 +50,15 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerClient()
-    
-    const { data: { user } } = await supabase.auth.getUser()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
 
     if (!profile || profile.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
@@ -69,10 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (is_primary) {
-      await supabase
-        .from("location_persons")
-        .update({ is_primary: false })
-        .eq("pickup_location_id", pickup_location_id)
+      await supabase.from("location_persons").update({ is_primary: false }).eq("pickup_location_id", pickup_location_id)
     }
 
     const { data: locationPerson, error } = await supabase
@@ -94,20 +94,53 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function PATCH(request: NextRequest) {
   try {
     const supabase = await createServerClient()
-    
-    const { data: { user } } = await supabase.auth.getUser()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
+
+    if (!profile || profile.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const { id, is_active } = body
+
+    if (!id || is_active === undefined) {
+      return NextResponse.json({ error: "id and is_active are required" }, { status: 400 })
+    }
+
+    const { data, error } = await supabase.from("location_persons").update({ is_active }).eq("id", id).select().single()
+
+    if (error) throw error
+
+    return NextResponse.json({ success: true, data })
+  } catch (error: any) {
+    console.error("[API] Error updating location person:", error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createServerClient()
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
 
     if (!profile || profile.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
@@ -116,14 +149,30 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get("id")
 
-    if (!id) {
-      return NextResponse.json({ error: "ID is required" }, { status: 400 })
+    // Support deletion via id OR via body with locationId and personId
+    if (id) {
+      const { error } = await supabase.from("location_persons").delete().eq("id", id)
+
+      if (error) throw error
+      return NextResponse.json({ success: true })
+    }
+
+    // Alternative: Delete by locationId and personId from body
+    const body = await request.json()
+    const { locationId, personId } = body
+
+    if (!locationId || !personId) {
+      return NextResponse.json(
+        { error: "Either id parameter or locationId and personId in body are required" },
+        { status: 400 },
+      )
     }
 
     const { error } = await supabase
       .from("location_persons")
       .delete()
-      .eq("id", id)
+      .eq("pickup_location_id", locationId)
+      .eq("person_id", personId)
 
     if (error) throw error
 

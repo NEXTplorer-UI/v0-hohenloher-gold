@@ -34,6 +34,7 @@ interface Order {
   customers: {
     name: string
     email: string
+    postal_code: string | null
   } | null
 }
 
@@ -63,7 +64,7 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 export default function OrderNormalization() {
   const { toast } = useToast()
-  const [groupByLocation, setGroupByLocation] = useState(true)
+  const [groupByLocation, setGroupByLocation] = useState(false)
   const [includeIgnored, setIncludeIgnored] = useState(false)
 
   const [hideWithLocation, setHideWithLocation] = useState(false)
@@ -72,6 +73,7 @@ export default function OrderNormalization() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set())
   const [autoMatches, setAutoMatches] = useState<AutoMatch[]>([])
   const [isAutoMatching, setIsAutoMatching] = useState(false)
+  const [isZipMatching, setIsZipMatching] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage] = useState(50)
@@ -223,6 +225,64 @@ export default function OrderNormalization() {
       })
     } finally {
       setIsAutoMatching(false)
+    }
+  }
+
+  const handleZipAutoMatch = async () => {
+    setIsZipMatching(true)
+    try {
+      const response = await fetch("/api/admin/orders/auto-match-by-zip", {
+        method: "POST",
+      })
+      const data = await response.json()
+
+      if (data.matches && Array.isArray(data.matches)) {
+        const newSelections: Record<string, { locationId: string; personId: string }> = {}
+
+        data.matches.forEach(
+          (match: {
+            orderId: string
+            bestLocationId: string
+            distance: number
+            confidence: string
+          }) => {
+            const order = orders.find((o) => o.id === match.orderId)
+            if (!order) return
+
+            const key = groupByLocation ? order.pickup_location || "Unbekannt" : match.orderId
+
+            newSelections[key] = {
+              locationId: match.bestLocationId,
+              personId: "",
+            }
+
+            const locationPersonsList = locationPersons.filter((lp) => lp.pickup_location_id === match.bestLocationId)
+            if (locationPersonsList.length === 1) {
+              newSelections[key].personId = locationPersonsList[0].person_id
+            }
+          },
+        )
+
+        setRowSelections({ ...rowSelections, ...newSelections })
+
+        const highConfidence = data.matches.filter((m: any) => m.confidence === "high").length
+        const mediumConfidence = data.matches.filter((m: any) => m.confidence === "medium").length
+        const lowConfidence = data.matches.filter((m: any) => m.confidence === "low").length
+
+        toast({
+          title: "PLZ Auto-Mapping abgeschlossen",
+          description: `${data.matchCount} Zuordnungen: ${highConfidence} hoch, ${mediumConfidence} mittel, ${lowConfidence} niedrig`,
+        })
+      }
+    } catch (error) {
+      console.error("[zip-auto-match] Error:", error)
+      toast({
+        title: "Fehler",
+        description: "PLZ Auto-Mapping fehlgeschlagen",
+        variant: "destructive",
+      })
+    } finally {
+      setIsZipMatching(false)
     }
   }
 
@@ -443,6 +503,20 @@ export default function OrderNormalization() {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={handleZipAutoMatch}
+                disabled={isZipMatching || filteredOrders.length === 0}
+              >
+                {isZipMatching ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mr-2" />
+                )}
+                PLZ Auto-Mapping
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleAutoMatch}
                 disabled={isAutoMatching || filteredOrders.length === 0}
               >
@@ -623,7 +697,7 @@ export default function OrderNormalization() {
                             <div>
                               <p className="text-sm">{order.pickup_location}</p>
                             </div>
-                            <div>
+                            <div className="space-y-1">
                               {order.notes ? (
                                 <Dialog>
                                   <DialogTrigger asChild>
@@ -644,6 +718,9 @@ export default function OrderNormalization() {
                                 </Dialog>
                               ) : (
                                 <span className="text-xs text-muted-foreground">Kein Kommentar</span>
+                              )}
+                              {order.customers?.postal_code && (
+                                <p className="text-xs text-muted-foreground">PLZ: {order.customers.postal_code}</p>
                               )}
                             </div>
                             <div>
@@ -689,7 +766,7 @@ export default function OrderNormalization() {
                                   <SelectContent>
                                     {locations.map((loc) => (
                                       <SelectItem key={loc.id} value={loc.id}>
-                                        {loc.name}
+                                        {loc.name} - {loc.address}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>

@@ -1,17 +1,17 @@
 "use client"
 import { useEffect, lazy, Suspense, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from 'next/navigation'
+import { useRouter } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
-import { LogOut, Clock, Shield, Users, ShoppingCart, TrendingUp, Loader2, Menu } from 'lucide-react'
+import { LogOut, Clock, Shield, Users, ShoppingCart, TrendingUp, Loader2, Menu } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { AdminProvider, useAdmin } from "@/contexts/admin-context"
 import RevenueAnalyticsModal from "@/components/admin/revenue-analytics-modal"
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw } from "lucide-react"
 import usePersistedState from "@/hooks/use-persisted-state"
 import { TestModeToggle } from "@/components/admin/test-mode-toggle"
 import { SettingsPanel } from "@/components/admin/settings-panel"
@@ -32,6 +32,7 @@ const ProductManagement = lazy(() => import("@/components/admin/product-manageme
 const DeliveryScheduleManagement = lazy(() => import("@/components/admin/delivery-schedule-management"))
 const EmailPreviewSystem = lazy(() => import("@/app/admin/emails/page"))
 const EmailTemplatesViewer = lazy(() => import("@/components/admin/email-templates-viewer"))
+const ReportBuilder = lazy(() => import("@/components/admin/report-builder"))
 
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center p-8">
@@ -641,11 +642,12 @@ function AdminDashboardContent() {
           <Card>
             <CardContent className="pt-6">
               <Tabs defaultValue="locations" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-5">
                   <TabsTrigger value="locations">Abholorte</TabsTrigger>
                   <TabsTrigger value="routes">Touren</TabsTrigger>
                   <TabsTrigger value="persons">Verteilpersonen</TabsTrigger>
                   <TabsTrigger value="normalize">Normalisieren</TabsTrigger>
+                  <TabsTrigger value="reports">Report Builder</TabsTrigger>
                 </TabsList>
                 <TabsContent value="locations" className="mt-6">
                   <Suspense fallback={<LoadingSpinner />}>
@@ -665,6 +667,11 @@ function AdminDashboardContent() {
                 <TabsContent value="normalize" className="mt-6">
                   <Suspense fallback={<LoadingSpinner />}>
                     <OrderNormalization />
+                  </Suspense>
+                </TabsContent>
+                <TabsContent value="reports" className="mt-6">
+                  <Suspense fallback={<LoadingSpinner />}>
+                    <ReportBuilder />
                   </Suspense>
                 </TabsContent>
               </Tabs>
@@ -762,8 +769,8 @@ function AdminDashboardContent() {
             <CardContent>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Synchronisieren Sie alle Kunden ohne HelloCash-ID nacheinander mit HelloCash. Dies stellt sicher,
-                  dass alle Kundendaten inklusive Adressen auf Rechnungen angezeigt werden.
+                  Synchronisieren Sie alle Kunden ohne HelloCash-ID nacheinander mit HelloCash. Dies stellt sicher, dass
+                  alle Kundendaten inklusive Adressen auf Rechnungen angezeigt werden.
                 </p>
                 <HelloCashSyncButton />
               </div>

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/server"
+import { getAdminClient } from "@/lib/supabase/admin"
 
 export async function GET() {
   try {
-    const supabase = createAdminClient()
+    const supabase = getAdminClient()
 
     const { data: schedules, error } = await supabase
       .from("delivery_schedules")

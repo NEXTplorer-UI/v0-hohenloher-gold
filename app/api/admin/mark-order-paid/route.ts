@@ -145,6 +145,12 @@ export async function POST(request: NextRequest) {
       if (helloCashToken && invoiceResult?.invoiceId) {
         try {
           console.log("[v0] [mark-order-paid] Fetching invoice PDF...")
+          console.log("[v0] [mark-order-paid] Invoice ID:", invoiceResult.invoiceId)
+          console.log(
+            "[v0] [mark-order-paid] API endpoint:",
+            `https://api.hellocash.business/api/v1/invoices/${invoiceResult.invoiceId}/pdf`,
+          )
+
           const pdfResponse = await fetch(
             `https://api.hellocash.business/api/v1/invoices/${invoiceResult.invoiceId}/pdf?cancellation=false&locale=de_DE`,
             {
@@ -154,20 +160,43 @@ export async function POST(request: NextRequest) {
             },
           )
 
+          console.log("[v0] [mark-order-paid] PDF response status:", pdfResponse.status)
+          console.log("[v0] [mark-order-paid] PDF response headers:", Object.fromEntries(pdfResponse.headers.entries()))
+
           if (pdfResponse.ok) {
-            const pdfBuffer = await pdfResponse.arrayBuffer()
-            attachments.push({
-              filename: `Rechnung_${order.order_number}.pdf`,
-              content: Buffer.from(pdfBuffer),
-            })
-            console.log("[v0] [mark-order-paid] Invoice PDF attached successfully")
+            console.log("[v0] [mark-order-paid] Converting PDF to buffer...")
+            const pdfBuffer = await pdfResponse.arrayBuffer() // This is correct - arrayBuffer() returns Promise<ArrayBuffer>
+            console.log("[v0] [mark-order-paid] PDF buffer size:", pdfBuffer.byteLength, "bytes")
+
+            if (pdfBuffer.byteLength === 0) {
+              console.error("[v0] [mark-order-paid] PDF buffer is empty!")
+            } else {
+              attachments.push({
+                filename: `Rechnung_${order.order_number}.pdf`,
+                content: Buffer.from(pdfBuffer),
+              })
+              console.log(
+                "[v0] [mark-order-paid] Invoice PDF attached successfully, size:",
+                pdfBuffer.byteLength,
+                "bytes",
+              )
+            }
           } else {
+            const errorText = await pdfResponse.text()
             console.error("[v0] [mark-order-paid] Failed to fetch invoice PDF:", pdfResponse.status)
+            console.error("[v0] [mark-order-paid] Error response:", errorText)
           }
         } catch (pdfError) {
           console.error("[v0] [mark-order-paid] Error fetching invoice PDF:", pdfError)
+          console.error("[v0] [mark-order-paid] Error stack:", pdfError instanceof Error ? pdfError.stack : "No stack")
         }
+      } else {
+        console.log("[v0] [mark-order-paid] Skipping PDF fetch - Token or Invoice ID missing")
+        console.log("[v0] [mark-order-paid] Token available:", !!helloCashToken)
+        console.log("[v0] [mark-order-paid] Invoice ID:", invoiceResult?.invoiceId)
       }
+
+      console.log("[v0] [mark-order-paid] Total attachments to send:", attachments.length)
 
       // Send email to customer
       await resend.emails.send({
