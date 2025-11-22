@@ -11,6 +11,10 @@ interface RecipientFilter {
   newsletterConsent?: boolean
   marketingConsent?: boolean
   reminderConsent?: boolean
+  pickupLocationNames?: string[]
+  distributionPersonIds?: string[]
+  activeOrdersOnly?: boolean
+  orderStatuses?: string[]
 }
 
 export async function POST(request: Request) {
@@ -32,15 +36,19 @@ export async function POST(request: Request) {
 
     const supabase = createAdminClient()
 
+    console.log("[v0] Newsletter send - Filters received:", filters)
+
+    // Build the query with the same logic as /api/admin/newsletter/recipients
     let query = supabase.from("customers").select("id, email, first_name, last_name")
 
+    // Apply consent filters
     if (filters.allCustomers) {
       query = query.not("email", "is", null).neq("email", "")
     } else {
       const orConditions: string[] = []
 
       if (filters.newsletterConsent) {
-        orConditions.push("newsletter_subscribed.eq.true,newsletter_confirmed.eq.true")
+        orConditions.push("newsletter_subscribed.eq.true")
       }
       if (filters.marketingConsent) {
         orConditions.push("marketing_consent.eq.true")
@@ -56,16 +64,110 @@ export async function POST(request: Request) {
       query = query.or(orConditions.join(",")).not("email", "is", null).neq("email", "")
     }
 
-    const { data: recipients, error: fetchError } = await query
+    const { data: allCustomers, error: fetchError } = await query
 
     if (fetchError) {
-      console.error("[v0] Error fetching recipients:", fetchError)
-      return NextResponse.json({ error: "Failed to fetch recipients" }, { status: 500 })
+      console.error("[v0] Error fetching customers:", fetchError)
+      return NextResponse.json({ error: "Failed to fetch customers" }, { status: 500 })
     }
 
-    if (!recipients || recipients.length === 0) {
-      return NextResponse.json({ error: "No recipients found" }, { status: 400 })
+    if (!allCustomers || allCustomers.length === 0) {
+      return NextResponse.json({ error: "No customers found" }, { status: 400 })
     }
+
+    console.log("[v0] Found customers matching consent filters:", allCustomers.length)
+
+    let recipients = allCustomers
+
+    // Filter by pickup location (normalized name)
+    if (filters.pickupLocationNames && filters.pickupLocationNames.length > 0) {
+      const normalizedNames = filters.pickupLocationNames.map((name) => name.trim().toLowerCase().split(",")[0].trim())
+
+      // Get customer IDs that have orders with matching pickup locations
+      const { data: matchingOrders } = await supabase
+        .from("orders")
+        .select("customer_id, pickup_location_normalized, pickup_location_id, pickup_locations(name)")
+        .in(
+          "customer_id",
+          allCustomers.map((c) => c.id),
+        )
+
+      if (matchingOrders) {
+        const customerIdsWithMatchingLocations = new Set<string>()
+
+        matchingOrders.forEach((order: any) => {
+          // Try to match via JOIN first (if pickup_location_id is correct)
+          if (order.pickup_locations?.name) {
+            const locationName = order.pickup_locations.name.trim().toLowerCase().split(",")[0].trim()
+            if (normalizedNames.includes(locationName)) {
+              customerIdsWithMatchingLocations.add(order.customer_id)
+            }
+          }
+
+          // Fallback: match via pickup_location_normalized
+          if (order.pickup_location_normalized) {
+            const normalizedLocation = order.pickup_location_normalized.trim().toLowerCase().split(",")[0].trim()
+            if (normalizedNames.includes(normalizedLocation)) {
+              customerIdsWithMatchingLocations.add(order.customer_id)
+            }
+          }
+        })
+
+        recipients = recipients.filter((customer) => customerIdsWithMatchingLocations.has(customer.id))
+        console.log("[v0] After pickup location filter:", recipients.length)
+      }
+    }
+
+    // Filter by distribution person
+    if (filters.distributionPersonIds && filters.distributionPersonIds.length > 0) {
+      // Get customers with matching default distribution person OR orders with matching distribution person
+      const { data: matchingOrders } = await supabase
+        .from("orders")
+        .select("customer_id")
+        .in("distribution_person_id", filters.distributionPersonIds)
+        .in(
+          "customer_id",
+          recipients.map((c) => c.id),
+        )
+
+      const { data: matchingCustomers } = await supabase
+        .from("customers")
+        .select("id")
+        .in("default_distribution_person_id", filters.distributionPersonIds)
+        .in(
+          "id",
+          recipients.map((c) => c.id),
+        )
+
+      const matchingIds = new Set<string>()
+      matchingOrders?.forEach((o: any) => matchingIds.add(o.customer_id))
+      matchingCustomers?.forEach((c: any) => matchingIds.add(c.id))
+
+      recipients = recipients.filter((customer) => matchingIds.has(customer.id))
+      console.log("[v0] After distribution person filter:", recipients.length)
+    }
+
+    // Filter by active orders
+    if (filters.activeOrdersOnly && filters.orderStatuses && filters.orderStatuses.length > 0) {
+      const { data: activeOrders } = await supabase
+        .from("orders")
+        .select("customer_id")
+        .in("status", filters.orderStatuses)
+        .in(
+          "customer_id",
+          recipients.map((c) => c.id),
+        )
+
+      const activeCustomerIds = new Set(activeOrders?.map((o: any) => o.customer_id) || [])
+      recipients = recipients.filter((customer) => activeCustomerIds.has(customer.id))
+      console.log("[v0] After active orders filter:", recipients.length)
+    }
+
+    if (recipients.length === 0) {
+      return NextResponse.json({ error: "No recipients found matching all filters" }, { status: 400 })
+    }
+
+    console.log(`[v0] Final recipient count after all filters: ${recipients.length}`)
 
     console.log(`[v0] Sending newsletter to ${recipients.length} recipients with template type: ${templateType}`)
 

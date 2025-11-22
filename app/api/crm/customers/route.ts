@@ -111,3 +111,50 @@ export async function GET(request: Request) {
     )
   }
 }
+
+export async function POST(request: Request) {
+  console.log("[v0] [/api/crm/customers] POST request received")
+
+  try {
+    const body = await request.json()
+    console.log("[v0] [/api/crm/customers] Request body:", body)
+
+    const supabase = createAdminClient()
+
+    // Validate: At least name is required
+    const fullName = `${body.first_name || ""} ${body.last_name || ""}`.trim()
+    if (!fullName) {
+      return NextResponse.json({ error: "Name ist erforderlich" }, { status: 400 })
+    }
+
+    // Create customer with only provided fields
+    const customerData: any = {
+      first_name: body.first_name || "",
+      last_name: body.last_name || "",
+    }
+
+    // Add optional fields if provided
+    if (body.email) customerData.email = body.email
+    if (body.phone) customerData.phone = body.phone
+    if (body.street) customerData.street = body.street
+    if (body.house_number) customerData.house_number = body.house_number
+    if (body.postal_code) customerData.postal_code = body.postal_code
+    if (body.city) customerData.city = body.city
+
+    const { data: customer, error } = await supabase.from("customers").insert(customerData).select().single()
+
+    if (error) {
+      console.error("[v0] [/api/crm/customers] Database error:", error)
+      return NextResponse.json({ error: "Kunde konnte nicht angelegt werden", details: error.message }, { status: 500 })
+    }
+
+    console.log("[v0] [/api/crm/customers] Customer created successfully:", customer.id)
+    return NextResponse.json({ customer })
+  } catch (e) {
+    console.error("[v0] [/api/crm/customers] Unexpected error:", e)
+    return NextResponse.json(
+      { error: "Unerwarteter Fehler", details: e instanceof Error ? e.message : String(e) },
+      { status: 500 },
+    )
+  }
+}

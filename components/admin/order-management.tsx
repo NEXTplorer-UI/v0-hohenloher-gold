@@ -6,7 +6,24 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Download, Mail, Search, Filter, Loader2, ChevronDown, ChevronUp, MapPin, Users, Plus, X, RefreshCw, XCircle, FileText, Printer } from 'lucide-react'
+import {
+  Download,
+  Mail,
+  Search,
+  Filter,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  MapPin,
+  Users,
+  Plus,
+  X,
+  RefreshCw,
+  XCircle,
+  FileText,
+  Printer,
+  ExternalLink,
+} from "lucide-react"
 import { mapDBToUIStatus } from "@/lib/order-status-mapping"
 import type { EmailTemplateId } from "@/lib/email/build"
 import { useToast } from "@/hooks/use-toast"
@@ -17,6 +34,14 @@ import { usePersistedState } from "@/hooks/use-persisted-state"
 import { useTestMode } from "./test-mode-toggle" // Import useTestMode hook
 import { useAdminCache } from "@/hooks/use-admin-cache"
 import { Combobox } from "@/components/ui/combobox" // Import Combobox
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface OrderItem {
   id: string
@@ -128,6 +153,8 @@ const OrderItem = memo(
     const [showCustomerDetails, setShowCustomerDetails] = useState(false)
     const [customerDetails, setCustomerDetails] = useState<CustomerDetails | null>(null)
     const [loadingCustomerDetails, setLoadingCustomerDetails] = useState(false)
+
+    const [selectedNotificationTemplate, setSelectedNotificationTemplate] = useState<EmailTemplateId | "">("")
 
     const customerName = `${order.customer.first_name} ${order.customer.last_name}`
     const orderDate = new Date(order.created_at).toLocaleDateString("de-DE")
@@ -288,9 +315,7 @@ const OrderItem = memo(
                 <span className="font-medium">{order.order_number}</span>
                 <Badge variant={getStatusVariant(uiStatus)}>{getStatusDisplay(uiStatus)}</Badge>
                 {order.payment_status === "paid" && (
-                  <Badge className="bg-green-600 text-white hover:bg-green-700">
-                    ✓ Bezahlt
-                  </Badge>
+                  <Badge className="bg-green-600 text-white hover:bg-green-700">✓ Bezahlt</Badge>
                 )}
                 {isBulkOrder && (
                   <Badge variant="secondary" className="gap-1">
@@ -322,6 +347,15 @@ const OrderItem = memo(
                       </>
                     )}
                   </button>
+                  <a
+                    href={`/admin#customer-${order.customer_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center text-blue-600 hover:text-blue-800 ml-2"
+                    title="Kunde in Verwaltung öffnen"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
                   {" • "}
                   {order.customer.email}
                 </div>
@@ -714,6 +748,19 @@ function OrderManagement() {
   // Loading state for marking as paid
   const [isMarkingAsPaid, setIsMarkingAsPaid] = useState(false)
 
+  const [showNewCustomerDialog, setShowNewCustomerDialog] = useState(false)
+  const [newCustomerForm, setNewCustomerForm] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    street: "",
+    house_number: "",
+    postal_code: "",
+    city: "",
+  })
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false)
+
   useEffect(() => {
     if (!customerSearchQuery || customerSearchQuery.length < 2) {
       setCustomerSearchResults([])
@@ -769,10 +816,12 @@ function OrderManagement() {
         const locationsData = await locationsRes.json()
         const locations = locationsData.locations || locationsData
         if (Array.isArray(locations)) {
-          setPickupLocations(locations.map((loc: any) => ({
-            id: loc.id,
-            name: loc.name,
-          })))
+          setPickupLocations(
+            locations.map((loc: any) => ({
+              id: loc.id,
+              name: loc.name,
+            })),
+          )
           console.log("[v0] Pickup locations loaded:", locations.length)
         } else {
           console.error("[v0] Pickup locations data is not an array:", locations)
@@ -825,8 +874,9 @@ function OrderManagement() {
         return
       }
 
-      const customer = customers.find((c) => c.id === manualOrderForm.customerId) ||
-                      customerSearchResults.find((c) => c.id === manualOrderForm.customerId)
+      const customer =
+        customers.find((c) => c.id === manualOrderForm.customerId) ||
+        customerSearchResults.find((c) => c.id === manualOrderForm.customerId)
       if (!customer) {
         toast({
           title: "Fehler",
@@ -976,8 +1026,7 @@ function OrderManagement() {
       const matchesDeliveryMethod = deliveryMethodFilter === "all" || order.delivery_method === deliveryMethodFilter
 
       const matchesPickupLocation =
-        pickupLocationFilter === "all" ||
-        order.pickup_location_normalized === pickupLocationFilter
+        pickupLocationFilter === "all" || order.pickup_location_normalized === pickupLocationFilter
 
       return matchesSearch && matchesStatus && matchesComment && matchesDeliveryMethod && matchesPickupLocation
     })
@@ -1320,6 +1369,70 @@ function OrderManagement() {
     [orders, fetchOrders, toast],
   )
 
+  const handleCreateNewCustomer = useCallback(async () => {
+    try {
+      setIsCreatingCustomer(true)
+
+      // Validate only name is required
+      const fullName = `${newCustomerForm.first_name} ${newCustomerForm.last_name}`.trim()
+      if (!fullName) {
+        toast({
+          title: "Fehler",
+          description: "Bitte geben Sie mindestens einen Namen ein",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const response = await fetch("/api/crm/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newCustomerForm),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to create customer")
+      }
+
+      const { customer } = await response.json()
+
+      toast({
+        title: "Erfolg",
+        description: "Kunde wurde erfolgreich angelegt",
+      })
+
+      // Add to customer list and select
+      setCustomers((prev) => [...prev, customer])
+      setManualOrderForm((prev) => ({
+        ...prev,
+        customerId: customer.id,
+        customerEmail: customer.email || "",
+      }))
+
+      // Reset form and close dialog
+      setNewCustomerForm({
+        first_name: "",
+        last_name: "",
+        email: "",
+        phone: "",
+        street: "",
+        house_number: "",
+        postal_code: "",
+        city: "",
+      })
+      setShowNewCustomerDialog(false)
+    } catch (error) {
+      console.error("[v0] Error creating customer:", error)
+      toast({
+        title: "Fehler",
+        description: "Kunde konnte nicht angelegt werden",
+        variant: "destructive",
+      })
+    } finally {
+      setIsCreatingCustomer(false)
+    }
+  }, [newCustomerForm, toast])
+
   const loadHelloCashEmployees = useCallback(async () => {
     setLoadingEmployees(true)
     try {
@@ -1343,20 +1456,29 @@ function OrderManagement() {
     }
   }, [toast])
 
-  const handleMarkAsPaid = useCallback((orderId: string) => {
-    setSelectedOrderForPayment(orderId)
-    setShowMarkAsPaidModal(true)
-    loadHelloCashEmployees()
-  }, [loadHelloCashEmployees])
+  const handleMarkAsPaid = useCallback(
+    (orderId: string) => {
+      setSelectedOrderForPayment(orderId)
+      setShowMarkAsPaidModal(true)
+      loadHelloCashEmployees()
+    },
+    [loadHelloCashEmployees],
+  )
 
   const handleConfirmMarkAsPaid = useCallback(async () => {
     if (!selectedOrderForPayment) return
 
     setIsMarkingAsPaid(true)
     try {
-      const percent = discountPercent ? parseFloat(discountPercent) : (customDiscountPercent ? parseFloat(customDiscountPercent) : 0)
+      const percent = discountPercent
+        ? Number.parseFloat(discountPercent)
+        : customDiscountPercent
+          ? Number.parseFloat(customDiscountPercent)
+          : 0
 
-      console.log(`[v0] Marking order ${selectedOrderForPayment} as paid with payment method: ${selectedPaymentMethod}, createInvoice: ${createInvoice}, discountPercent: ${percent}, testMode: ${invoiceTestMode}, cashierId: ${selectedCashierId}`)
+      console.log(
+        `[v0] Marking order ${selectedOrderForPayment} as paid with payment method: ${selectedPaymentMethod}, createInvoice: ${createInvoice}, discountPercent: ${percent}, testMode: ${invoiceTestMode}, cashierId: ${selectedCashierId}`,
+      )
 
       const response = await fetch("/api/admin/mark-order-paid", {
         method: "POST",
@@ -1369,7 +1491,7 @@ function OrderManagement() {
           createInvoice,
           discountPercent: percent > 0 ? percent : undefined, // Send percent instead of euro amount
           testMode: invoiceTestMode,
-          cashierId: selectedCashierId ? parseInt(selectedCashierId) : undefined, // Added cashierId
+          cashierId: selectedCashierId ? Number.parseInt(selectedCashierId) : undefined, // Added cashierId
         }),
       })
 
@@ -1380,7 +1502,7 @@ function OrderManagement() {
         toast({
           title: "Als bezahlt markiert",
           description: createInvoice
-            ? (result.message || "Rechnung wurde erstellt und per E-Mail versendet")
+            ? result.message || "Rechnung wurde erstellt und per E-Mail versendet"
             : "Bestellung wurde als bezahlt markiert",
         })
 
@@ -1412,7 +1534,18 @@ function OrderManagement() {
     } finally {
       setIsMarkingAsPaid(false)
     }
-  }, [selectedOrderForPayment, selectedPaymentMethod, createInvoice, discountPercent, customDiscountPercent, invoiceTestMode, selectedCashierId, orders, fetchOrders, toast])
+  }, [
+    selectedOrderForPayment,
+    selectedPaymentMethod,
+    createInvoice,
+    discountPercent,
+    customDiscountPercent,
+    invoiceTestMode,
+    selectedCashierId,
+    orders,
+    fetchOrders,
+    toast,
+  ])
 
   const handleOrderSelection = useCallback((orderId: string, selected: boolean) => {
     setSelectedOrderIds((prev) => {
@@ -1484,7 +1617,7 @@ function OrderManagement() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle>Bestellungen verwalten</CardTitle>
@@ -1520,26 +1653,40 @@ function OrderManagement() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="customer">Kunde *</Label>
-                      <Combobox
-                        value={manualOrderForm.customerId}
-                        onValueChange={(value) => {
-                          const customer = customers.find((c) => c.id === value) ||
-                                          customerSearchResults.find((c) => c.id === value)
-                          setManualOrderForm((prev) => ({
-                            ...prev,
-                            customerId: value,
-                            customerEmail: customer?.email || "",
-                          }))
-                        }}
-                        onSearchChange={setCustomerSearchQuery}
-                        searchValue={customerSearchQuery}
-                        placeholder="Kunde suchen..."
-                        emptyText={isSearchingCustomers ? "Suche läuft..." : "Keine Kunden gefunden"}
-                        options={customerSearchResults.map((customer) => ({
-                          value: customer.id,
-                          label: `${customer.first_name} ${customer.last_name} (${customer.email})`,
-                        }))}
-                      />
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <Combobox
+                            value={manualOrderForm.customerId}
+                            onValueChange={(value) => {
+                              const customer =
+                                customers.find((c) => c.id === value) ||
+                                customerSearchResults.find((c) => c.id === value)
+                              setManualOrderForm((prev) => ({
+                                ...prev,
+                                customerId: value,
+                                customerEmail: customer?.email || "",
+                              }))
+                            }}
+                            onSearchChange={setCustomerSearchQuery}
+                            searchValue={customerSearchQuery}
+                            placeholder="Kunde suchen..."
+                            emptyText={isSearchingCustomers ? "Suche läuft..." : "Keine Kunden gefunden"}
+                            options={customerSearchResults.map((customer) => ({
+                              value: customer.id,
+                              label: `${customer.first_name} ${customer.last_name} (${customer.email})`,
+                            }))}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setShowNewCustomerDialog(true)}
+                          title="Neuen Kunden anlegen"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
 
                     {/* Delivery Method */}
@@ -1770,7 +1917,10 @@ function OrderManagement() {
               <Button variant="outline" onClick={() => setShowFilters(!showFilters)} className="w-full sm:w-48">
                 <Filter className="h-4 w-4 mr-2" />
                 Filter
-                {(statusFilter !== "all" || deliveryMethodFilter !== "all" || commentFilter !== "all" || pickupLocationFilter !== "all") && (
+                {(statusFilter !== "all" ||
+                  deliveryMethodFilter !== "all" ||
+                  commentFilter !== "all" ||
+                  pickupLocationFilter !== "all") && (
                   <Badge variant="secondary" className="ml-2">
                     Aktiv
                   </Badge>
@@ -1958,9 +2108,7 @@ function OrderManagement() {
           <Card className="w-full max-w-md mx-4">
             <CardHeader>
               <CardTitle>Als bezahlt markieren</CardTitle>
-              <CardDescription>
-                Wählen Sie die Zahlungsart und optionale Einstellungen.
-              </CardDescription>
+              <CardDescription>Wählen Sie die Zahlungsart und optionale Einstellungen.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -1979,10 +2127,10 @@ function OrderManagement() {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="flex items-center space-x-2 p-3 border rounded-md bg-muted/50">
-                <Checkbox 
-                  id="createInvoice" 
+                <Checkbox
+                  id="createInvoice"
                   checked={createInvoice}
                   onCheckedChange={(checked) => setCreateInvoice(checked as boolean)}
                 />
@@ -2003,12 +2151,14 @@ function OrderManagement() {
                     <Select value={selectedCashierId} onValueChange={setSelectedCashierId} disabled={loadingEmployees}>
                       <SelectTrigger id="cashierSelect">
                         <SelectValue placeholder={loadingEmployees ? "Lädt..." : "Kassierer auswählen (optional)"}>
-                          {selectedCashierId && helloCashEmployees.length > 0 ? (
-                            (() => {
-                              const selected = helloCashEmployees.find(e => e.employee_id.toString() === selectedCashierId)
-                              return selected ? selected.employee_name : "Kassierer auswählen (optional)"
-                            })()
-                          ) : null}
+                          {selectedCashierId && helloCashEmployees.length > 0
+                            ? (() => {
+                                const selected = helloCashEmployees.find(
+                                  (e) => e.employee_id.toString() === selectedCashierId,
+                                )
+                                return selected ? selected.employee_name : "Kassierer auswählen (optional)"
+                              })()
+                            : null}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
@@ -2079,22 +2229,26 @@ function OrderManagement() {
                         }}
                       />
                     </div>
-                    {(discountPercent || customDiscountPercent) && selectedOrderForPayment && (() => {
-                      const order = orders.find(o => o.id === selectedOrderForPayment)
-                      if (!order) return null
-                      const percent = discountPercent ? parseFloat(discountPercent) : parseFloat(customDiscountPercent) || 0
-                      const amount = (order.total * percent) / 100
-                      return (
-                        <p className="text-sm text-muted-foreground">
-                          Rabatt: {percent}% ({amount.toFixed(2)} €)
-                        </p>
-                      )
-                    })()}
+                    {(discountPercent || customDiscountPercent) &&
+                      selectedOrderForPayment &&
+                      (() => {
+                        const order = orders.find((o) => o.id === selectedOrderForPayment)
+                        if (!order) return null
+                        const percent = discountPercent
+                          ? Number.parseFloat(discountPercent)
+                          : Number.parseFloat(customDiscountPercent) || 0
+                        const amount = (order.total * percent) / 100
+                        return (
+                          <p className="text-sm text-muted-foreground">
+                            Rabatt: {percent}% ({amount.toFixed(2)} €)
+                          </p>
+                        )
+                      })()}
                   </div>
 
                   <div className="flex items-center space-x-2 p-3 border rounded-md bg-yellow-50">
-                    <Checkbox 
-                      id="invoiceTestMode" 
+                    <Checkbox
+                      id="invoiceTestMode"
                       checked={invoiceTestMode}
                       onCheckedChange={(checked) => setInvoiceTestMode(checked as boolean)}
                     />
@@ -2133,8 +2287,10 @@ function OrderManagement() {
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       Wird verarbeitet...
                     </>
+                  ) : createInvoice ? (
+                    "Rechnung versenden"
                   ) : (
-                    createInvoice ? "Rechnung versenden" : "Als bezahlt markieren"
+                    "Als bezahlt markieren"
                   )}
                 </Button>
               </div>
@@ -2142,6 +2298,100 @@ function OrderManagement() {
           </Card>
         </div>
       )}
+
+      <Dialog open={showNewCustomerDialog} onOpenChange={setShowNewCustomerDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Neuen Kunden anlegen</DialogTitle>
+            <DialogDescription>Nur der Name ist Pflichtfeld. Alle anderen Felder sind optional.</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="new_first_name">Vorname *</Label>
+              <Input
+                id="new_first_name"
+                value={newCustomerForm.first_name}
+                onChange={(e) => setNewCustomerForm({ ...newCustomerForm, first_name: e.target.value })}
+                placeholder="Max"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new_last_name">Nachname *</Label>
+              <Input
+                id="new_last_name"
+                value={newCustomerForm.last_name}
+                onChange={(e) => setNewCustomerForm({ ...newCustomerForm, last_name: e.target.value })}
+                placeholder="Mustermann"
+              />
+            </div>
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="new_email">E-Mail (optional)</Label>
+              <Input
+                id="new_email"
+                type="email"
+                value={newCustomerForm.email}
+                onChange={(e) => setNewCustomerForm({ ...newCustomerForm, email: e.target.value })}
+                placeholder="max@example.com"
+              />
+            </div>
+            <div className="space-y-2 col-span-2">
+              <Label htmlFor="new_phone">Telefon (optional)</Label>
+              <Input
+                id="new_phone"
+                value={newCustomerForm.phone}
+                onChange={(e) => setNewCustomerForm({ ...newCustomerForm, phone: e.target.value })}
+                placeholder="+49 123 456789"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new_street">Straße (optional)</Label>
+              <Input
+                id="new_street"
+                value={newCustomerForm.street}
+                onChange={(e) => setNewCustomerForm({ ...newCustomerForm, street: e.target.value })}
+                placeholder="Hauptstraße"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new_house_number">Hausnummer (optional)</Label>
+              <Input
+                id="new_house_number"
+                value={newCustomerForm.house_number}
+                onChange={(e) => setNewCustomerForm({ ...newCustomerForm, house_number: e.target.value })}
+                placeholder="123"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new_postal_code">PLZ (optional)</Label>
+              <Input
+                id="new_postal_code"
+                value={newCustomerForm.postal_code}
+                onChange={(e) => setNewCustomerForm({ ...newCustomerForm, postal_code: e.target.value })}
+                placeholder="12345"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new_city">Stadt (optional)</Label>
+              <Input
+                id="new_city"
+                value={newCustomerForm.city}
+                onChange={(e) => setNewCustomerForm({ ...newCustomerForm, city: e.target.value })}
+                placeholder="Berlin"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewCustomerDialog(false)} disabled={isCreatingCustomer}>
+              Abbrechen
+            </Button>
+            <Button onClick={handleCreateNewCustomer} disabled={isCreatingCustomer}>
+              {isCreatingCustomer ? "Wird angelegt..." : "Kunde anlegen"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -16,6 +16,7 @@ import {
   shippingNotificationContent,
   contactConfirmationContent,
   complaintConfirmationContent,
+  orderPickedUpContent, // Added orderPickedUp content import
 } from "./templates"
 import type { TemplateVars } from "./engine"
 import type { emailCopy } from "./copy"
@@ -30,6 +31,7 @@ export type EmailTemplateId =
   | "paymentReceipt"
   | "readyForPickup"
   | "orderCancelled"
+  | "orderPickedUp" // Added orderPickedUp template
   | "shippingNotification"
   | "contactConfirmation"
   | "complaintConfirmation"
@@ -102,6 +104,14 @@ export function buildEmail(
       headerColor = "#d4af37"
       headerGradient = "linear-gradient(135deg, #b8941f 0%, #d4af37 100%)"
       contentHtml = orderCancelledContent(vars, customCopy)
+      break
+
+    case "orderPickedUp": // Added orderPickedUp template case
+      subject = `Vielen Dank für Ihre Bestellung ${vars.orderNumber} - Südfrüchte Hohenlohe`
+      headerTitle = "Vielen Dank!"
+      headerColor = "#10b981"
+      headerGradient = "linear-gradient(135deg, #059669 0%, #10b981 100%)"
+      contentHtml = orderPickedUpContent(vars, customCopy)
       break
 
     case "shippingNotification":

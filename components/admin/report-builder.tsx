@@ -1,5 +1,5 @@
 "use client"
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -18,16 +18,8 @@ import {
   type ColumnOrderState,
 } from "@tanstack/react-table"
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Download, GripVertical, Settings, ArrowUpDown, FileSpreadsheet, FileText, Eye } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Download, GripVertical, Settings, ArrowUpDown } from "lucide-react"
 
 const AVAILABLE_COLUMNS = [
   { id: "order_number", label: "Bestellnummer", type: "string" },
@@ -97,7 +89,7 @@ const TEMPLATES = [
 ]
 
 export default function ReportBuilder() {
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("")
   const [selectedColumns, setSelectedColumns] = useState<string[]>([
     "order_number",
     "customer_name",
@@ -114,8 +106,6 @@ export default function ReportBuilder() {
     tours: [],
   })
 
-  const [pickupLocations, setPickupLocations] = useState<any[]>([])
-  const [tours, setTours] = useState<any[]>([])
   const [isExporting, setIsExporting] = useState(false)
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [isColumnSettingsOpen, setIsColumnSettingsOpen] = useState(false)
@@ -130,47 +120,39 @@ export default function ReportBuilder() {
   const [wrapText, setWrapText] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
 
-  useEffect(() => {
-    if (selectedColumns.length > 0 && columnOrderState.length === 0) {
-      setColumnOrderState([...selectedColumns])
-    }
-  }, [selectedColumns, columnOrderState])
+  const { data: pickupLocationsData } = useSWR(
+    "/api/admin/pickup-locations",
+    async (url) => {
+      const res = await fetch(url)
+      if (!res.ok) return { locations: [] }
+      return res.json()
+    },
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 60000,
+    },
+  )
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const [locationsRes, toursRes] = await Promise.all([
-          fetch("/api/admin/pickup-locations"),
-          fetch("/api/admin/delivery-routes"),
-        ])
+  const { data: toursData } = useSWR(
+    "/api/admin/delivery-routes",
+    async (url) => {
+      const res = await fetch(url)
+      if (!res.ok) return { routes: [] }
+      return res.json()
+    },
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 60000,
+    },
+  )
 
-        if (locationsRes.ok) {
-          const locationsData = await locationsRes.json()
-          setPickupLocations(Array.isArray(locationsData?.locations) ? locationsData.locations : [])
-        }
+  const pickupLocations = Array.isArray(pickupLocationsData?.locations)
+    ? pickupLocationsData.locations.filter((loc: any) => loc.is_active)
+    : []
 
-        if (toursRes.ok) {
-          const toursData = await toursRes.json()
-          setTours(Array.isArray(toursData?.routes) ? toursData.routes : Array.isArray(toursData) ? toursData : [])
-        }
-      } catch (error) {
-        console.error("Failed to load filter data:", error)
-        setPickupLocations([])
-        setTours([])
-      }
-    }
-
-    loadData()
-  }, [])
-
-  useEffect(() => {
-    // When selectedColumns changes, update columnOrder to include all selected columns
-    const newOrder = selectedColumns.filter((col) => columnOrderState.includes(col))
-    const addedColumns = selectedColumns.filter((col) => !columnOrderState.includes(col))
-    if (addedColumns.length > 0 || newOrder.length !== columnOrderState.length) {
-      setColumnOrderState([...newOrder, ...addedColumns])
-    }
-  }, [selectedColumns])
+  const tours = Array.isArray(toursData?.routes) ? toursData.routes.filter((route: any) => route.is_active) : []
 
   const applyTemplate = (templateId: string) => {
     const template = TEMPLATES.find((t) => t.id === templateId)
@@ -449,19 +431,18 @@ export default function ReportBuilder() {
                 <Label className="text-sm mb-2 block">Abholort</Label>
                 <ScrollArea className="h-32">
                   <div className="space-y-2">
-                    {Array.isArray(pickupLocations) &&
-                      pickupLocations.map((location) => (
-                        <div key={location.id} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`filter-location-${location.id}`}
-                            checked={filters.pickupLocations?.includes(location.id)}
-                            onCheckedChange={() => toggleFilter("pickupLocations", location.id)}
-                          />
-                          <Label htmlFor={`filter-location-${location.id}`} className="text-sm cursor-pointer">
-                            {location.name}
-                          </Label>
-                        </div>
-                      ))}
+                    {pickupLocations.map((location) => (
+                      <div key={location.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`filter-location-${location.id}`}
+                          checked={filters.pickupLocations?.includes(location.id)}
+                          onCheckedChange={() => toggleFilter("pickupLocations", location.id)}
+                        />
+                        <Label htmlFor={`filter-location-${location.id}`} className="text-sm cursor-pointer">
+                          {location.name}
+                        </Label>
+                      </div>
+                    ))}
                   </div>
                 </ScrollArea>
               </div>
@@ -470,19 +451,18 @@ export default function ReportBuilder() {
                 <Label className="text-sm mb-2 block">Tour</Label>
                 <ScrollArea className="h-32">
                   <div className="space-y-2">
-                    {Array.isArray(tours) &&
-                      tours.map((tour) => (
-                        <div key={tour.id} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`filter-tour-${tour.id}`}
-                            checked={filters.tours?.includes(tour.id)}
-                            onCheckedChange={() => toggleFilter("tours", tour.id)}
-                          />
-                          <Label htmlFor={`filter-tour-${tour.id}`} className="text-sm cursor-pointer">
-                            {tour.name}
-                          </Label>
-                        </div>
-                      ))}
+                    {tours.map((tour) => (
+                      <div key={tour.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`filter-tour-${tour.id}`}
+                          checked={filters.tours?.includes(tour.id)}
+                          onCheckedChange={() => toggleFilter("tours", tour.id)}
+                        />
+                        <Label htmlFor={`filter-tour-${tour.id}`} className="text-sm cursor-pointer">
+                          {tour.name}
+                        </Label>
+                      </div>
+                    ))}
                   </div>
                 </ScrollArea>
               </div>
@@ -580,43 +560,42 @@ export default function ReportBuilder() {
                     <Droppable droppableId="columns">
                       {(provided) => (
                         <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2 mt-2">
-                          {Array.isArray(columnOrderState) &&
-                            columnOrderState
-                              .filter((col) => selectedColumns.includes(col))
-                              .map((col, index) => {
-                                const colDef = AVAILABLE_COLUMNS.find((c) => c.id === col)
-                                return (
-                                  <Draggable key={String(col)} draggableId={String(col)} index={index}>
-                                    {(provided) => (
-                                      <div
-                                        ref={provided.innerRef}
-                                        {...provided.draggableProps}
-                                        {...provided.dragHandleProps}
-                                        className="flex items-center gap-3 p-3 bg-muted rounded-lg"
-                                      >
-                                        <GripVertical className="h-5 w-5 text-muted-foreground" />
-                                        <div className="flex-1">
-                                          <div className="font-medium">{colDef?.label || col}</div>
-                                          <div className="text-sm text-muted-foreground">
-                                            Breite: {columnWidths[col] || 150}px
-                                          </div>
-                                        </div>
-                                        <div className="w-64">
-                                          <Slider
-                                            value={[columnWidths[col] || 150]}
-                                            onValueChange={(value) =>
-                                              setColumnWidths((prev) => ({ ...prev, [col]: value[0] }))
-                                            }
-                                            min={80}
-                                            max={400}
-                                            step={10}
-                                          />
+                          {columnOrderState
+                            .filter((col) => selectedColumns.includes(col))
+                            .map((col, index) => {
+                              const colDef = AVAILABLE_COLUMNS.find((c) => c.id === col)
+                              return (
+                                <Draggable key={String(col)} draggableId={String(col)} index={index}>
+                                  {(provided) => (
+                                    <div
+                                      ref={provided.innerRef}
+                                      {...provided.draggableProps}
+                                      {...provided.dragHandleProps}
+                                      className="flex items-center gap-3 p-3 bg-muted rounded-lg"
+                                    >
+                                      <GripVertical className="h-5 w-5 text-muted-foreground" />
+                                      <div className="flex-1">
+                                        <div className="font-medium">{colDef?.label || col}</div>
+                                        <div className="text-sm text-muted-foreground">
+                                          Breite: {columnWidths[col] || 150}px
                                         </div>
                                       </div>
-                                    )}
-                                  </Draggable>
-                                )
-                              })}
+                                      <div className="w-64">
+                                        <Slider
+                                          value={[columnWidths[col] || 150]}
+                                          onValueChange={(value) =>
+                                            setColumnWidths((prev) => ({ ...prev, [col]: value[0] }))
+                                          }
+                                          min={80}
+                                          max={400}
+                                          step={10}
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </Draggable>
+                              )
+                            })}
                           {provided.placeholder}
                         </div>
                       )}
@@ -627,7 +606,7 @@ export default function ReportBuilder() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={showPreview} onOpenChange={setShowPreview}>
+          {/* <Dialog open={showPreview} onOpenChange={setShowPreview}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm">
                 <Eye className="mr-2 h-4 w-4" />
@@ -708,7 +687,7 @@ export default function ReportBuilder() {
                 </Button>
               </DialogFooter>
             </DialogContent>
-          </Dialog>
+          </Dialog> */}
         </div>
 
         <Button onClick={exportToCSV} variant="outline" size="sm">

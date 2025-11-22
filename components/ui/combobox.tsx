@@ -1,22 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react'
+import { Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 export interface ComboboxOption {
   value: string
@@ -45,28 +34,67 @@ export function Combobox({
   className,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+
+  React.useEffect(() => {
+    if (open) {
+      console.log("[v0] Combobox opened, attempting to focus input")
+      // Use longer timeout to ensure the popover is fully rendered in production
+      setTimeout(() => {
+        const input = document.querySelector("[cmdk-input]") as HTMLInputElement
+        if (input) {
+          console.log("[v0] Found input, focusing")
+          input.focus()
+        } else {
+          console.log("[v0] Input not found")
+        }
+      }, 200) // Increased from 50ms to 200ms for production reliability
+    }
+  }, [open])
 
   const selectedOption = options.find((option) => option.value === value)
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(newOpen) => {
+        console.log("[v0] Popover onOpenChange:", newOpen)
+        setOpen(newOpen)
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           variant="outline"
           role="combobox"
           aria-expanded={open}
           className={cn("w-full justify-between", className)}
+          onClick={() => {
+            console.log("[v0] Trigger button clicked, current open state:", open)
+          }}
         >
           {selectedOption ? selectedOption.label : placeholder}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0" align="start">
+      <PopoverContent
+        className="w-(--radix-popover-trigger-width) p-0"
+        align="start"
+        onOpenAutoFocus={(e) => {
+          console.log("[v0] PopoverContent onOpenAutoFocus")
+          // Prevent default behavior and manually focus the input
+          e.preventDefault()
+        }}
+      >
         <Command shouldFilter={false}>
           <CommandInput
+            ref={inputRef}
             placeholder="Suchen..."
             value={searchValue}
-            onValueChange={onSearchChange}
+            onValueChange={(newValue) => {
+              console.log("[v0] Search value changed:", newValue)
+              onSearchChange(newValue)
+            }}
+            autoFocus
           />
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
@@ -76,16 +104,12 @@ export function Combobox({
                   key={option.value}
                   value={option.value}
                   onSelect={() => {
+                    console.log("[v0] Option selected:", option.value)
                     onValueChange(option.value)
                     setOpen(false)
                   }}
                 >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === option.value ? "opacity-100" : "opacity-0"
-                    )}
-                  />
+                  <Check className={cn("mr-2 h-4 w-4", value === option.value ? "opacity-100" : "opacity-0")} />
                   {option.label}
                 </CommandItem>
               ))}

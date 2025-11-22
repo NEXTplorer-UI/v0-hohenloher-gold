@@ -59,6 +59,8 @@ interface ExtendedCustomer {
   total_spent?: number
   last_order_date?: string
   email_confirmed?: boolean
+  default_pickup_location_name?: string
+  default_distribution_person_name?: string
 }
 
 const AVAILABLE_COLUMNS = [
@@ -74,6 +76,8 @@ const AVAILABLE_COLUMNS = [
   { key: "total_spent", label: "Umsatz", required: false },
   { key: "last_activity", label: "Letzte Aktivität", required: false },
   { key: "tags", label: "Tags", required: false },
+  { key: "pickup_location", label: "Abholort", required: false },
+  { key: "distribution_person", label: "Verteilperson", required: false },
   { key: "actions", label: "Aktionen", required: true },
 ]
 
@@ -203,6 +207,10 @@ const CustomerRow = memo(
               )}
             </div>
           )
+        case "pickup_location":
+          return (customer as any).default_pickup_location_name || "-"
+        case "distribution_person":
+          return (customer as any).default_distribution_person_name || "-"
         case "actions":
           return (
             <div className="flex gap-2">
