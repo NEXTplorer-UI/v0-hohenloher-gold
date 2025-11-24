@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Search, MapPin, Users, Phone, Mail, ArrowRight, Heart, ChevronDown, Clock, Loader2 } from 'lucide-react'
+import { Search, MapPin, Users, Phone, Mail, ArrowRight, Heart, ChevronDown, Clock, Loader2 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { NextArrivalBanner } from "@/components/next-arrival-banner"
 import { useNearbyPickups } from "@/lib/hooks/use-nearby-pickups"
@@ -44,8 +44,7 @@ export default function DistributorPage() {
   } = useNearbyPickups({
     userPlz: searchPlz,
     radiusKm: 30,
-    maxPlzDelta: 300,
-    take: 3, // Limit results to best 3 matches
+    take: 5, // Show top 5 nearest locations
   })
 
   const hasCloseMatches = useMemo(() => {

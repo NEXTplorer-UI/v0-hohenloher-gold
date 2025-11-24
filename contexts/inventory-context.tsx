@@ -123,19 +123,36 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "SET_LOADING", payload: true })
       console.log("[v0] Loading inventory from database...")
 
-      const [productsResponse, stockResponse] = await Promise.all([
-        fetch("/api/admin/products", { cache: "no-store" }),
-        fetch("/api/admin/inventory/current-stock", { cache: "no-store" }),
-      ])
+      console.log("[v0] Fetching products from /api/admin/products")
+      const productsResponse = await fetch("/api/admin/products", { cache: "no-store" })
+      console.log("[v0] Products response status:", productsResponse.status)
 
-      if (!productsResponse.ok || !stockResponse.ok) {
-        throw new Error("Failed to fetch inventory data")
+      console.log("[v0] Fetching stock from /api/admin/inventory/current-stock")
+      const stockResponse = await fetch("/api/admin/inventory/current-stock", { cache: "no-store" })
+      console.log("[v0] Stock response status:", stockResponse.status)
+
+      if (!productsResponse.ok) {
+        const errorText = await productsResponse.text()
+        console.error("[v0] Products API error:", errorText)
+        throw new Error(`Failed to fetch products: ${productsResponse.status}`)
       }
 
+      if (!stockResponse.ok) {
+        const errorText = await stockResponse.text()
+        console.error("[v0] Stock API error:", errorText)
+        throw new Error(`Failed to fetch stock: ${stockResponse.status}`)
+      }
+
+      console.log("[v0] Parsing products response...")
       const products = await productsResponse.json()
+      console.log("[v0] Parsed products:", products?.length || 0)
+
+      console.log("[v0] Parsing stock response...")
       const stockResult = await stockResponse.json()
+      console.log("[v0] Parsed stock result:", stockResult?.data?.length || 0)
 
       if (!stockResult.success) {
+        console.error("[v0] Stock result error:", stockResult.error)
         throw new Error(stockResult.error || "Failed to load stock data")
       }
 
@@ -156,6 +173,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       console.log(`[v0] Loaded inventory with ${mergedInventory.length} products`)
     } catch (error) {
       console.error("[v0] Error loading inventory:", error)
+      console.error("[v0] Error stack:", error instanceof Error ? error.stack : "No stack trace")
       // Keep existing data on error
     } finally {
       dispatch({ type: "SET_LOADING", payload: false })

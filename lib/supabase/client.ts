@@ -10,3 +10,5 @@ let client: SupabaseClient | undefined
  * @deprecated Import from @/lib/supabase/browser instead
  */
 export const createClient = getBrowserClient
+
+export const createBrowserClient = getBrowserClient

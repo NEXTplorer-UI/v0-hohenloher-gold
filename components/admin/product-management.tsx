@@ -32,11 +32,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Plus, Edit, Trash2, Search, RefreshCw, Package, Cloud, CloudOff } from 'lucide-react'
+import { Plus, Edit, Trash2, Search, RefreshCw, Package, Cloud, CloudOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
-
 
 interface Product {
   id: number
@@ -115,17 +114,21 @@ export default function ProductManagement() {
   const { toast } = useToast()
 
   const [showCategoryMappings, setShowCategoryMappings] = useState(false)
-  const [categoryMappings, setCategoryMappings] = useState<Array<{
-    id: number
-    name: string
-    hellocash_category_id: number | null
-  }>>([])
+  const [categoryMappings, setCategoryMappings] = useState<
+    Array<{
+      id: number
+      name: string
+      hellocash_category_id: number | null
+    }>
+  >([])
 
-  const [tempCategoryMappings, setTempCategoryMappings] = useState<Array<{
-    id: number
-    name: string
-    hellocash_category_id: number | null
-  }>>([])
+  const [tempCategoryMappings, setTempCategoryMappings] = useState<
+    Array<{
+      id: number
+      name: string
+      hellocash_category_id: number | null
+    }>
+  >([])
 
   const [activeTab, setActiveTab] = useState("products")
   const [selectedRawGroup, setSelectedRawGroup] = useState<number | null>(null)
@@ -134,6 +137,8 @@ export default function ProductManagement() {
   const [editingGroupName, setEditingGroupName] = useState<string>("")
   const [editingGroupType, setEditingGroupType] = useState<"weight" | "volume">("weight")
   const [isCreatingGroup, setIsCreatingGroup] = useState(false)
+
+  const [selectedProductsForGroup, setSelectedProductsForGroup] = useState<number[]>([])
 
   const [formData, setFormData] = useState({
     name: "",
@@ -155,33 +160,42 @@ export default function ProductManagement() {
   })
 
   const loadProductAssignments = () => {
-  console.log("[v0] loadProductAssignments called with selectedRawGroup:", selectedRawGroup)
-  console.log("[v0] Current products:", products.length)
-  console.log("[v0] Current rawStockGroups:", rawStockGroups)
-  
-  const assignments: ProductAssignment[] = products.map(p => {
-    const isAssigned = p.inventory_raw_id === selectedRawGroup
-    console.log(`[v0] Product ${p.name} (id: ${p.id}): inventory_raw_id=${p.inventory_raw_id}, isAssigned=${isAssigned}`)
-    
-    return {
-      product_id: p.id,
-      product_name: p.name,
-      current_raw_id: p.inventory_raw_id || null,
-      selected_raw_id: isAssigned ? selectedRawGroup : null
+    console.log("[v0] loadProductAssignments called with selectedRawGroup:", selectedRawGroup)
+    console.log("[v0] Current products:", products.length)
+    console.log("[v0] Current rawStockGroups:", rawStockGroups)
+
+    const assignments: ProductAssignment[] = products.map((p) => {
+      const isAssigned = p.inventory_raw_id === selectedRawGroup
+      console.log(
+        `[v0] Product ${p.name} (id: ${p.id}): inventory_raw_id=${p.inventory_raw_id}, isAssigned=${isAssigned}`,
+      )
+
+      return {
+        product_id: p.id,
+        product_name: p.name,
+        current_raw_id: p.inventory_raw_id || null,
+        selected_raw_id: isAssigned ? selectedRawGroup : null,
+      }
+    })
+
+    console.log("[v0] Created assignments:", assignments)
+    setProductAssignments(assignments)
+    setHasUnsavedChanges(false)
+  }
+
+  // CHANGE: Fixed useEffect dependencies to use products.length instead of products array reference
+  useEffect(() => {
+    console.log("[v0] useEffect check - selectedRawGroup:", selectedRawGroup, "products.length:", products.length)
+    if (selectedRawGroup && products.length > 0) {
+      console.log("[v0] useEffect triggered - loading product assignments")
+      loadProductAssignments()
     }
-  })
-  
-  console.log("[v0] Created assignments:", assignments)
-  setProductAssignments(assignments)
-  setHasUnsavedChanges(false)
-}
+  }, [selectedRawGroup, products.length])
 
   const handleProductToggle = (productId: number, checked: boolean) => {
-    setProductAssignments(prev => prev.map(p => 
-      p.product_id === productId 
-        ? { ...p, selected_raw_id: checked ? selectedRawGroup : null }
-        : p
-    ))
+    setProductAssignments((prev) =>
+      prev.map((p) => (p.product_id === productId ? { ...p, selected_raw_id: checked ? selectedRawGroup : null } : p)),
+    )
     setHasUnsavedChanges(true)
   }
 
@@ -190,7 +204,7 @@ export default function ProductManagement() {
       toast({
         title: "Fehler",
         description: "Keine Rohware-Gruppe ausgewählt",
-        variant: "destructive"
+        variant: "destructive",
       })
       return
     }
@@ -198,16 +212,16 @@ export default function ProductManagement() {
     try {
       setLoading(true)
       const updates = productAssignments
-        .filter(p => p.selected_raw_id !== p.current_raw_id)
-        .map(p => ({
+        .filter((p) => p.selected_raw_id !== p.current_raw_id)
+        .map((p) => ({
           product_id: p.product_id,
-          inventory_raw_id: p.selected_raw_id
+          inventory_raw_id: p.selected_raw_id,
         }))
 
       if (updates.length === 0) {
         toast({
           title: "Info",
-          description: "Keine Änderungen zu speichern"
+          description: "Keine Änderungen zu speichern",
         })
         return
       }
@@ -215,33 +229,30 @@ export default function ProductManagement() {
       const response = await fetch("/api/admin/inventory/assign-products", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          assignments: updates
-        })
+          assignments: updates,
+        }),
       })
 
       if (response.ok) {
         toast({
           title: "Erfolg",
-          description: `${updates.length} Produkt(e) wurden zugeordnet`
+          description: `${updates.length} Produkt(e) wurden zugeordnet`,
         })
-        
-        await Promise.all([
-          fetchProducts(),
-          fetchRawStockGroups()
-        ])
-        
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
+
+        await Promise.all([fetchProducts(), fetchRawStockGroups()])
+
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+
         loadProductAssignments()
       } else {
         const error = await response.json()
         toast({
           title: "Fehler",
           description: error.error || "Fehler beim Speichern",
-          variant: "destructive"
+          variant: "destructive",
         })
       }
     } catch (error) {
@@ -249,7 +260,7 @@ export default function ProductManagement() {
       toast({
         title: "Fehler",
         description: "Verbindungsfehler beim Speichern",
-        variant: "destructive"
+        variant: "destructive",
       })
     } finally {
       setLoading(false)
@@ -261,46 +272,63 @@ export default function ProductManagement() {
       toast({
         title: "Fehler",
         description: "Bitte geben Sie einen Namen ein",
-        variant: "destructive"
+        variant: "destructive",
       })
       return
     }
 
     try {
       setLoading(true)
-      
+
       const response = await fetch("/api/admin/inventory/raw-stock", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           product_group: editingGroupName.trim(),
           unit_type: editingGroupType,
           stock_grams: 0,
-          min_stock_grams: editingGroupType === "weight" ? 2000 : 5000
-        })
+          min_stock_grams: editingGroupType === "weight" ? 2000 : 5000,
+        }),
       })
 
       if (response.ok) {
         const newGroup = await response.json()
+
+        if (selectedProductsForGroup.length > 0) {
+          await Promise.all(
+            selectedProductsForGroup.map((productId) =>
+              fetch("/api/admin/products/assign-raw-group", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  productId,
+                  rawGroupId: newGroup.id,
+                }),
+              }),
+            ),
+          )
+        }
+
         toast({
           title: "Erfolg",
-          description: "Rohware-Gruppe wurde erstellt"
+          description: `Rohware-Gruppe wurde erstellt${selectedProductsForGroup.length > 0 ? ` mit ${selectedProductsForGroup.length} Produkten` : ""}`,
         })
-        
+
         await fetchRawStockGroups()
         setIsCreatingGroup(false)
         setEditingGroupName("")
+        setSelectedProductsForGroup([])
         setSelectedRawGroup(newGroup.id)
-        
+
         loadProductAssignments()
       } else {
         const error = await response.json()
         toast({
           title: "Fehler",
           description: error.error || "Fehler beim Erstellen",
-          variant: "destructive"
+          variant: "destructive",
         })
       }
     } catch (error) {
@@ -308,18 +336,12 @@ export default function ProductManagement() {
       toast({
         title: "Fehler",
         description: "Verbindungsfehler",
-        variant: "destructive"
+        variant: "destructive",
       })
     } finally {
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    if (selectedRawGroup && products.length > 0) {
-      loadProductAssignments()
-    }
-  }, [selectedRawGroup, products])
 
   // CHANGE: Separate effect for auto-selecting first group
   useEffect(() => {
@@ -340,11 +362,11 @@ export default function ProductManagement() {
       console.log("[v0] Using cached products data")
       return
     }
-    
+
     setLoading(true)
     try {
       await refreshCache()
-      
+
       toast({
         title: "Aktualisiert",
         description: "Produkte wurden neu geladen",
@@ -370,7 +392,7 @@ export default function ProductManagement() {
       if (response.ok) {
         const data = await response.json()
         console.log("[v0] Categories loaded:", data)
-        const categoriesArray = Array.isArray(data) ? data : (data.categories || [])
+        const categoriesArray = Array.isArray(data) ? data : data.categories || []
         setCategories(categoriesArray)
       } else {
         const errorText = await response.text()
@@ -421,7 +443,7 @@ export default function ProductManagement() {
         const categoriesArray = data.categories || []
         setHelloCashCategories(categoriesArray)
         setIsHelloCashCategoriesDialogOpen(true)
-        
+
         toast({
           title: "HelloCash Kategorien geladen",
           description: `${categoriesArray.length} Kategorien gefunden`,
@@ -450,26 +472,26 @@ export default function ProductManagement() {
     try {
       const [categoriesResponse, helloCashResponse] = await Promise.all([
         fetch("/api/admin/categories"),
-        fetch("/api/admin/hellocash/categories")
+        fetch("/api/admin/hellocash/categories"),
       ])
-      
+
       if (categoriesResponse.ok) {
         const data = await categoriesResponse.json()
-        const categoriesArray = Array.isArray(data) ? data : (data.categories || [])
+        const categoriesArray = Array.isArray(data) ? data : data.categories || []
         const mappings = categoriesArray.map((cat: any) => ({
           id: cat.id,
           name: cat.name,
-          hellocash_category_id: cat.hellocash_category_id || null
+          hellocash_category_id: cat.hellocash_category_id || null,
         }))
         setCategoryMappings(mappings)
         setTempCategoryMappings(mappings)
       }
-      
+
       if (helloCashResponse.ok) {
         const helloCashData = await helloCashResponse.json()
         setHelloCashCategories(helloCashData.categories || [])
       }
-      
+
       setShowCategoryMappings(true)
     } catch (error) {
       console.error("Error fetching category mappings:", error)
@@ -491,17 +513,17 @@ export default function ProductManagement() {
           },
           body: JSON.stringify({ hellocash_category_id: mapping.hellocash_category_id }),
         })
-        
+
         if (!response.ok) {
           const error = await response.json()
-          throw new Error(`Failed to update category ${mapping.name}: ${error.error || 'Unknown error'}`)
+          throw new Error(`Failed to update category ${mapping.name}: ${error.error || "Unknown error"}`)
         }
       })
-      
+
       await Promise.all(promises)
-      
+
       setCategoryMappings(tempCategoryMappings) // Update permanent mappings
-      
+
       toast({
         title: "Erfolg",
         description: "Alle Kategorie-Mappings wurden gespeichert",
@@ -721,7 +743,7 @@ export default function ProductManagement() {
         inventory_raw_id: formData.is_raw_stock_managed ? formData.inventory_raw_id : null,
         is_raw_stock_managed: formData.is_raw_stock_managed,
         hellocash_category_id: formData.hellocash_category_id, // Ensure this is passed
-        hellocash_stock_managed: formData.hellocash_stock_managed // Ensure this is passed
+        hellocash_stock_managed: formData.hellocash_stock_managed, // Ensure this is passed
       }
 
       console.log("[v0] Sending request to:", url)
@@ -740,15 +762,15 @@ export default function ProductManagement() {
       if (response.ok) {
         const result = await response.json()
         console.log("[v0] Success:", result)
-        
+
         if (editingProduct) {
-          const updatedProducts = products.map(p => p.id === editingProduct.id ? result : p)
+          const updatedProducts = products.map((p) => (p.id === editingProduct.id ? result : p))
           updateCache(updatedProducts)
         } else {
           const updatedProducts = [...products, result]
           updateCache(updatedProducts)
         }
-        
+
         toast({
           title: "Erfolg",
           description: editingProduct ? "Produkt wurde aktualisiert" : "Produkt wurde erstellt",
@@ -806,9 +828,9 @@ export default function ProductManagement() {
       })
 
       if (response.ok) {
-        const updatedProducts = products.filter(p => p.id !== productId)
+        const updatedProducts = products.filter((p) => p.id !== productId)
         updateCache(updatedProducts)
-        
+
         toast({
           title: "Erfolg",
           description: "Produkt wurde gelöscht",
@@ -825,10 +847,10 @@ export default function ProductManagement() {
     } catch (error) {
       console.error("Error deleting product:", error)
       toast({
-          title: "Fehler",
-          description: "Verbindungsfehler beim Löschen",
-          variant: "destructive",
-        })
+        title: "Fehler",
+        description: "Verbindungsfehler beim Löschen",
+        variant: "destructive",
+      })
     }
   }
 
@@ -849,25 +871,25 @@ export default function ProductManagement() {
 
       if (response.ok) {
         const result = await response.json()
-        
+
         // Update product with HelloCash ID, category ID, and stock managed flag
-        const updatedProducts = products.map(p => 
-          p.id === product.id 
-            ? { 
-                ...p, 
-                hellocash_article_id: result.hellocash_article_id, 
+        const updatedProducts = products.map((p) =>
+          p.id === product.id
+            ? {
+                ...p,
+                hellocash_article_id: result.hellocash_article_id,
                 hellocash_category_id: result.hellocash_category_id,
-                hellocash_stock_managed: result.hellocash_stock_managed // Update stock managed flag
-              } 
-            : p
+                hellocash_stock_managed: result.hellocash_stock_managed, // Update stock managed flag
+              }
+            : p,
         )
         updateCache(updatedProducts)
-        
+
         toast({
           title: "Erfolg",
           description: result.message,
         })
-        
+
         await fetchProducts()
       } else {
         const error = await response.json()
@@ -880,10 +902,10 @@ export default function ProductManagement() {
     } catch (error) {
       console.error("Error syncing with HelloCash:", error)
       toast({
-          title: "Fehler",
-          description: "Verbindungsfehler bei der HelloCash Synchronisation",
-          variant: "destructive",
-        })
+        title: "Fehler",
+        description: "Verbindungsfehler bei der HelloCash Synchronisation",
+        variant: "destructive",
+      })
     }
   }
 
@@ -901,16 +923,16 @@ export default function ProductManagement() {
 
       if (response.ok) {
         const result = await response.json()
-        
+
         toast({
           title: "Synchronisierung abgeschlossen",
           description: result.message,
         })
-        
+
         if (result.errors && result.errors.length > 0) {
           console.error("[v0] Bulk sync errors:", result.errors)
         }
-        
+
         await fetchProducts()
       } else {
         const error = await response.json()
@@ -975,34 +997,34 @@ export default function ProductManagement() {
         </div>
         <div className="flex items-center space-x-2">
           <Button onClick={fetchProducts} disabled={loading || cacheLoading} variant="outline" size="sm">
-            <RefreshCw className={`h-4 w-4 mr-2 ${(loading || cacheLoading) ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading || cacheLoading ? "animate-spin" : ""}`} />
             Aktualisieren
           </Button>
           {/* CHANGE: Added HelloCash categories button */}
-          <Button 
-            onClick={fetchHelloCashCategories} 
-            disabled={loading || cacheLoading} 
-            variant="outline" 
+          <Button
+            onClick={fetchHelloCashCategories}
+            disabled={loading || cacheLoading}
+            variant="outline"
             size="sm"
             title="HelloCash Kategorien anzeigen"
           >
             <Package className="h-4 w-4 mr-2" />
             HC Kategorien
           </Button>
-          <Button 
-            onClick={handleBulkHelloCashSync} 
-            disabled={loading || cacheLoading} 
-            variant="outline" 
+          <Button
+            onClick={handleBulkHelloCashSync}
+            disabled={loading || cacheLoading}
+            variant="outline"
             size="sm"
             title="Alle aktiven Produkte mit HelloCash synchronisieren"
           >
             <Cloud className="h-4 w-4 mr-2" />
             Alle synchronisieren
           </Button>
-          <Button 
-            onClick={fetchCategoryMappings} 
-            disabled={loading || cacheLoading} 
-            variant="outline" 
+          <Button
+            onClick={fetchCategoryMappings}
+            disabled={loading || cacheLoading}
+            variant="outline"
             size="sm"
             title="Kategorie zu HelloCash Mapping verwalten"
           >
@@ -1216,7 +1238,7 @@ export default function ProductManagement() {
                               variant="outline"
                               size="sm"
                               onClick={handleCreateRawStockGroup}
-                              className="flex-1"
+                              className="flex-1 bg-transparent"
                             >
                               Erstellen
                             </Button>
@@ -1330,7 +1352,8 @@ export default function ProductManagement() {
                       Bestand in HelloCash-Kasse führen
                     </Label>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Wenn aktiviert (article_stock_status: 0), ändert HelloCash den Bestand bei Verkauf. Wenn deaktiviert (article_stock_status: 2), bleibt der Bestand unverändert.
+                      Wenn aktiviert (article_stock_status: 0), ändert HelloCash den Bestand bei Verkauf. Wenn
+                      deaktiviert (article_stock_status: 2), bleibt der Bestand unverändert.
                     </p>
                   </div>
                 </div>
@@ -1341,9 +1364,9 @@ export default function ProductManagement() {
                     <Select
                       value={formData.hellocash_category_id ? formData.hellocash_category_id.toString() : "none"}
                       onValueChange={(value) => {
-                        setFormData({ 
-                          ...formData, 
-                          hellocash_category_id: value === "none" ? null : parseInt(value)
+                        setFormData({
+                          ...formData,
+                          hellocash_category_id: value === "none" ? null : Number.parseInt(value),
                         })
                       }}
                     >
@@ -1364,9 +1387,9 @@ export default function ProductManagement() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
+                    <Button
+                      type="button"
+                      variant="outline"
                       size="sm"
                       onClick={fetchHelloCashCategories}
                       title="HelloCash Kategorien anzeigen"
@@ -1375,7 +1398,8 @@ export default function ProductManagement() {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Wählen Sie die passende HelloCash Kategorie-ID für die Synchronisation. Klicken Sie auf das Icon um die verfügbaren HelloCash Kategorien anzuzeigen.
+                    Wählen Sie die passende HelloCash Kategorie-ID für die Synchronisation. Klicken Sie auf das Icon um
+                    die verfügbaren HelloCash Kategorien anzuzeigen.
                   </p>
                 </div>
 
@@ -1438,7 +1462,8 @@ export default function ProductManagement() {
           <DialogHeader>
             <DialogTitle>Kategorie zu HelloCash Mapping</DialogTitle>
             <DialogDescription>
-              Ordnen Sie Ihre lokalen Kategorien den HelloCash Kategorien zu. Wählen Sie die passende HelloCash Kategorie aus dem Dropdown.
+              Ordnen Sie Ihre lokalen Kategorien den HelloCash Kategorien zu. Wählen Sie die passende HelloCash
+              Kategorie aus dem Dropdown.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1450,13 +1475,9 @@ export default function ProductManagement() {
                 <Select
                   value={category.hellocash_category_id?.toString() || "none"}
                   onValueChange={(value) => {
-                    const newValue = value === "none" ? null : parseInt(value)
-                    setTempCategoryMappings(mappings => 
-                      mappings.map(m => 
-                        m.id === category.id 
-                          ? { ...m, hellocash_category_id: newValue }
-                          : m
-                      )
+                    const newValue = value === "none" ? null : Number.parseInt(value)
+                    setTempCategoryMappings((mappings) =>
+                      mappings.map((m) => (m.id === category.id ? { ...m, hellocash_category_id: newValue } : m)),
                     )
                   }}
                 >
@@ -1466,14 +1487,9 @@ export default function ProductManagement() {
                   <SelectContent>
                     <SelectItem value="none">Keine Zuordnung</SelectItem>
                     {helloCashCategories.map((hcCat: any) => (
-                      <SelectItem 
-                        key={hcCat.article_category_id} 
-                        value={hcCat.article_category_id.toString()}
-                      >
+                      <SelectItem key={hcCat.article_category_id} value={hcCat.article_category_id.toString()}>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs text-muted-foreground">
-                            {hcCat.article_category_id}
-                          </span>
+                          <span className="font-mono text-xs text-muted-foreground">{hcCat.article_category_id}</span>
                           <span>{hcCat.article_category_name}</span>
                         </div>
                       </SelectItem>
@@ -1484,7 +1500,9 @@ export default function ProductManagement() {
             ))}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCategoryMappings(false)}>Abbrechen</Button>
+            <Button variant="outline" onClick={() => setShowCategoryMappings(false)}>
+              Abbrechen
+            </Button>
             <Button onClick={saveCategoryMappings}>Speichern</Button>
           </DialogFooter>
         </DialogContent>
@@ -1496,9 +1514,7 @@ export default function ProductManagement() {
             <Package className="h-5 w-5 mr-2" />
             Produktverwaltung
           </CardTitle>
-          <CardDescription>
-            Verwalten Sie Ihr Produktsortiment und Rohware-Gruppen
-          </CardDescription>
+          <CardDescription>Verwalten Sie Ihr Produktsortiment und Rohware-Gruppen</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -1632,8 +1648,8 @@ export default function ProductManagement() {
                                   <AlertDialogHeader>
                                     <AlertDialogTitle>Produkt löschen</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Sind Sie sicher, dass Sie "{product.name}" löschen möchten? Diese Aktion kann nicht
-                                      rückgängig gemacht werden.
+                                      Sind Sie sicher, dass Sie "{product.name}" löschen möchten? Diese Aktion kann
+                                      nicht rückgängig gemacht werden.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <AlertDialogFooter>
@@ -1671,6 +1687,7 @@ export default function ProductManagement() {
                       setIsCreatingGroup(true)
                       setEditingGroupName("")
                       setEditingGroupType("weight")
+                      setSelectedProductsForGroup([]) // Reset selected products when starting a new group creation
                     }}
                     disabled={isCreatingGroup}
                   >
@@ -1710,6 +1727,44 @@ export default function ProductManagement() {
                           </SelectContent>
                         </Select>
                       </div>
+
+                      <div className="space-y-2">
+                        <Label>Produkte zuordnen (optional)</Label>
+                        <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
+                          {products.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">Keine Produkte verfügbar</p>
+                          ) : (
+                            products.map((product) => (
+                              <label
+                                key={product.id}
+                                className="flex items-center gap-2 cursor-pointer hover:bg-accent p-1 rounded"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedProductsForGroup.includes(product.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedProductsForGroup([...selectedProductsForGroup, product.id])
+                                    } else {
+                                      setSelectedProductsForGroup(
+                                        selectedProductsForGroup.filter((id) => id !== product.id),
+                                      )
+                                    }
+                                  }}
+                                  className="h-4 w-4"
+                                />
+                                <span className="text-sm">{product.name}</span>
+                              </label>
+                            ))
+                          )}
+                        </div>
+                        {selectedProductsForGroup.length > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            {selectedProductsForGroup.length} Produkt(e) ausgewählt
+                          </p>
+                        )}
+                      </div>
+
                       <div className="flex gap-2">
                         <Button onClick={handleCreateNewGroup} disabled={loading}>
                           Erstellen
@@ -1719,6 +1774,7 @@ export default function ProductManagement() {
                           onClick={() => {
                             setIsCreatingGroup(false)
                             setEditingGroupName("")
+                            setSelectedProductsForGroup([])
                           }}
                         >
                           Abbrechen
@@ -1760,7 +1816,7 @@ export default function ProductManagement() {
                           </CardHeader>
                           <CardContent className="space-y-2 text-sm">
                             {(() => {
-                              const group = rawStockGroups.find(g => g.id === selectedRawGroup)
+                              const group = rawStockGroups.find((g) => g.id === selectedRawGroup)
                               if (!group) return null
                               return (
                                 <>
@@ -1792,11 +1848,11 @@ export default function ProductManagement() {
                           </CardHeader>
                           <CardContent>
                             {(() => {
-                              const group = rawStockGroups.find(g => g.id === selectedRawGroup)
+                              const group = rawStockGroups.find((g) => g.id === selectedRawGroup)
                               if (!group) return null
-                              
+
                               const productNames = group.product_names || []
-                              
+
                               if (productNames.length === 0) {
                                 return (
                                   <p className="text-sm text-muted-foreground text-center py-4">
@@ -1835,9 +1891,7 @@ export default function ProductManagement() {
                         <Card className="max-h-[500px] overflow-y-auto">
                           <CardContent className="p-4 space-y-2">
                             {productAssignments.length === 0 ? (
-                              <p className="text-sm text-muted-foreground text-center py-8">
-                                Keine Produkte verfügbar
-                              </p>
+                              <p className="text-sm text-muted-foreground text-center py-8">Keine Produkte verfügbar</p>
                             ) : (
                               productAssignments.map((assignment) => (
                                 <div
@@ -1858,7 +1912,8 @@ export default function ProductManagement() {
                                     {assignment.product_name}
                                     {assignment.current_raw_id && assignment.current_raw_id !== selectedRawGroup && (
                                       <span className="ml-2 text-xs text-muted-foreground">
-                                        (aktuell: {rawStockGroups.find(g => g.id === assignment.current_raw_id)?.product_group})
+                                        (aktuell:{" "}
+                                        {rawStockGroups.find((g) => g.id === assignment.current_raw_id)?.product_group})
                                       </span>
                                     )}
                                   </Label>

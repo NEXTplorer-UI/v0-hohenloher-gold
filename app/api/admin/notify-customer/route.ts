@@ -172,7 +172,7 @@ export async function POST(request: NextRequest) {
               delivery_date: item.delivery_schedule.delivery_date,
               pickup_time:
                 item.delivery_schedule.pickup_start_time && item.delivery_schedule.pickup_end_time
-                  ? `${item.delivery_schedule.pickup_start_time} - ${item.delivery_schedule.pickup_end_time}`
+                  ? `${item.delivery_schedule.pickup_start_time.substring(0, 5)} - ${item.delivery_schedule.pickup_end_time.substring(0, 5)}`
                   : null,
             }
           : null,

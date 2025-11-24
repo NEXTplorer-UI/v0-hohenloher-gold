@@ -3,7 +3,7 @@
  * Kombiniert Templates mit base-layout
  */
 
-import { wrapInBaseLayout } from "./base-layout"
+import { wrapInBaseLayout } from "./base-layout.tsx"
 import {
   orderConfirmationContent,
   pickupReminderContent,

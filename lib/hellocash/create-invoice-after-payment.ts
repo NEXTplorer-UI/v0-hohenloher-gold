@@ -44,10 +44,15 @@ export async function createInvoiceAfterPayment(
   discountPercent?: number, // Changed from discount (euro amount) to discountPercent
   cashierId?: number, // Added cashierId parameter
   invoiceText?: string, // Added invoiceText parameter for custom invoice text
+  includeCustomerAddress?: boolean, // New parameter to control customer address inclusion
 ): Promise<CreateInvoiceResult> {
   try {
     console.log("[v0] [create-invoice-after-payment] Creating invoice for order:", orderId)
     console.log("[v0] [create-invoice-after-payment] Test mode:", testMode ? "ENABLED" : "DISABLED")
+    console.log(
+      "[v0] [create-invoice-after-payment] Include customer address:",
+      includeCustomerAddress !== false ? "YES" : "NO", // Log customer address inclusion
+    )
     console.log(
       "[v0] [create-invoice-after-payment] Discount percent:",
       discountPercent ? `${discountPercent}%` : "None",
@@ -94,7 +99,7 @@ export async function createInvoiceAfterPayment(
     let customerData = null
     let helloCashUserId: number | null = null
 
-    if (order.customer_id) {
+    if (order.customer_id && includeCustomerAddress !== false) {
       const { data: customer, error: customerError } = await supabase
         .from("customers")
         .select("*")
@@ -155,6 +160,8 @@ export async function createInvoiceAfterPayment(
       } else {
         console.log("[v0] [create-invoice-after-payment] No customer data found or error:", customerError?.message)
       }
+    } else if (includeCustomerAddress === false) {
+      console.log("[v0] [create-invoice-after-payment] Skipping customer data (includeCustomerAddress=false)")
     }
 
     // Prepare helloCash invoice items
@@ -176,7 +183,7 @@ export async function createInvoiceAfterPayment(
 
     const invoicePayload: any = {
       invoice_paymentMethod: helloCashPaymentMethod, // Use mapped payment method
-      invoice_type: "json",
+      invoice_type: "pdf", // Changed from "json" to "pdf" to get PDF invoices
       items,
     }
 
@@ -198,6 +205,8 @@ export async function createInvoiceAfterPayment(
     if (helloCashUserId) {
       invoicePayload.invoice_user_id = helloCashUserId
       console.log("[v0] [create-invoice-after-payment] Using HelloCash user ID for invoice:", helloCashUserId)
+    } else if (includeCustomerAddress === false) {
+      console.log("[v0] [create-invoice-after-payment] No customer ID included (address excluded)")
     }
 
     if (order.order_time) {

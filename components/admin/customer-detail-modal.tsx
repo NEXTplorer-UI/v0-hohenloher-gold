@@ -2,9 +2,11 @@
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Edit } from "lucide-react"
-import { useState } from "react"
+import { Edit, Mail, Loader2 } from "lucide-react"
+import { useState, useEffect } from "react"
 import type { ExtendedCustomer } from "@/types/customer"
+import { useToast } from "@/hooks/use-toast"
+import { createBrowserClient } from "@/lib/supabase/client"
 
 function formatCurrency(amount?: number) {
   return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(amount ?? 0)
@@ -33,6 +35,74 @@ export default function CustomerDetailModal({
   const [customSubject, setCustomSubject] = useState("")
   const [customContent, setCustomContent] = useState("")
   const [selectedNotificationType, setSelectedNotificationType] = useState<string>("")
+  const { toast } = useToast()
+  const [resendingInvoice, setResendingInvoice] = useState<string | null>(null)
+  const [customerOrders, setCustomerOrders] = useState<any[]>([])
+  const [loadingOrders, setLoadingOrders] = useState(false)
+
+  useEffect(() => {
+    if (isOpen && customer?.id) {
+      const fetchCustomerOrders = async () => {
+        setLoadingOrders(true)
+        try {
+          const supabase = createBrowserClient()
+          const { data, error } = await supabase
+            .from("orders")
+            .select("id, order_number, created_at, total_amount, hellocash_invoice_id, hellocash_invoice_number")
+            .eq("customer_id", customer.id)
+            .order("created_at", { ascending: false })
+            .limit(10)
+
+          if (!error && data) {
+            setCustomerOrders(data)
+          }
+        } catch (error) {
+          console.error("[v0] Error fetching customer orders:", error)
+        } finally {
+          setLoadingOrders(false)
+        }
+      }
+
+      fetchCustomerOrders()
+    }
+  }, [isOpen, customer?.id])
+
+  const handleResendInvoice = async (orderId: string, orderNumber: string) => {
+    setResendingInvoice(orderId)
+    try {
+      const response = await fetch("/api/admin/resend-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        toast({
+          title: "Rechnung versendet",
+          description: data.pdfAttached
+            ? `Rechnung für Bestellung ${orderNumber} wurde erfolgreich per E-Mail versendet.`
+            : `E-Mail wurde versendet, aber PDF war zu groß für Anhang.`,
+        })
+      } else {
+        toast({
+          title: "Fehler",
+          description: data.error || "Rechnung konnte nicht versendet werden",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error resending invoice:", error)
+      toast({
+        title: "Fehler",
+        description: "Ein unerwarteter Fehler ist aufgetreten",
+        variant: "destructive",
+      })
+    } finally {
+      setResendingInvoice(null)
+    }
+  }
 
   if (!customer) return null
 
@@ -257,7 +327,6 @@ export default function CustomerDetailModal({
           </div>
         </section>
 
-        {/* Kategorien */}
         {!!customer.favorite_categories?.length && (
           <section className="mt-6 p-4 bg-gray-50 rounded-lg">
             <h3 className="font-semibold text-lg border-b pb-2 mb-3">Lieblingskategorien</h3>
@@ -276,7 +345,46 @@ export default function CustomerDetailModal({
           </section>
         )}
 
-        {/* Footer */}
+        <section className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <h3 className="font-semibold text-lg border-b pb-2 mb-3">Letzte Bestellungen</h3>
+          {loadingOrders ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : customerOrders.length > 0 ? (
+            <div className="space-y-2">
+              {customerOrders.map((order) => (
+                <div key={order.id} className="flex items-center justify-between p-3 border rounded-lg bg-white">
+                  <div className="flex-1">
+                    <div className="font-medium">#{order.order_number}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {formatDate(order.created_at)} • {formatCurrency(order.total_amount)}
+                    </div>
+                    {order.hellocash_invoice_number && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Rechnung: {order.hellocash_invoice_number}
+                      </div>
+                    )}
+                  </div>
+                  {order.hellocash_invoice_id && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleResendInvoice(order.id, order.order_number)}
+                      disabled={resendingInvoice === order.id}
+                    >
+                      <Mail className="h-4 w-4 mr-2" />
+                      {resendingInvoice === order.id ? "Wird gesendet..." : "Rechnung senden"}
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Noch keine Bestellungen</p>
+          )}
+        </section>
+
         <div className="mt-6 flex gap-2 justify-end border-t pt-4">
           <Button onClick={onClose} variant="outline">
             Schließen

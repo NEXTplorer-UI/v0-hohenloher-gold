@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
       testMode,
       cashierId,
       invoiceText,
+      includeCustomerAddress = true, // New parameter to control customer address
     } = await request.json()
 
     if (!orderId) {
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
         discountPercent,
         cashierId,
         invoiceText,
+        includeCustomerAddress,
       )
 
       if (!invoiceResult.success) {
@@ -161,10 +163,6 @@ export async function POST(request: NextRequest) {
         try {
           console.log("[v0] [mark-order-paid] Fetching invoice PDF...")
           console.log("[v0] [mark-order-paid] Invoice ID:", invoiceResult.invoiceId)
-          console.log(
-            "[v0] [mark-order-paid] API endpoint:",
-            `https://api.hellocash.business/api/v1/invoices/${invoiceResult.invoiceId}/pdf`,
-          )
 
           const pdfResponse = await fetch(
             `https://api.hellocash.business/api/v1/invoices/${invoiceResult.invoiceId}/pdf?cancellation=false&locale=de_DE`,
@@ -176,15 +174,21 @@ export async function POST(request: NextRequest) {
           )
 
           console.log("[v0] [mark-order-paid] PDF response status:", pdfResponse.status)
-          console.log("[v0] [mark-order-paid] PDF response headers:", Object.fromEntries(pdfResponse.headers.entries()))
 
           if (pdfResponse.ok) {
             console.log("[v0] [mark-order-paid] Converting PDF to buffer...")
-            const pdfBuffer = await pdfResponse.arrayBuffer() // This is correct - arrayBuffer() returns Promise<ArrayBuffer>
+            const pdfBuffer = await pdfResponse.arrayBuffer()
             console.log("[v0] [mark-order-paid] PDF buffer size:", pdfBuffer.byteLength, "bytes")
 
             if (pdfBuffer.byteLength === 0) {
               console.error("[v0] [mark-order-paid] PDF buffer is empty!")
+            } else if (pdfBuffer.byteLength > 3 * 1024 * 1024) {
+              console.warn(
+                "[v0] [mark-order-paid] PDF too large for email attachment:",
+                pdfBuffer.byteLength,
+                "bytes - skipping attachment",
+              )
+              console.log("[v0] [mark-order-paid] Invoice can be downloaded from HelloCash directly")
             } else {
               attachments.push({
                 filename: `Rechnung_${order.order_number}.pdf`,
@@ -203,12 +207,8 @@ export async function POST(request: NextRequest) {
           }
         } catch (pdfError) {
           console.error("[v0] [mark-order-paid] Error fetching invoice PDF:", pdfError)
-          console.error("[v0] [mark-order-paid] Error stack:", pdfError instanceof Error ? pdfError.stack : "No stack")
+          console.log("[v0] [mark-order-paid] Continuing without PDF attachment")
         }
-      } else {
-        console.log("[v0] [mark-order-paid] Skipping PDF fetch - Token or Invoice ID missing")
-        console.log("[v0] [mark-order-paid] Token available:", !!helloCashToken)
-        console.log("[v0] [mark-order-paid] Invoice ID:", invoiceResult?.invoiceId)
       }
 
       console.log("[v0] [mark-order-paid] Total attachments to send:", attachments.length)
@@ -250,10 +250,10 @@ export async function POST(request: NextRequest) {
 
       if (adminEmailResult.error) {
         console.error("[v0] [mark-order-paid] Failed to send admin email:", adminEmailResult.error)
-        throw new Error(`Failed to send admin email: ${adminEmailResult.error.message}`)
+        console.log("[v0] [mark-order-paid] Continuing despite admin email failure")
+      } else {
+        console.log("[v0] [mark-order-paid] Admin copy sent to:", adminEmail, "- Email ID:", adminEmailResult.data?.id)
       }
-
-      console.log("[v0] [mark-order-paid] Admin copy sent to:", adminEmail, "- Email ID:", adminEmailResult.data?.id)
 
       return NextResponse.json({
         success: true,

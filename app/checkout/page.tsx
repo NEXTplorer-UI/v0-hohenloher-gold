@@ -350,46 +350,7 @@ export default function CheckoutPage() {
     fetchPickupLocations()
   }, [])
 
-  const findNearestPickupLocations = (plz: string) => {
-    if (pickupLocations.length === 0) {
-      console.log("[v0] No pickup locations available yet")
-      return []
-    }
-
-    if (!plz || typeof plz !== "string" || plz.trim() === "") {
-      return pickupLocations.slice(0, 1) // Return first location as default
-    }
-
-    const userPlz = Number.parseInt(plz.trim(), 10)
-    if (!Number.isFinite(userPlz)) {
-      return pickupLocations.slice(0, 1)
-    }
-
-    // Calculate PLZ-based distances for all stations
-    const stationsWithDistance = pickupLocations
-      .map((station) => {
-        const pc = Number.parseInt(String(station.postal_code ?? "").trim(), 10)
-        if (!Number.isFinite(pc)) return null
-        return { ...station, plzDistance: Math.abs(userPlz - pc) }
-      })
-      .filter(Boolean) as Array<any & { plzDistance: number }>
-
-    if (stationsWithDistance.length === 0) {
-      return pickupLocations.slice(0, 1)
-    }
-
-    // Sort by PLZ distance
-    stationsWithDistance.sort((a, b) => a.plzDistance - b.plzDistance)
-    const nearest = stationsWithDistance[0]
-
-    // Show multiple stations if they're within similar PLZ range (threshold: 200)
-    const threshold = 200
-    const similarStations = stationsWithDistance.filter((s) => s.plzDistance <= nearest.plzDistance + threshold)
-
-    console.log("[v0] PLZ search for", plz, "found", similarStations.length, "similar stations")
-
-    return similarStations.length > 1 ? similarStations : [nearest]
-  }
+  // This function was never called - the checkout uses useNearbyPickups hook and lib/geo.ts instead
 
   const handlePickupLocationSearch = () => {
     if (!searchPlz || searchPlz.trim().length < 5) {

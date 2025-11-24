@@ -23,6 +23,7 @@ import {
   FileText,
   Printer,
   ExternalLink,
+  Send,
 } from "lucide-react"
 import { mapDBToUIStatus } from "@/lib/order-status-mapping"
 import type { EmailTemplateId } from "@/lib/email/build"
@@ -91,6 +92,15 @@ interface CustomerDetails {
   phone: string | null
 }
 
+interface OrderCardProps {
+  order: Order
+  isSelected: boolean
+  onSelectionChange: (orderId: string, selected: boolean) => void
+  onStatusChange: (orderId: string, status?: string, paymentStatus?: string) => void
+  onMarkAsPaid: (orderId: string) => void
+  onNotify: (orderId: string, templateId?: EmailTemplateId) => void
+}
+
 function parseBulkOrderNames(notes: string | null): string[] {
   if (!notes) return []
 
@@ -154,7 +164,20 @@ const OrderItem = memo(
     const [customerDetails, setCustomerDetails] = useState<CustomerDetails | null>(null)
     const [loadingCustomerDetails, setLoadingCustomerDetails] = useState(false)
 
-    const [selectedNotificationTemplate, setSelectedNotificationTemplate] = useState<EmailTemplateId | "">("")
+    // State and handler for notifications
+    const [selectedNotification, setSelectedNotification] = useState<EmailTemplateId | "">("")
+    const [isSendingNotification, setIsSendingNotification] = useState(false)
+
+    const handleSendNotification = async () => {
+      if (!selectedNotification) return
+      setIsSendingNotification(true) // Set loading state
+      try {
+        await onNotify(order.id, selectedNotification)
+      } finally {
+        setIsSendingNotification(false) // Reset loading state
+        setSelectedNotification("") // Clear selection after attempt
+      }
+    }
 
     const customerName = `${order.customer.first_name} ${order.customer.last_name}`
     const orderDate = new Date(order.created_at).toLocaleDateString("de-DE")
@@ -480,134 +503,181 @@ const OrderItem = memo(
             <div className="flex flex-col items-end gap-2">
               <span className="font-bold">€{order.total.toFixed(2)}</span>
 
-              {order.qr_code_url && (
-                <div className="mb-2">
-                  <img
-                    src={order.qr_code_url || "/placeholder.svg"}
-                    alt="QR Code"
-                    className="w-20 h-20 border rounded"
-                    title="QR-Code für Abholung"
-                  />
-                </div>
-              )}
-
-              {pickupUrl && (
-                <Button size="sm" variant="outline" onClick={() => window.open(pickupUrl, "_blank")} className="w-full">
-                  🎫 Bestellung anzeigen
-                </Button>
-              )}
-
-              {order.hellocash_invoice_id && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleSyncStatus}
-                  disabled={isSyncing}
-                  className="w-full bg-transparent"
-                >
-                  {isSyncing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Synchronisiere...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Status aktualisieren
-                    </>
+              <div className="flex flex-col lg:flex-row lg:items-start gap-2 w-full lg:w-auto">
+                {/* Left side: Action buttons */}
+                <div className="flex flex-col gap-2 w-full lg:w-auto">
+                  {order.qr_code_url && (
+                    <div className="lg:hidden mb-2 flex justify-center">
+                      <img
+                        src={order.qr_code_url || "/placeholder.svg"}
+                        alt="QR Code"
+                        className="w-20 h-20 border rounded"
+                        title="QR-Code für Abholung"
+                      />
+                    </div>
                   )}
-                </Button>
-              )}
 
-              {order.hellocash_invoice_id && order.payment_status === "paid" && (
-                <div className="flex gap-2 w-full">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => window.open(`/api/invoices/${order.id}/pdf`, "_blank")}
-                    className="flex-1"
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    Rechnung
-                  </Button>
-                  {order.status !== "cancelled" && (
+                  {pickupUrl && (
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setShowCancelModal(true)}
-                      className="flex-1 text-destructive hover:text-destructive"
+                      onClick={() => window.open(pickupUrl, "_blank")}
+                      className="w-full"
                     >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Stornieren
+                      🎫 Bestellung anzeigen
                     </Button>
                   )}
+
+                  {order.hellocash_invoice_id && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSyncStatus}
+                      disabled={isSyncing}
+                      className="w-full bg-transparent"
+                    >
+                      {isSyncing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Synchronisiere...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Status aktualisieren
+                        </>
+                      )}
+                    </Button>
+                  )}
+
+                  {order.hellocash_invoice_id && order.payment_status === "paid" && (
+                    <div className="flex gap-2 w-full">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => window.open(`/api/invoices/${order.id}/pdf`, "_blank")}
+                        className="flex-1"
+                      >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Rechnung
+                      </Button>
+                      {order.status !== "cancelled" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setShowCancelModal(true)}
+                          className="flex-1 text-destructive hover:text-destructive"
+                        >
+                          <XCircle className="h-4 w-4 mr-2" />
+                          Stornieren
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {order.hellocash_invoice_id && order.status === "cancelled" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(`/api/invoices/${order.id}/pdf?cancellation=true`, "_blank")}
+                      className="w-full"
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      Storno-Beleg
+                    </Button>
+                  )}
+
+                  {order.payment_status !== "paid" && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => onMarkAsPaid(order.id)}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      Als bezahlt markieren
+                    </Button>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-2 w-full">
+                    <Select value={uiStatus} onValueChange={(value) => onStatusChange(order.id, value, undefined)}>
+                      <SelectTrigger className="w-full sm:w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Ausstehend</SelectItem>
+                        <SelectItem value="confirmed">Bestätigt</SelectItem>
+                        <SelectItem value="ready">Bereit</SelectItem>
+                        <SelectItem value="picked_up">Abgeholt</SelectItem>
+                        <SelectItem value="cancelled">Storniert</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={order.payment_status}
+                      onValueChange={(value) => onStatusChange(order.id, undefined, value)}
+                    >
+                      <SelectTrigger className="w-full sm:w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Ausstehend</SelectItem>
+                        <SelectItem value="paid">Bezahlt</SelectItem>
+                        <SelectItem value="failed">Fehlgeschlagen</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2 w-full">
+                    <Select
+                      value={selectedNotification}
+                      onValueChange={(value) => setSelectedNotification(value as EmailTemplateId)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <Mail className="h-4 w-4 mr-2" />
+                        <SelectValue placeholder="Benachrichtigung wählen" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="orderConfirmation">Bestellbestätigung</SelectItem>
+                        <SelectItem value="readyForPickup">Abholbereit</SelectItem>
+                        <SelectItem value="orderPickedUp">Abgeholt (Danke)</SelectItem>
+                        <SelectItem value="shippingNotification">Versandbestätigung</SelectItem>
+                        <SelectItem value="orderCancelled">Stornierung</SelectItem>
+                        <SelectItem value="pickupReminder">Abholtermin-Erinnerung</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={handleSendNotification}
+                      disabled={!selectedNotification || isSendingNotification}
+                      className="w-full sm:w-auto whitespace-nowrap"
+                    >
+                      {isSendingNotification ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Sendet...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-4 w-4 mr-2" />
+                          Senden
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-              )}
 
-              {order.hellocash_invoice_id && order.status === "cancelled" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => window.open(`/api/invoices/${order.id}/pdf?cancellation=true`, "_blank")}
-                  className="w-full"
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Storno-Beleg
-                </Button>
-              )}
-
-              {order.payment_status !== "paid" && (
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => onMarkAsPaid(order.id)}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white"
-                >
-                  Als bezahlt markieren
-                </Button>
-              )}
-
-              <div className="flex gap-2">
-                <Select value={uiStatus} onValueChange={(value) => onStatusChange(order.id, value, undefined)}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Ausstehend</SelectItem>
-                    <SelectItem value="confirmed">Bestätigt</SelectItem>
-                    <SelectItem value="ready">Bereit</SelectItem>
-                    <SelectItem value="picked_up">Abgeholt</SelectItem>
-                    <SelectItem value="cancelled">Storniert</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={order.payment_status}
-                  onValueChange={(value) => onStatusChange(order.id, undefined, value)}
-                >
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Ausstehend</SelectItem>
-                    <SelectItem value="paid">Bezahlt</SelectItem>
-                    <SelectItem value="failed">Fehlgeschlagen</SelectItem>
-                  </SelectContent>
-                </Select>
+                {/* Right side: QR code (desktop only) */}
+                {order.qr_code_url && (
+                  <div className="hidden lg:block ml-4">
+                    <img
+                      src={order.qr_code_url || "/placeholder.svg"}
+                      alt="QR Code"
+                      className="w-20 h-20 border rounded"
+                      title="QR-Code für Abholung"
+                    />
+                  </div>
+                )}
               </div>
-              <Select onValueChange={(templateId) => onNotify(order.id, templateId as EmailTemplateId)}>
-                <SelectTrigger className="w-full">
-                  <Mail className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="Benachrichtigung senden" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="orderConfirmation">Bestellbestätigung</SelectItem>
-                  <SelectItem value="readyForPickup">Abholbereit</SelectItem>
-                  <SelectItem value="orderPickedUp">Abgeholt (Danke)</SelectItem>
-                  <SelectItem value="shippingNotification">Versandbestätigung</SelectItem>
-                  <SelectItem value="orderCancelled">Stornierung</SelectItem>
-                  <SelectItem value="pickupReminder">Abholtermin-Erinnerung</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </div>
         </div>
@@ -742,6 +812,7 @@ function OrderManagement() {
   const [discountPercent, setDiscountPercent] = useState<string>("")
   const [customDiscountPercent, setCustomDiscountPercent] = useState<string>("")
   const [invoiceTestMode, setInvoiceTestMode] = useState<boolean>(false)
+  const [includeCustomerAddress, setIncludeCustomerAddress] = useState<boolean>(true) // Added state for customer address checkbox
   const [helloCashEmployees, setHelloCashEmployees] = useState<any[]>([])
   const [selectedCashierId, setSelectedCashierId] = useState<string>("")
   const [loadingEmployees, setLoadingEmployees] = useState(false)
@@ -749,6 +820,10 @@ function OrderManagement() {
   const [isMarkingAsPaid, setIsMarkingAsPaid] = useState(false)
 
   const [invoiceText, setInvoiceText] = useState("")
+
+  // State for notifications (moved from OrderItem)
+  const [selectedNotification, setSelectedNotification] = useState<EmailTemplateId | "">("")
+  const [isSendingNotification, setIsSendingNotification] = useState(false)
 
   const [showNewCustomerDialog, setShowNewCustomerDialog] = useState(false)
   const [newCustomerForm, setNewCustomerForm] = useState({
@@ -1055,6 +1130,7 @@ function OrderManagement() {
           showSubtotals: options.showSubtotals.toString(),
           emptyLinesBetweenGroups: options.emptyLinesBetweenGroups.toString(),
           showGroupHeaders: options.showGroupHeaders.toString(),
+          includeCustomerAddress: includeCustomerAddress.toString(), // Added for address inclusion
         })
 
         if (orderIds && orderIds.length > 0) {
@@ -1094,7 +1170,7 @@ function OrderManagement() {
         })
       }
     },
-    [toast],
+    [toast, includeCustomerAddress], // Added includeCustomerAddress to dependencies
   )
 
   const handleNotify = useCallback(
@@ -1102,6 +1178,7 @@ function OrderManagement() {
       const order = orders.find((o) => o.id === orderId)
       if (!order) return
 
+      // Moved loading state and reset selected notification logic to OrderItem
       try {
         console.log(`[v0] Sending notification for order ${order.order_number}`)
 
@@ -1118,18 +1195,29 @@ function OrderManagement() {
 
         if (response.ok) {
           console.log(`[v0] Notification sent successfully for order ${order.order_number}`)
-          alert(`Benachrichtigung wurde an ${order.customer.email} gesendet`)
+          toast({
+            title: "Benachrichtigung gesendet",
+            description: `Eine ${templateId || "Standard-Benachrichtigung"} wurde an ${order.customer.email} gesendet.`,
+          })
         } else {
           const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
           console.error(`[v0] Failed to send notification for order ${order.order_number}:`, errorData)
-          alert(`Fehler: ${errorData.error || "Benachrichtigung konnte nicht gesendet werden"}`)
+          toast({
+            title: "Fehler beim Senden",
+            description: errorData.error || "Benachrichtigung konnte nicht gesendet werden",
+            variant: "destructive",
+          })
         }
       } catch (error) {
         console.error(`[v0] Error sending notification:`, error)
-        alert(`Fehler: ${error instanceof Error ? error.message : "Unbekannter Fehler"}`)
+        toast({
+          title: "Fehler",
+          description: error instanceof Error ? error.message : "Unbekannter Fehler",
+          variant: "destructive",
+        })
       }
     },
-    [orders],
+    [orders, toast], // Added toast to dependencies
   )
 
   const handleStatusChange = useCallback(
@@ -1137,6 +1225,8 @@ function OrderManagement() {
       try {
         console.log(`[v0] Updating order ${orderId} status:`, { status, paymentStatus })
 
+        // Optimistic update
+        const previousOrder = orders.find((o) => o.id === orderId)
         updateOrdersCache((prevOrders) =>
           prevOrders?.map((order) => {
             if (order.id === orderId) {
@@ -1167,6 +1257,7 @@ function OrderManagement() {
 
           const { order: updatedOrder } = await response.json()
 
+          // Update cache with actual data from backend
           updateOrdersCache((prevOrders) =>
             prevOrders?.map((order) => {
               if (order.id === orderId && updatedOrder) {
@@ -1188,6 +1279,7 @@ function OrderManagement() {
           const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
           console.error(`[v0] Failed to update order status:`, errorData)
 
+          // Revert optimistic update if failed
           await fetchOrders()
 
           toast({
@@ -1199,6 +1291,7 @@ function OrderManagement() {
       } catch (error) {
         console.error(`[v0] Error updating order status:`, error)
 
+        // Revert optimistic update if failed
         await fetchOrders()
 
         toast({
@@ -1208,13 +1301,26 @@ function OrderManagement() {
         })
       }
     },
-    [updateOrdersCache, fetchOrders, toast],
+    [updateOrdersCache, fetchOrders, toast, orders], // Added orders to dependencies
   )
 
   const handleAdminNotesChange = useCallback(
     async (orderId: string, adminNotes: string) => {
       try {
         console.log(`[v0] Updating admin notes for order ${orderId}`)
+
+        // Optimistic update
+        updateOrdersCache((prevOrders) =>
+          prevOrders?.map((order) => {
+            if (order.id === orderId) {
+              return {
+                ...order,
+                admin_notes: adminNotes,
+              }
+            }
+            return order
+          }),
+        )
 
         const response = await fetch("/api/admin/update-order-notes", {
           method: "POST",
@@ -1230,6 +1336,7 @@ function OrderManagement() {
         if (response.ok) {
           console.log(`[v0] Admin notes updated successfully`)
 
+          // Update cache with actual data from backend
           updateOrdersCache((prevOrders) =>
             prevOrders?.map((order) => {
               if (order.id === orderId) {
@@ -1250,6 +1357,9 @@ function OrderManagement() {
           const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
           console.error(`[v0] Failed to update admin notes:`, errorData)
 
+          // Revert optimistic update if failed
+          await fetchOrders()
+
           toast({
             title: "Fehler",
             description: errorData.error || "Notizen konnten nicht gespeichert werden",
@@ -1259,6 +1369,9 @@ function OrderManagement() {
       } catch (error) {
         console.error(`[v0] Error updating admin notes:`, error)
 
+        // Revert optimistic update if failed
+        await fetchOrders()
+
         toast({
           title: "Fehler",
           description: error instanceof Error ? error.message : "Unbekannter Fehler",
@@ -1266,7 +1379,7 @@ function OrderManagement() {
         })
       }
     },
-    [updateOrdersCache, toast],
+    [updateOrdersCache, fetchOrders, toast],
   )
 
   // Added handleSyncStatus function
@@ -1329,7 +1442,8 @@ function OrderManagement() {
       try {
         console.log(`[v0] Cancelling invoice for order ${order.order_number}`)
 
-        const reason = prompt("Stornierungsgrund:") // Using prompt for simplicity as per update's implication
+        // Use a more descriptive prompt or an input field if available
+        const reason = prompt("Stornierungsgrund:")
         if (!reason) return
 
         const response = await fetch(`/api/admin/invoices/${orderId}/cancel`, {
@@ -1495,6 +1609,7 @@ function OrderManagement() {
           testMode: invoiceTestMode,
           cashierId: selectedCashierId ? Number.parseInt(selectedCashierId) : undefined,
           invoiceText: invoiceText || undefined,
+          includeCustomerAddress,
         }),
       })
 
@@ -1516,6 +1631,7 @@ function OrderManagement() {
         setDiscountPercent("")
         setCustomDiscountPercent("")
         setInvoiceTestMode(false)
+        setIncludeCustomerAddress(true)
         setSelectedCashierId("")
         setInvoiceText("")
 
@@ -1545,10 +1661,11 @@ function OrderManagement() {
     discountPercent,
     customDiscountPercent,
     invoiceTestMode,
+    includeCustomerAddress,
     selectedCashierId,
     invoiceText,
     orders,
-    fetchOrders, // Ensure fetchOrders is included in dependencies
+    fetchOrders,
     toast,
   ])
 
@@ -2026,7 +2143,7 @@ function OrderManagement() {
               )}
             </div>
 
-            {/* CHANGE: Added print QR codes button */}
+            {/* CHANGE: Increased height to show more orders and reduced bottom margin */}
             <Button onClick={() => window.open("/admin/print-qr-codes", "_blank")} variant="outline">
               <Printer className="h-4 w-4 mr-2" />
               QR-Codes drucken
@@ -2282,6 +2399,22 @@ function OrderManagement() {
                       </p>
                     </div>
                   </div>
+
+                  <div className="flex items-center space-x-2 p-3 border rounded-md bg-blue-50">
+                    <Checkbox
+                      id="includeCustomerAddress"
+                      checked={includeCustomerAddress}
+                      onCheckedChange={(checked) => setIncludeCustomerAddress(checked as boolean)}
+                    />
+                    <div className="flex flex-col">
+                      <Label htmlFor="includeCustomerAddress" className="cursor-pointer font-medium">
+                        Kundenadresse auf Rechnung anzeigen
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Deaktivieren um Rechnungen ohne Kundenanschrift zu erstellen
+                      </p>
+                    </div>
+                  </div>
                 </>
               )}
 
@@ -2296,6 +2429,7 @@ function OrderManagement() {
                     setDiscountPercent("")
                     setCustomDiscountPercent("")
                     setInvoiceTestMode(false)
+                    setIncludeCustomerAddress(true) // Resetting the new state
                     setSelectedCashierId("")
                     setInvoiceText("")
                   }}

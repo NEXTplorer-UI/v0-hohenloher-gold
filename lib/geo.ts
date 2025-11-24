@@ -71,11 +71,26 @@ export function plzPrefixMatchScore(userPlz: string, locationPlz: string): numbe
 
 /**
  * Calculate PLZ distance score (numeric difference)
+ * Added prefix-aware distance calculation for incomplete postal codes
  */
 export function plzDistanceScore(userPlz: string, locationPlz: string): number {
-  const up = plzToNumber(userPlz)
-  const lp = plzToNumber(locationPlz)
-  return Math.abs(up - lp)
+  const up = normalizePlz(userPlz)
+  const lp = normalizePlz(locationPlz)
+
+  // Return 0 distance for perfect regional match
+  if (up.startsWith(lp)) {
+    return 0
+  }
+
+  // Return very small distance (1) to prioritize over non-matching regions
+  if (lp.startsWith(up)) {
+    return 1
+  }
+
+  // Otherwise calculate numeric distance
+  const upNum = plzToNumber(up)
+  const lpNum = plzToNumber(lp)
+  return Math.abs(upNum - lpNum)
 }
 
 /**
@@ -119,14 +134,12 @@ export function rankLocations(
       const delta = plzDistanceScore(userPlz, loc.postal_code)
       const prefixBonus = plzPrefixMatchScore(userPlz, loc.postal_code)
 
-      if (delta <= maxPlzDelta) {
-        ranked.push({
-          ...loc,
-          approxPlzDelta: delta,
-          score: delta - prefixBonus * 50, // Bonus reduces score (better ranking)
-          reason: "plz",
-        })
-      }
+      ranked.push({
+        ...loc,
+        approxPlzDelta: delta,
+        score: delta - prefixBonus * 50, // Bonus reduces score (better ranking)
+        reason: "plz",
+      })
     }
   }
 

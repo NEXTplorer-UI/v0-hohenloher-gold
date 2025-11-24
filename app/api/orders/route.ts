@@ -372,20 +372,23 @@ export async function POST(request: NextRequest) {
 
     if (!autoFilledDistributionPersonId && customer.default_distribution_person_id) {
       autoFilledDistributionPersonId = customer.default_distribution_person_id
-      console.log("[/api/orders] Auto-filled distribution_person_id from customer default:", autoFilledDistributionPersonId)
+      console.log(
+        "[/api/orders] Auto-filled distribution_person_id from customer default:",
+        autoFilledDistributionPersonId,
+      )
     }
 
     if (!autoFilledPickupLocationId && customer.default_pickup_location_id) {
       autoFilledPickupLocationId = customer.default_pickup_location_id
       console.log("[/api/orders] Auto-filled pickup_location_id from customer default:", autoFilledPickupLocationId)
-      
+
       // Also update pickupLocationNormalized based on the default location
       const { data: defaultLocation } = await supabase
         .from("pickup_locations")
         .select("name, address")
         .eq("id", autoFilledPickupLocationId)
         .single()
-      
+
       if (defaultLocation) {
         pickupLocationNormalized = `${defaultLocation.name}, ${defaultLocation.address}`
         normalizedLocationId = autoFilledPickupLocationId
@@ -582,17 +585,13 @@ export async function POST(request: NextRequest) {
         savedOrder.pickup_location.trim() === "")
     ) {
       if (orderData.notes && orderData.notes.trim().length > 0) {
-        console.log(
-          "[/api/orders] Attempting to parse pickup location from comment..."
-        )
+        console.log("[/api/orders] Attempting to parse pickup location from comment...")
 
-        const parsedLocation = await parsePickupLocationFromComment(
-          orderData.notes
-        )
+        const parsedLocation = await parsePickupLocationFromComment(orderData.notes)
 
         if (parsedLocation.found && parsedLocation.confidence !== "low") {
           console.log(
-            `[/api/orders] Found pickup location in comment: ${parsedLocation.pickupLocationName} (confidence: ${parsedLocation.confidence})`
+            `[/api/orders] Found pickup location in comment: ${parsedLocation.pickupLocationName} (confidence: ${parsedLocation.confidence})`,
           )
 
           // Update order with parsed pickup location
@@ -606,19 +605,12 @@ export async function POST(request: NextRequest) {
             .eq("id", savedOrder.id)
 
           if (updateError) {
-            console.error(
-              "[/api/orders] Error updating order with parsed location:",
-              updateError
-            )
+            console.error("[/api/orders] Error updating order with parsed location:", updateError)
           } else {
-            console.log(
-              "[/api/orders] Successfully updated order with parsed pickup location"
-            )
+            console.log("[/api/orders] Successfully updated order with parsed pickup location")
           }
         } else {
-          console.log(
-            "[/api/orders] No pickup location found in comment or confidence too low"
-          )
+          console.log("[/api/orders] No pickup location found in comment or confidence too low")
         }
       }
     }
@@ -662,7 +654,7 @@ export async function POST(request: NextRequest) {
             customerName: `${updatedOrder.customer.first_name || ""} ${updatedOrder.customer.last_name || ""}`.trim(),
             orderNumber: updatedOrder.order_number || "",
             orderId: updatedOrder.order_number || "",
-            orderDate: updatedOrder.created_at ? new Date(updatedOrder.created_at).toLocaleDateString("de-DE") : "",
+            orderDate: updatedOrder.created_at || "", // Pass ISO date string instead of formatted date for payment deadline calculation
             orderTotal: updatedOrder.total ? updatedOrder.total.toFixed(2) : "0.00",
             total: updatedOrder.total ? updatedOrder.total.toFixed(2) : "0.00",
             subtotal: updatedOrder.subtotal ? updatedOrder.subtotal.toFixed(2) : "0.00",
@@ -679,7 +671,7 @@ export async function POST(request: NextRequest) {
             })),
           }
 
-          const { subject, html } = buildEmail("paymentReceipt", emailVars, emailCopy)
+          const { subject, html } = buildEmail("orderConfirmation", emailVars, emailCopy)
 
           let attachments: Array<{ filename: string; content: string }> | undefined
 

@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     }
 
     const { data, error } = await supabase.rpc("crm_customers_search", {
-      q,
+      search_query: q,
       limit_count: limit,
       offset_count: offset,
     })
