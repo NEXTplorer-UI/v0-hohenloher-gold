@@ -17,7 +17,15 @@ export async function POST(request: NextRequest) {
   try {
     console.log("[v0] [mark-order-paid] Starting mark as paid process")
 
-    const { orderId, paymentMethod, createInvoice = true, discountPercent, testMode, cashierId } = await request.json()
+    const {
+      orderId,
+      paymentMethod,
+      createInvoice = true,
+      discountPercent,
+      testMode,
+      cashierId,
+      invoiceText,
+    } = await request.json()
 
     if (!orderId) {
       return NextResponse.json({ error: "Order ID required" }, { status: 400 })
@@ -62,7 +70,14 @@ export async function POST(request: NextRequest) {
     if (createInvoice) {
       // STEP 1: Create HelloCash invoice FIRST
       console.log("[v0] [mark-order-paid] Step 1: Creating HelloCash invoice...")
-      invoiceResult = await createInvoiceAfterPayment(orderId, paymentMethod, testMode, discountPercent, cashierId)
+      invoiceResult = await createInvoiceAfterPayment(
+        orderId,
+        paymentMethod,
+        testMode,
+        discountPercent,
+        cashierId,
+        invoiceText,
+      )
 
       if (!invoiceResult.success) {
         console.error("[v0] [mark-order-paid] Invoice creation failed:", invoiceResult.error)
@@ -199,7 +214,7 @@ export async function POST(request: NextRequest) {
       console.log("[v0] [mark-order-paid] Total attachments to send:", attachments.length)
 
       // Send email to customer
-      await resend.emails.send({
+      const customerEmailResult = await resend.emails.send({
         from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
         to: order.customers.email,
         subject,
@@ -207,11 +222,23 @@ export async function POST(request: NextRequest) {
         attachments,
       })
 
-      console.log("[v0] [mark-order-paid] Payment receipt email sent to:", order.customers.email)
+      console.log("[v0] [mark-order-paid] Customer email send result:", JSON.stringify(customerEmailResult, null, 2))
+
+      if (customerEmailResult.error) {
+        console.error("[v0] [mark-order-paid] Failed to send customer email:", customerEmailResult.error)
+        throw new Error(`Failed to send customer email: ${customerEmailResult.error.message}`)
+      }
+
+      console.log(
+        "[v0] [mark-order-paid] Payment receipt email sent to:",
+        order.customers.email,
+        "- Email ID:",
+        customerEmailResult.data?.id,
+      )
 
       // Send copy to admin
       const adminEmail = process.env.SUMUP_PAY_TO_EMAIL || "info@suedfruechte-hohenlohe.de"
-      await resend.emails.send({
+      const adminEmailResult = await resend.emails.send({
         from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
         to: adminEmail,
         subject: `[KOPIE] ${subject}`,
@@ -219,7 +246,14 @@ export async function POST(request: NextRequest) {
         attachments,
       })
 
-      console.log("[v0] [mark-order-paid] Admin copy sent to:", adminEmail)
+      console.log("[v0] [mark-order-paid] Admin email send result:", JSON.stringify(adminEmailResult, null, 2))
+
+      if (adminEmailResult.error) {
+        console.error("[v0] [mark-order-paid] Failed to send admin email:", adminEmailResult.error)
+        throw new Error(`Failed to send admin email: ${adminEmailResult.error.message}`)
+      }
+
+      console.log("[v0] [mark-order-paid] Admin copy sent to:", adminEmail, "- Email ID:", adminEmailResult.data?.id)
 
       return NextResponse.json({
         success: true,

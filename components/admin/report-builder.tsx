@@ -1,7 +1,9 @@
 "use client"
 import { useState, useMemo } from "react"
+import { DialogFooter } from "@/components/ui/dialog"
+
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -18,8 +20,21 @@ import {
   type ColumnOrderState,
 } from "@tanstack/react-table"
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Download, GripVertical, Settings, ArrowUpDown } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import { Download, GripVertical, Settings, ArrowUpDown, FileSpreadsheet, Plus, Trash2 } from "lucide-react"
+import ExcelJS from "exceljs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { toast } from "sonner"
 
 const AVAILABLE_COLUMNS = [
   { id: "order_number", label: "Bestellnummer", type: "string" },
@@ -42,54 +57,86 @@ const AVAILABLE_COLUMNS = [
   { id: "product_category", label: "Warengruppe", type: "string" },
 ]
 
-const TEMPLATES = [
-  {
-    id: "tour-picking",
-    name: "Tour-Kommissionierung",
-    description: "Gruppiert nach Abholort, zeigt Produkte und Mengen",
-    columns: ["pickup_location_normalized", "products", "product_count", "customer_name"],
-    groupBy: ["pickup_location_normalized"],
-    aggregations: [{ field: "product_count", function: "sum" }],
-  },
-  {
-    id: "packing-list",
-    name: "Packliste",
-    description: "Pro Verteilperson, sortiert nach Abholort",
-    columns: ["distribution_person", "pickup_location_normalized", "customer_name", "products", "total"],
-    groupBy: ["pickup_location_normalized"],
-    aggregations: [{ field: "total", function: "sum" }],
-  },
-  {
-    id: "customer-overview",
-    name: "Kundenübersicht",
-    description: "Alle Bestellungen gruppiert nach Kunde",
-    columns: ["customer_name", "customer_phone", "order_number", "pickup_location_normalized", "total"],
-    groupBy: ["customer_name"],
-    aggregations: [{ field: "total", function: "sum" }],
-  },
-  {
-    id: "location-analysis",
-    name: "Abholort-Analyse",
-    description: "Statistiken pro Abholort",
-    columns: ["pickup_location_normalized", "customer_name", "product_count", "total"],
-    groupBy: ["pickup_location_normalized"],
-    aggregations: [
-      { field: "product_count", function: "sum" },
-      { field: "total", function: "sum" },
-    ],
-  },
-  {
-    id: "payment-overview",
-    name: "Zahlungsübersicht",
-    description: "Gruppiert nach Zahlungsart",
-    columns: ["payment_method", "customer_name", "order_number", "total", "payment_status"],
-    groupBy: ["payment_method"],
-    aggregations: [{ field: "total", function: "sum" }],
-  },
-]
+// const TEMPLATES = [
+//   {
+//     id: "tour-picking",
+//     name: "Tour-Kommissionierung",
+//     description: "Gruppiert nach Abholort, zeigt Produkte und Mengen",
+//     columns: ["pickup_location_normalized", "products", "product_count", "customer_name"],
+//     groupBy: ["pickup_location_normalized"],
+//     aggregations: [{ field: "product_count", function: "sum" }],
+//   },
+//   {
+//     id: "packing-list",
+//     name: "Packliste",
+//     description: "Pro Verteilperson, sortiert nach Abholort",
+//     columns: ["distribution_person", "pickup_location_normalized", "customer_name", "products", "total"],
+//     groupBy: ["pickup_location_normalized"],
+//     aggregations: [{ field: "total", function: "sum" }],
+//   },
+//   {
+//     id: "customer-overview",
+//     name: "Kundenübersicht",
+//     description: "Alle Bestellungen gruppiert nach Kunde",
+//     columns: ["customer_name", "customer_phone", "order_number", "pickup_location_normalized", "total"],
+//     groupBy: ["customer_name"],
+//     aggregations: [{ field: "total", function: "sum" }],
+//   },
+//   {
+//     id: "location-analysis",
+//     name: "Abholort-Analyse",
+//     description: "Statistiken pro Abholort",
+//     columns: ["pickup_location_normalized", "customer_name", "product_count", "total"],
+//     groupBy: ["pickup_location_normalized"],
+//     aggregations: [
+//       { field: "product_count", function: "sum" },
+//       { field: "total", function: "sum" },
+//     ],
+//   },
+//   {
+//     id: "payment-overview",
+//     name: "Zahlungsübersicht",
+//     description: "Gruppiert nach Zahlungsart",
+//     columns: ["payment_method", "customer_name", "order_number", "total", "payment_status"],
+//     groupBy: ["payment_method"],
+//     aggregations: [{ field: "total", function: "sum" }],
+//   },
+// ]
+
+interface ExcelExportOptions {
+  // Text-Formatierung
+  wrapText: boolean
+  fontSize: 10 | 11 | 12 | 14
+  fontFamily: "Arial" | "Calibri" | "Times New Roman"
+
+  // Spalten
+  autoWidth: boolean
+
+  // Zeilen
+  headerBackground: string
+  headerBold: boolean
+  alternatingRows: boolean
+
+  // Gruppierung
+  preserveGrouping: boolean
+  groupBackground: string
+
+  // Summen/Aggregationen
+  includeAggregations: boolean
+  aggregationBackground: string
+
+  // Rahmen
+  showBorders: boolean
+  borderStyle: "thin" | "medium" | "thick"
+}
 
 export default function ReportBuilder() {
-  const [selectedTemplate, setSelectedTemplate] = useState<string>("")
+  const [selectedPreset, setSelectedPreset] = useState<string>("")
+  const [showSavePresetDialog, setShowSavePresetDialog] = useState(false)
+  const [presetName, setPresetName] = useState("")
+  const [presetDescription, setPresetDescription] = useState("")
+  const [isSavingPreset, setIsSavingPreset] = useState(false)
+
   const [selectedColumns, setSelectedColumns] = useState<string[]>([
     "order_number",
     "customer_name",
@@ -119,6 +166,38 @@ export default function ReportBuilder() {
   const [showAggregations, setShowAggregations] = useState(true)
   const [wrapText, setWrapText] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+
+  const [showExcelOptionsDialog, setShowExcelOptionsDialog] = useState(false)
+  const [excelOptions, setExcelOptions] = useState<ExcelExportOptions>({
+    wrapText: true,
+    fontSize: 11,
+    fontFamily: "Calibri",
+    autoWidth: true,
+    headerBackground: "#e5e7eb",
+    headerBold: true,
+    alternatingRows: true,
+    preserveGrouping: true,
+    groupBackground: "#f3f4f6",
+    includeAggregations: true,
+    aggregationBackground: "#dbeafe",
+    showBorders: true,
+    borderStyle: "thin",
+  })
+
+  const { data: presetsData, mutate: mutatePresets } = useSWR(
+    "/api/admin/report-presets",
+    async (url) => {
+      const res = await fetch(url)
+      if (!res.ok) return { presets: [] }
+      return res.json()
+    },
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    },
+  )
+
+  const presets = presetsData?.presets || []
 
   const { data: pickupLocationsData } = useSWR(
     "/api/admin/pickup-locations",
@@ -154,14 +233,95 @@ export default function ReportBuilder() {
 
   const tours = Array.isArray(toursData?.routes) ? toursData.routes.filter((route: any) => route.is_active) : []
 
-  const applyTemplate = (templateId: string) => {
-    const template = TEMPLATES.find((t) => t.id === templateId)
-    if (template) {
-      setSelectedTemplate(templateId)
-      setSelectedColumns([...template.columns])
-      setGroupBy([...(template.groupBy || [])])
-      setAggregations([...(template.aggregations || [])])
-      setColumnOrderState([...template.columns])
+  const loadPreset = (presetId: string) => {
+    const preset = presets.find((p: any) => p.id === presetId)
+    if (preset) {
+      setSelectedPreset(presetId)
+      setSelectedColumns(preset.columns || [])
+      setColumnOrderState(preset.column_order || preset.columns || [])
+      setColumnWidths(preset.column_widths || {})
+      setGroupBy(preset.group_by || [])
+      setAggregations(preset.aggregations || [])
+      setShowAggregations(preset.show_aggregations ?? true)
+      setWrapText(preset.wrap_text ?? false)
+      setFilters(
+        preset.filters || {
+          deliveryType: [],
+          paymentMethod: [],
+          pickupLocations: [],
+          tours: [],
+        },
+      )
+
+      if (preset.excel_options) {
+        setExcelOptions(preset.excel_options)
+      }
+
+      toast.success(`Vorlage "${preset.name}" geladen`)
+    }
+  }
+
+  const savePreset = async () => {
+    if (!presetName.trim()) {
+      toast.error("Bitte geben Sie einen Namen ein")
+      return
+    }
+
+    setIsSavingPreset(true)
+    try {
+      const response = await fetch("/api/admin/report-presets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: presetName,
+          description: presetDescription,
+          columns: selectedColumns,
+          column_order: columnOrderState,
+          column_widths: columnWidths,
+          filters,
+          group_by: groupBy,
+          aggregations,
+          show_aggregations: showAggregations,
+          wrap_text: wrapText,
+          excel_options: excelOptions,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to save preset")
+
+      const { preset } = await response.json()
+      await mutatePresets()
+      setSelectedPreset(preset.id)
+      setShowSavePresetDialog(false)
+      setPresetName("")
+      setPresetDescription("")
+      toast.success("Vorlage gespeichert")
+    } catch (error) {
+      console.error("Error saving preset:", error)
+      toast.error("Fehler beim Speichern")
+    } finally {
+      setIsSavingPreset(false)
+    }
+  }
+
+  const deletePreset = async (presetId: string) => {
+    if (!confirm("Möchten Sie diese Vorlage wirklich löschen?")) return
+
+    try {
+      const response = await fetch(`/api/admin/report-presets/${presetId}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) throw new Error("Failed to delete preset")
+
+      await mutatePresets()
+      if (selectedPreset === presetId) {
+        setSelectedPreset("")
+      }
+      toast.success("Vorlage gelöscht")
+    } catch (error) {
+      console.error("Error deleting preset:", error)
+      toast.error("Fehler beim Löschen")
     }
   }
 
@@ -217,8 +377,131 @@ export default function ReportBuilder() {
     }
   }
 
-  const exportToExcel = () => {
-    alert("Excel-Export wird in Kürze verfügbar sein. Bitte verwenden Sie vorerst CSV-Export.")
+  const exportToExcel = async () => {
+    setIsExporting(true)
+    try {
+      const workbook = new ExcelJS.Workbook()
+      const worksheet = workbook.addWorksheet("Report")
+
+      const rows = reportData?.data || []
+      const headers = selectedColumns.map((colId) => AVAILABLE_COLUMNS.find((c) => c.id === colId)?.label || colId)
+
+      // Header Row mit Formatierung aus Options
+      const headerRow = worksheet.addRow(headers)
+      headerRow.font = {
+        bold: excelOptions.headerBold,
+        size: excelOptions.fontSize,
+        name: excelOptions.fontFamily,
+      }
+      headerRow.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF" + excelOptions.headerBackground.replace("#", "") },
+      }
+
+      // Rahmen für Header
+      if (excelOptions.showBorders) {
+        headerRow.eachCell((cell) => {
+          cell.border = {
+            top: { style: excelOptions.borderStyle },
+            left: { style: excelOptions.borderStyle },
+            bottom: { style: excelOptions.borderStyle },
+            right: { style: excelOptions.borderStyle },
+          }
+        })
+      }
+
+      // Datenzeilen mit Formatierung
+      rows.forEach((row: any, idx: number) => {
+        const rowData = selectedColumns.map((colId) => {
+          const value = row[colId]
+          return value ?? ""
+        })
+        const excelRow = worksheet.addRow(rowData)
+
+        excelRow.font = {
+          size: excelOptions.fontSize,
+          name: excelOptions.fontFamily,
+        }
+
+        // Gruppierungs-Styling
+        if (row._isGroup && excelOptions.preserveGrouping) {
+          excelRow.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FF" + excelOptions.groupBackground.replace("#", "") },
+          }
+          excelRow.font = { bold: true, size: excelOptions.fontSize, name: excelOptions.fontFamily }
+        }
+        // Aggregations-Styling
+        else if (row._isAggregation && excelOptions.includeAggregations) {
+          excelRow.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FF" + excelOptions.aggregationBackground.replace("#", "") },
+          }
+          excelRow.font = { bold: true, size: excelOptions.fontSize, name: excelOptions.fontFamily }
+        }
+        // Abwechselnde Zeilen
+        else if (excelOptions.alternatingRows && idx % 2 === 1) {
+          excelRow.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF9FAFB" },
+          }
+        }
+
+        // Rahmen
+        if (excelOptions.showBorders) {
+          excelRow.eachCell((cell) => {
+            cell.border = {
+              top: { style: excelOptions.borderStyle },
+              left: { style: excelOptions.borderStyle },
+              bottom: { style: excelOptions.borderStyle },
+              right: { style: excelOptions.borderStyle },
+            }
+          })
+        }
+
+        // Text-Wrapping
+        if (excelOptions.wrapText) {
+          excelRow.alignment = { wrapText: true, vertical: "top" }
+        }
+      })
+
+      // Spaltenbreiten
+      if (excelOptions.autoWidth) {
+        worksheet.columns.forEach((column) => {
+          let maxLength = 10
+          if (column && column.eachCell) {
+            column.eachCell({ includeEmpty: false }, (cell) => {
+              const cellValue = cell.value ? cell.value.toString() : ""
+              maxLength = Math.max(maxLength, cellValue.length)
+            })
+          }
+          if (column) {
+            column.width = Math.min(maxLength + 2, 50)
+          }
+        })
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `report-${new Date().toISOString().split("T")[0]}.xlsx`
+      link.click()
+      URL.revokeObjectURL(url)
+
+      setShowExcelOptionsDialog(false)
+    } catch (error) {
+      console.error("[v0] Excel export error:", error)
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   const reportConfig = useMemo(() => {
@@ -339,26 +622,55 @@ export default function ReportBuilder() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Report-Konfiguration</CardTitle>
+          <CardTitle>Report Builder</CardTitle>
+          <CardDescription>
+            Erstellen Sie benutzerdefinierte Reports mit flexiblen Filtern und Gruppierungen
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div>
-            <Label className="text-base font-semibold mb-3 block">Vorlagen</Label>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-              {TEMPLATES.map((template) => (
+          <div className="space-y-2">
+            <Label>Vorlagen</Label>
+            <div className="flex gap-2">
+              <Select value={selectedPreset} onValueChange={loadPreset}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Vorlage auswählen..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {presets.map((preset: any) => (
+                    <SelectItem key={preset.id} value={preset.id}>
+                      <div className="flex flex-col items-start">
+                        <span className="font-medium">{preset.name}</span>
+                        {preset.description && (
+                          <span className="text-xs text-muted-foreground">{preset.description}</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShowSavePresetDialog(true)}
+                title="Aktuelle Konfiguration als Vorlage speichern"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+
+              {selectedPreset && (
                 <Button
-                  key={template.id}
-                  variant={selectedTemplate === template.id ? "default" : "outline"}
-                  className="h-auto flex flex-col items-start p-4 text-left"
-                  onClick={() => applyTemplate(template.id)}
+                  variant="outline"
+                  size="icon"
+                  onClick={() => deletePreset(selectedPreset)}
+                  title="Vorlage löschen"
                 >
-                  <div className="font-semibold mb-1">{template.name}</div>
-                  <div className="text-xs text-muted-foreground">{template.description}</div>
+                  <Trash2 className="h-4 w-4" />
                 </Button>
-              ))}
+              )}
             </div>
           </div>
 
@@ -690,9 +1002,13 @@ export default function ReportBuilder() {
           </Dialog> */}
         </div>
 
-        <Button onClick={exportToCSV} variant="outline" size="sm">
+        <Button onClick={exportToCSV} disabled={!reportData?.data?.length} variant="outline">
           <Download className="mr-2 h-4 w-4" />
           Als CSV exportieren
+        </Button>
+        <Button onClick={() => setShowExcelOptionsDialog(true)} disabled={!reportData?.data?.length} variant="outline">
+          <FileSpreadsheet className="mr-2 h-4 w-4" />
+          Als Excel exportieren
         </Button>
       </div>
 
@@ -766,6 +1082,261 @@ export default function ReportBuilder() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={showSavePresetDialog} onOpenChange={setShowSavePresetDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Vorlage speichern</DialogTitle>
+            <DialogDescription>Speichern Sie die aktuelle Report-Konfiguration als Vorlage.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="presetName">Name</Label>
+              <Input id="presetName" value={presetName} onChange={(e) => setPresetName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="presetDescription">Beschreibung (optional)</Label>
+              <Input
+                id="presetDescription"
+                value={presetDescription}
+                onChange={(e) => setPresetDescription(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSavePresetDialog(false)}>
+              Abbrechen
+            </Button>
+            <Button onClick={savePreset} disabled={isSavingPreset}>
+              {isSavingPreset ? "Speichere..." : "Vorlage speichern"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showExcelOptionsDialog} onOpenChange={setShowExcelOptionsDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Excel Export Einstellungen</DialogTitle>
+          </DialogHeader>
+
+          <Tabs defaultValue="formatting" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="formatting">Formatierung</TabsTrigger>
+              <TabsTrigger value="columns">Spalten</TabsTrigger>
+              <TabsTrigger value="colors">Farben</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="formatting" className="space-y-4 mt-4">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="wrapText">Zeilenumbruch in Zellen</Label>
+                  <Switch
+                    id="wrapText"
+                    checked={excelOptions.wrapText}
+                    onCheckedChange={(checked) => setExcelOptions({ ...excelOptions, wrapText: checked })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="headerBold">Fette Überschriften</Label>
+                  <Switch
+                    id="headerBold"
+                    checked={excelOptions.headerBold}
+                    onCheckedChange={(checked) => setExcelOptions({ ...excelOptions, headerBold: checked })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="alternatingRows">Abwechselnde Zeilenfarben</Label>
+                  <Switch
+                    id="alternatingRows"
+                    checked={excelOptions.alternatingRows}
+                    onCheckedChange={(checked) => setExcelOptions({ ...excelOptions, alternatingRows: checked })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="fontFamily">Schriftart</Label>
+                  <Select
+                    value={excelOptions.fontFamily}
+                    onValueChange={(value: any) => setExcelOptions({ ...excelOptions, fontFamily: value })}
+                  >
+                    <SelectTrigger id="fontFamily">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Calibri">Calibri</SelectItem>
+                      <SelectItem value="Arial">Arial</SelectItem>
+                      <SelectItem value="Times New Roman">Times New Roman</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="fontSize">Schriftgröße</Label>
+                  <Select
+                    value={excelOptions.fontSize.toString()}
+                    onValueChange={(value) =>
+                      setExcelOptions({ ...excelOptions, fontSize: Number.parseInt(value) as any })
+                    }
+                  >
+                    <SelectTrigger id="fontSize">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="11">11</SelectItem>
+                      <SelectItem value="12">12</SelectItem>
+                      <SelectItem value="14">14</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="columns" className="space-y-4 mt-4">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="autoWidth">Automatische Spaltenbreite</Label>
+                  <Switch
+                    id="autoWidth"
+                    checked={excelOptions.autoWidth}
+                    onCheckedChange={(checked) => setExcelOptions({ ...excelOptions, autoWidth: checked })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="showBorders">Zellenrahmen anzeigen</Label>
+                  <Switch
+                    id="showBorders"
+                    checked={excelOptions.showBorders}
+                    onCheckedChange={(checked) => setExcelOptions({ ...excelOptions, showBorders: checked })}
+                  />
+                </div>
+
+                {excelOptions.showBorders && (
+                  <div className="space-y-2">
+                    <Label htmlFor="borderStyle">Rahmendicke</Label>
+                    <Select
+                      value={excelOptions.borderStyle}
+                      onValueChange={(value: any) => setExcelOptions({ ...excelOptions, borderStyle: value })}
+                    >
+                      <SelectTrigger id="borderStyle">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="thin">Dünn</SelectItem>
+                        <SelectItem value="medium">Mittel</SelectItem>
+                        <SelectItem value="thick">Dick</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="colors" className="space-y-4 mt-4">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="headerBackground">Header-Hintergrund</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="headerBackground"
+                      type="color"
+                      value={excelOptions.headerBackground}
+                      onChange={(e) => setExcelOptions({ ...excelOptions, headerBackground: e.target.value })}
+                      className="w-20 h-10"
+                    />
+                    <Input
+                      value={excelOptions.headerBackground}
+                      onChange={(e) => setExcelOptions({ ...excelOptions, headerBackground: e.target.value })}
+                      className="flex-1"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="preserveGrouping">Gruppierungen beibehalten</Label>
+                  <Switch
+                    id="preserveGrouping"
+                    checked={excelOptions.preserveGrouping}
+                    onCheckedChange={(checked) => setExcelOptions({ ...excelOptions, preserveGrouping: checked })}
+                  />
+                </div>
+
+                {excelOptions.preserveGrouping && (
+                  <div className="space-y-2">
+                    <Label htmlFor="groupBackground">Gruppen-Hintergrund</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="groupBackground"
+                        type="color"
+                        value={excelOptions.groupBackground}
+                        onChange={(e) => setExcelOptions({ ...excelOptions, groupBackground: e.target.value })}
+                        className="w-20 h-10"
+                      />
+                      <Input
+                        value={excelOptions.groupBackground}
+                        onChange={(e) => setExcelOptions({ ...excelOptions, groupBackground: e.target.value })}
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="includeAggregations">Summen einschließen</Label>
+                  <Switch
+                    id="includeAggregations"
+                    checked={excelOptions.includeAggregations}
+                    onCheckedChange={(checked) => setExcelOptions({ ...excelOptions, includeAggregations: checked })}
+                  />
+                </div>
+
+                {excelOptions.includeAggregations && (
+                  <div className="space-y-2">
+                    <Label htmlFor="aggregationBackground">Summen-Hintergrund</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="aggregationBackground"
+                        type="color"
+                        value={excelOptions.aggregationBackground}
+                        onChange={(e) =>
+                          setExcelOptions({
+                            ...excelOptions,
+                            aggregationBackground: e.target.value,
+                          })
+                        }
+                        className="w-20 h-10"
+                      />
+                      <Input
+                        value={excelOptions.aggregationBackground}
+                        onChange={(e) =>
+                          setExcelOptions({
+                            ...excelOptions,
+                            aggregationBackground: e.target.value,
+                          })
+                        }
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExcelOptionsDialog(false)}>
+              Abbrechen
+            </Button>
+            <Button onClick={exportToExcel} disabled={isExporting}>
+              {isExporting ? "Exportiere..." : "Excel Exportieren"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

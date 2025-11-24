@@ -43,12 +43,19 @@ export async function createInvoiceAfterPayment(
   testMode?: boolean, // Added testMode parameter
   discountPercent?: number, // Changed from discount (euro amount) to discountPercent
   cashierId?: number, // Added cashierId parameter
+  invoiceText?: string, // Added invoiceText parameter for custom invoice text
 ): Promise<CreateInvoiceResult> {
   try {
     console.log("[v0] [create-invoice-after-payment] Creating invoice for order:", orderId)
     console.log("[v0] [create-invoice-after-payment] Test mode:", testMode ? "ENABLED" : "DISABLED")
-    console.log("[v0] [create-invoice-after-payment] Discount percent:", discountPercent ? `${discountPercent}%` : "None")
+    console.log(
+      "[v0] [create-invoice-after-payment] Discount percent:",
+      discountPercent ? `${discountPercent}%` : "None",
+    )
     console.log("[v0] [create-invoice-after-payment] Cashier ID:", cashierId || "None")
+    if (invoiceText) {
+      console.log("[v0] [create-invoice-after-payment] Custom invoice text:", invoiceText)
+    }
 
     const supabase = getAdminClient()
 
@@ -105,7 +112,7 @@ export async function createInvoiceAfterPayment(
           // Try to create HelloCash user
           try {
             console.log("[v0] [create-invoice-after-payment] Creating HelloCash user for customer...")
-            
+
             const helloCashUserData: any = {
               user_firstName: customer.first_name || "",
               user_surName: customer.last_name || "",
@@ -168,7 +175,6 @@ export async function createInvoiceAfterPayment(
     console.log(`[v0] [create-invoice-after-payment] Payment method: ${paymentMethod} → ${helloCashPaymentMethod}`)
 
     const invoicePayload: any = {
-      invoice_text: `Bestellnummer: ${order.order_number}`,
       invoice_paymentMethod: helloCashPaymentMethod, // Use mapped payment method
       invoice_type: "json",
       items,
@@ -202,8 +208,14 @@ export async function createInvoiceAfterPayment(
       invoicePayload.invoice_dueDate = order.pickup_date
     }
 
-    if (order.notes) {
-      invoicePayload.invoice_notes = order.notes
+    // Only invoice_text is supported
+    // if (order.notes) {
+    //   invoicePayload.invoice_notes = order.notes
+    // }
+
+    if (invoiceText) {
+      invoicePayload.invoice_text = invoiceText
+      console.log("[v0] [create-invoice-after-payment] Custom invoice text added to payload")
     }
 
     console.log("[v0] [create-invoice-after-payment] Payload:", JSON.stringify(invoicePayload, null, 2))

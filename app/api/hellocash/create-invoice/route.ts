@@ -27,7 +27,6 @@ export async function POST(req: Request) {
     console.log("[v0] [create-invoice] Token starts with:", helloCashToken.substring(0, 15) + "...")
 
     const invoicePayload = {
-      invoice_text: `Bestellung: ${orderNumber}`,
       invoice_paymentMethod: "cash",
       invoice_type: "json",
       items: items.map((item: HelloCashItem) => ({

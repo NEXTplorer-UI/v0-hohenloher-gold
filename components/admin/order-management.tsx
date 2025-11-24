@@ -748,6 +748,8 @@ function OrderManagement() {
   // Loading state for marking as paid
   const [isMarkingAsPaid, setIsMarkingAsPaid] = useState(false)
 
+  const [invoiceText, setInvoiceText] = useState("")
+
   const [showNewCustomerDialog, setShowNewCustomerDialog] = useState(false)
   const [newCustomerForm, setNewCustomerForm] = useState({
     first_name: "",
@@ -1489,9 +1491,10 @@ function OrderManagement() {
           orderId: selectedOrderForPayment,
           paymentMethod: selectedPaymentMethod,
           createInvoice,
-          discountPercent: percent > 0 ? percent : undefined, // Send percent instead of euro amount
+          discountPercent: percent > 0 ? percent : undefined,
           testMode: invoiceTestMode,
-          cashierId: selectedCashierId ? Number.parseInt(selectedCashierId) : undefined, // Added cashierId
+          cashierId: selectedCashierId ? Number.parseInt(selectedCashierId) : undefined,
+          invoiceText: invoiceText || undefined,
         }),
       })
 
@@ -1511,9 +1514,10 @@ function OrderManagement() {
         setSelectedPaymentMethod("cash")
         setCreateInvoice(true)
         setDiscountPercent("")
-        setCustomDiscountPercent("") // Reset custom discount percent
+        setCustomDiscountPercent("")
         setInvoiceTestMode(false)
-        setSelectedCashierId("") // Reset cashier
+        setSelectedCashierId("")
+        setInvoiceText("")
 
         await fetchOrders()
       } else {
@@ -1542,8 +1546,9 @@ function OrderManagement() {
     customDiscountPercent,
     invoiceTestMode,
     selectedCashierId,
+    invoiceText,
     orders,
-    fetchOrders,
+    fetchOrders, // Ensure fetchOrders is included in dependencies
     toast,
   ])
 
@@ -2246,6 +2251,22 @@ function OrderManagement() {
                       })()}
                   </div>
 
+                  <div className="space-y-2">
+                    <Label htmlFor="invoiceText" className="text-sm">
+                      Rechnungstext (optional)
+                    </Label>
+                    <textarea
+                      id="invoiceText"
+                      placeholder="z.B. Lieferung für Projektname"
+                      value={invoiceText}
+                      onChange={(e) => setInvoiceText(e.target.value)}
+                      className="w-full px-3 py-2 border border-input rounded-md text-sm resize-none h-20 bg-background"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Dieser Text wird auf der HelloCash-Rechnung angezeigt
+                    </p>
+                  </div>
+
                   <div className="flex items-center space-x-2 p-3 border rounded-md bg-yellow-50">
                     <Checkbox
                       id="invoiceTestMode"
@@ -2276,6 +2297,7 @@ function OrderManagement() {
                     setCustomDiscountPercent("")
                     setInvoiceTestMode(false)
                     setSelectedCashierId("")
+                    setInvoiceText("")
                   }}
                   disabled={isMarkingAsPaid}
                 >
