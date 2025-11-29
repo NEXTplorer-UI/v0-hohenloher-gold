@@ -27,6 +27,16 @@ import {
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { ProfileEditModal } from "@/components/customer/profile-edit-modal"
 import DistributorTab from "@/components/customer/distributor-tab"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface CustomerProfile {
   id: string
@@ -87,6 +97,7 @@ function DashboardContent({ user }: { user: any }) {
   const [isSavingPreferences, setIsSavingPreferences] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const router = useRouter()
+  const { signOut } = useAuth()
 
   const {
     data: ordersData,
@@ -128,14 +139,8 @@ function DashboardContent({ user }: { user: any }) {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch("/api/auth/logout", {
-        method: "POST",
-      })
-
-      if (!response.ok) {
-        throw new Error("Logout fehlgeschlagen")
-      }
-
+      console.log("[v0] Logging out customer...")
+      await signOut()
       router.push("/")
     } catch (error) {
       console.error("[v0] Logout error:", error)
@@ -190,10 +195,6 @@ function DashboardContent({ user }: { user: any }) {
   }
 
   const handleDeleteAccount = async () => {
-    if (!showDeleteConfirm) {
-      return
-    }
-
     setIsDeleting(true)
     try {
       const response = await fetch("/api/customer/delete-account", {
@@ -769,6 +770,28 @@ function DashboardContent({ user }: { user: any }) {
           onSuccess={handleProfileUpdateSuccess}
         />
       )}
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Account wirklich löschen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Diese Aktion kann nicht rückgängig gemacht werden. Ihre persönlichen Daten werden anonymisiert.
+              Bestelldaten bleiben aus rechtlichen Gründen erhalten, werden aber von Ihrem Account getrennt.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAccount}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Wird gelöscht..." : "Endgültig löschen"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -776,7 +799,7 @@ function DashboardContent({ user }: { user: any }) {
 function AuthenticatedDashboard() {
   const [user, setUser] = useState<any>(null)
   const router = useRouter()
-  const { user: authUser } = useAuth()
+  const { user: authUser, loading: authLoading } = useAuth()
 
   useEffect(() => {
     if (!authUser) {

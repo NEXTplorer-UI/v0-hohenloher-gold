@@ -24,6 +24,10 @@ import {
   Printer,
   ExternalLink,
   Send,
+  Receipt,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import { mapDBToUIStatus } from "@/lib/order-status-mapping"
 import type { EmailTemplateId } from "@/lib/email/build"
@@ -80,6 +84,7 @@ interface Order {
   }
   order_items: OrderItem[]
   hellocash_invoice_id?: string | null // Added hellocash_invoice_id field
+  hellocash_invoice_number?: string | null // Added hellocash_invoice_number field
 }
 
 interface CustomerDetails {
@@ -503,7 +508,8 @@ const OrderItem = memo(
             <div className="flex flex-col items-end gap-2">
               <span className="font-bold">€{order.total.toFixed(2)}</span>
 
-              <div className="flex flex-col lg:flex-row lg:items-start gap-2 w-full lg:w-auto">
+              {/* CHANGE: Improved mobile layout - everything stacks vertically on mobile */}
+              <div className="flex flex-col gap-2 w-full lg:flex-row lg:items-start lg:w-auto">
                 {/* Left side: Action buttons */}
                 <div className="flex flex-col gap-2 w-full lg:w-auto">
                   {order.qr_code_url && (
@@ -551,12 +557,12 @@ const OrderItem = memo(
                   )}
 
                   {order.hellocash_invoice_id && order.payment_status === "paid" && (
-                    <div className="flex gap-2 w-full">
+                    <div className="flex flex-col sm:flex-row gap-2 w-full">
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => window.open(`/api/invoices/${order.id}/pdf`, "_blank")}
-                        className="flex-1"
+                        className="w-full sm:flex-1"
                       >
                         <FileText className="h-4 w-4 mr-2" />
                         Rechnung
@@ -566,7 +572,7 @@ const OrderItem = memo(
                           size="sm"
                           variant="outline"
                           onClick={() => setShowCancelModal(true)}
-                          className="flex-1 text-destructive hover:text-destructive"
+                          className="w-full sm:flex-1 text-destructive hover:text-destructive"
                         >
                           <XCircle className="h-4 w-4 mr-2" />
                           Stornieren
@@ -586,6 +592,25 @@ const OrderItem = memo(
                       Storno-Beleg
                     </Button>
                   )}
+
+                  <div className="text-sm mb-2">
+                    {order.hellocash_invoice_number ? (
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <Receipt className="h-4 w-4" />
+                        Rechnung: {order.hellocash_invoice_number}
+                      </span>
+                    ) : order.hellocash_invoice_id ? (
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <Receipt className="h-4 w-4" />
+                        Rechnung: #{order.hellocash_invoice_id}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2 text-amber-600">
+                        <AlertCircle className="h-4 w-4" />
+                        Noch keine Rechnung
+                      </span>
+                    )}
+                  </div>
 
                   {order.payment_status !== "paid" && (
                     <Button
@@ -672,7 +697,7 @@ const OrderItem = memo(
                     <img
                       src={order.qr_code_url || "/placeholder.svg"}
                       alt="QR Code"
-                      className="w-20 h-20 border rounded"
+                      className="w-24 h-24 border rounded"
                       title="QR-Code für Abholung"
                     />
                   </div>
@@ -734,17 +759,23 @@ function OrderManagement() {
   const testMode = useTestMode()
 
   const {
-    data: orders,
+    data: ordersResponse,
     isLoading: loading,
     error: errorData,
     refresh: fetchOrders,
     updateCache: updateOrdersCache,
-  } = useAdminCache<Order[]>("/api/admin/orders", {
+  } = useAdminCache<{ orders: Order[]; total: number } | Order[]>("/api/admin/orders", {
     fallbackData: [],
     revalidateOnMount: true,
   })
 
   const error = errorData ? String(errorData) : null
+
+  const orders = Array.isArray(ordersResponse) ? ordersResponse : (ordersResponse?.orders ?? [])
+  const totalOrdersCount = Array.isArray(ordersResponse) ? orders.length : (ordersResponse?.total ?? 0)
+
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 50
 
   const [searchTerm, setSearchTerm] = usePersistedState({
     key: "admin-orders-search",
@@ -809,6 +840,7 @@ function OrderManagement() {
   // Payment method selection for manual payment
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("cash")
   const [createInvoice, setCreateInvoice] = useState<boolean>(true)
+  const [sendInvoiceEmail, setSendInvoiceEmail] = useState(true)
   const [discountPercent, setDiscountPercent] = useState<string>("")
   const [customDiscountPercent, setCustomDiscountPercent] = useState<string>("")
   const [invoiceTestMode, setInvoiceTestMode] = useState<boolean>(false)
@@ -837,6 +869,9 @@ function OrderManagement() {
     city: "",
   })
   const [isCreatingCustomer, setIsCreatingCustomer] = useState(false)
+
+  // Alias fetchOrders to loadOrders for clarity in handleConfirmMarkAsPaid
+  const loadOrders = fetchOrders
 
   useEffect(() => {
     if (!customerSearchQuery || customerSearchQuery.length < 2) {
@@ -1087,7 +1122,11 @@ function OrderManagement() {
   )
 
   const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
+    // Filter orders based on current page
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+
+    return orders.slice(startIndex, endIndex).filter((order) => {
       const searchLower = (searchTerm || "").toLowerCase()
       const customerName = `${order.customer.first_name || ""} ${order.customer.last_name || ""}`.toLowerCase()
       const matchesSearch =
@@ -1107,7 +1146,16 @@ function OrderManagement() {
 
       return matchesSearch && matchesStatus && matchesComment && matchesDeliveryMethod && matchesPickupLocation
     })
-  }, [orders, searchTerm, statusFilter, commentFilter, deliveryMethodFilter, pickupLocationFilter])
+  }, [
+    orders,
+    searchTerm,
+    statusFilter,
+    commentFilter,
+    deliveryMethodFilter,
+    pickupLocationFilter,
+    currentPage,
+    itemsPerPage,
+  ])
 
   const uniquePickupLocations = useMemo(() => {
     const locations = new Set<string>()
@@ -1133,8 +1181,23 @@ function OrderManagement() {
           includeCustomerAddress: includeCustomerAddress.toString(), // Added for address inclusion
         })
 
+        // Export only selected orders if specified
         if (orderIds && orderIds.length > 0) {
           params.append("ids", orderIds.join(","))
+        } else if (
+          searchTerm ||
+          statusFilter !== "all" ||
+          commentFilter !== "all" ||
+          deliveryMethodFilter !== "all" ||
+          pickupLocationFilter !== "all"
+        ) {
+          // If filters are applied, export filtered orders
+          const filteredIds = filteredOrders.map((order) => order.id)
+          params.append("ids", filteredIds.join(","))
+        } else {
+          // Otherwise, export all orders for the current page
+          const pageOrderIds = filteredOrders.map((order) => order.id)
+          params.append("ids", pageOrderIds.join(","))
         }
 
         const url = `/api/admin/orders-export-advanced?${params.toString()}`
@@ -1170,7 +1233,16 @@ function OrderManagement() {
         })
       }
     },
-    [toast, includeCustomerAddress], // Added includeCustomerAddress to dependencies
+    [
+      toast,
+      includeCustomerAddress,
+      filteredOrders,
+      searchTerm,
+      statusFilter,
+      commentFilter,
+      deliveryMethodFilter,
+      pickupLocationFilter,
+    ], // Added filter dependencies
   )
 
   const handleNotify = useCallback(
@@ -1226,7 +1298,6 @@ function OrderManagement() {
         console.log(`[v0] Updating order ${orderId} status:`, { status, paymentStatus })
 
         // Optimistic update
-        const previousOrder = orders.find((o) => o.id === orderId)
         updateOrdersCache((prevOrders) =>
           prevOrders?.map((order) => {
             if (order.id === orderId) {
@@ -1585,71 +1656,73 @@ function OrderManagement() {
     if (!selectedOrderForPayment) return
 
     setIsMarkingAsPaid(true)
+
     try {
       const percent = discountPercent
         ? Number.parseFloat(discountPercent)
-        : customDiscountPercent
-          ? Number.parseFloat(customDiscountPercent)
-          : 0
+        : Number.parseFloat(customDiscountPercent) || 0
 
       console.log(
-        `[v0] Marking order ${selectedOrderForPayment} as paid with payment method: ${selectedPaymentMethod}, createInvoice: ${createInvoice}, discountPercent: ${percent}, testMode: ${invoiceTestMode}, cashierId: ${selectedCashierId}`,
+        `[v0] Marking order ${selectedOrderForPayment} as paid with payment method: ${selectedPaymentMethod}, createInvoice: ${createInvoice}, sendEmail: ${sendInvoiceEmail}, discountPercent: ${percent}, testMode: ${invoiceTestMode}, cashierId: ${selectedCashierId}`,
       )
 
       const response = await fetch("/api/admin/mark-order-paid", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId: selectedOrderForPayment,
           paymentMethod: selectedPaymentMethod,
           createInvoice,
+          sendEmail: sendInvoiceEmail, // Adding sendEmail parameter
           discountPercent: percent > 0 ? percent : undefined,
           testMode: invoiceTestMode,
-          cashierId: selectedCashierId ? Number.parseInt(selectedCashierId) : undefined,
+          cashierId: selectedCashierId || undefined,
           invoiceText: invoiceText || undefined,
           includeCustomerAddress,
         }),
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        console.log(`[v0] Order marked as paid successfully:`, result)
+      const result = await response.json()
 
-        toast({
-          title: "Als bezahlt markiert",
-          description: createInvoice
-            ? result.message || "Rechnung wurde erstellt und per E-Mail versendet"
-            : "Bestellung wurde als bezahlt markiert",
-        })
-
-        setShowMarkAsPaidModal(false)
-        setSelectedOrderForPayment(null)
-        setSelectedPaymentMethod("cash")
-        setCreateInvoice(true)
-        setDiscountPercent("")
-        setCustomDiscountPercent("")
-        setInvoiceTestMode(false)
-        setIncludeCustomerAddress(true)
-        setSelectedCashierId("")
-        setInvoiceText("")
-
-        await fetchOrders()
-      } else {
-        const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
-        toast({
-          title: "Fehler",
-          description: errorData.error || "Rechnung konnte nicht erstellt werden",
-          variant: "destructive",
-        })
+      if (!response.ok) {
+        throw new Error(result.error || result.details || "Failed to mark as paid")
       }
+
+      console.log(`[v0] Order marked as paid successfully:`, result)
+
+      let successMessage = "Bestellung wurde als bezahlt markiert"
+      if (createInvoice && result.invoiceNumber) {
+        successMessage = `Rechnung ${result.invoiceNumber} wurde erfolgreich erstellt`
+        if (sendInvoiceEmail) {
+          successMessage += " und per E-Mail versendet"
+        }
+      }
+
+      toast({
+        title: "Erfolg",
+        description: successMessage,
+      })
+
+      setShowMarkAsPaidModal(false)
+      setSelectedOrderForPayment(null)
+      setSelectedPaymentMethod("cash")
+      setCreateInvoice(true)
+      setSendInvoiceEmail(true) // Reset send email state
+      setDiscountPercent("")
+      setCustomDiscountPercent("")
+      setInvoiceTestMode(false)
+      setIncludeCustomerAddress(true)
+      setSelectedCashierId("")
+      setInvoiceText("")
+
+      // Reload orders
+      await loadOrders()
     } catch (error) {
       console.error(`[v0] Error marking as paid:`, error)
       toast({
-        title: "Fehler",
-        description: error instanceof Error ? error.message : "Unbekannter Fehler",
         variant: "destructive",
+        title: "Fehler",
+        description: error instanceof Error ? error.message : "Fehler beim Markieren als bezahlt",
       })
     } finally {
       setIsMarkingAsPaid(false)
@@ -1658,15 +1731,15 @@ function OrderManagement() {
     selectedOrderForPayment,
     selectedPaymentMethod,
     createInvoice,
+    sendInvoiceEmail, // Added to dependencies
     discountPercent,
     customDiscountPercent,
     invoiceTestMode,
-    includeCustomerAddress,
     selectedCashierId,
     invoiceText,
-    orders,
-    fetchOrders,
+    includeCustomerAddress,
     toast,
+    loadOrders,
   ])
 
   const handleOrderSelection = useCallback((orderId: string, selected: boolean) => {
@@ -1699,6 +1772,17 @@ function OrderManagement() {
   const someFilteredSelected = useMemo(() => {
     return filteredOrders.some((order) => selectedOrderIds.has(order.id)) && !allFilteredSelected
   }, [filteredOrders, selectedOrderIds, allFilteredSelected])
+
+  const totalPages = Math.ceil(totalOrdersCount / itemsPerPage)
+  const showPagination = !searchTerm && totalPages > 1
+
+  const handlePrevPage = () => {
+    setCurrentPage((prev) => Math.max(prev - 1, 1))
+  }
+
+  const handleNextPage = () => {
+    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+  }
 
   if (loading) {
     return (
@@ -2181,7 +2265,8 @@ function OrderManagement() {
               <span className="text-sm text-muted-foreground">
                 {selectedOrderIds.size > 0
                   ? `${selectedOrderIds.size} von ${filteredOrders.length} ausgewählt`
-                  : `${filteredOrders.length} von ${orders.length} Bestellungen`}
+                  : `${totalOrdersCount} Bestellungen`}{" "}
+                {/* CHANGE: Display total orders count */}
               </span>
             </div>
           </div>
@@ -2215,6 +2300,28 @@ function OrderManagement() {
           </div>
         </CardContent>
       </Card>
+
+      {showPagination && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                Seite {currentPage} von {totalPages} ({totalOrdersCount} Bestellungen gesamt)
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handlePrevPage} disabled={currentPage === 1}>
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Zurück
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleNextPage} disabled={currentPage === totalPages}>
+                  Weiter
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <ExportOptionsDialog
         open={showExportDialog}
@@ -2260,11 +2367,27 @@ function OrderManagement() {
                   <Label htmlFor="createInvoice" className="cursor-pointer font-medium">
                     HelloCash-Rechnung erstellen
                   </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Wenn aktiviert, wird eine Rechnung erstellt und per E-Mail versendet
-                  </p>
+                  <p className="text-xs text-muted-foreground">Rechnung wird generiert und in HelloCash gespeichert</p>
                 </div>
               </div>
+
+              {createInvoice && (
+                <div className="flex items-center space-x-2 p-3 border rounded-md bg-muted/50">
+                  <Checkbox
+                    id="sendInvoiceEmail"
+                    checked={sendInvoiceEmail}
+                    onCheckedChange={(checked) => setSendInvoiceEmail(checked as boolean)}
+                  />
+                  <div className="flex flex-col">
+                    <Label htmlFor="sendInvoiceEmail" className="cursor-pointer font-medium">
+                      Rechnung per E-Mail versenden
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Wenn deaktiviert, wird die Rechnung nur generiert ohne E-Mail
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {createInvoice && (
                 <>
@@ -2426,10 +2549,11 @@ function OrderManagement() {
                     setSelectedOrderForPayment(null)
                     setSelectedPaymentMethod("cash")
                     setCreateInvoice(true)
+                    setSendInvoiceEmail(true) // Reset send email state
                     setDiscountPercent("")
                     setCustomDiscountPercent("")
                     setInvoiceTestMode(false)
-                    setIncludeCustomerAddress(true) // Resetting the new state
+                    setIncludeCustomerAddress(true)
                     setSelectedCashierId("")
                     setInvoiceText("")
                   }}
@@ -2444,7 +2568,11 @@ function OrderManagement() {
                       Wird verarbeitet...
                     </>
                   ) : createInvoice ? (
-                    "Rechnung versenden"
+                    sendInvoiceEmail ? (
+                      "Rechnung versenden"
+                    ) : (
+                      "Rechnung erstellen"
+                    ) // Dynamic button text
                   ) : (
                     "Als bezahlt markieren"
                   )}

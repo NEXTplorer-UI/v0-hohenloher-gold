@@ -126,13 +126,15 @@ export async function GET(request: NextRequest) {
       >()
 
       movements.forEach((movement) => {
-        const movementType = movement.qty > 0 ? "Eingang" : "Ausgang"
-        const key = `${movement.product_sku || "N/A"}|${movementType}|${movement.reason || "Kein Grund"}`
+        const productName = movement.product_name || movement.raw_product_group || "Unbekannt"
+        const sku = movement.product_sku || "RAW"
+        const movementType = (movement.qty_grams ? movement.qty_grams : movement.qty) > 0 ? "Eingang" : "Ausgang"
+        const key = `${sku}|${movementType}|${movement.reason || "Kein Grund"}`
 
         if (!analysisMap.has(key)) {
           analysisMap.set(key, {
-            productName: movement.product_name || "Unbekannt",
-            sku: movement.product_sku || "N/A",
+            productName: productName,
+            sku: sku,
             price: movement.product_price || 0,
             movementType,
             reason: movement.reason || "Kein Grund",
@@ -143,7 +145,7 @@ export async function GET(request: NextRequest) {
 
         const entry = analysisMap.get(key)!
         entry.count++
-        entry.totalQty += Math.abs(movement.qty)
+        entry.totalQty += Math.abs(movement.qty_grams || movement.qty)
       })
 
       // Convert to CSV rows
@@ -195,7 +197,9 @@ export async function GET(request: NextRequest) {
         let groupKey = ""
         switch (groupBy) {
           case "product":
-            groupKey = `${movement.product_name || "Unbekannt"} (${movement.product_sku || "N/A"})`
+            const productDisplay = movement.product_name || movement.raw_product_group || "Unbekannt"
+            const skuDisplay = movement.product_sku || "RAW"
+            groupKey = `${productDisplay} (${skuDisplay})`
             break
           case "category":
             groupKey = movement.category_name || "Keine Kategorie"
@@ -225,22 +229,25 @@ export async function GET(request: NextRequest) {
           const date = new Date(movement.occurred_at || movement.created_at)
           const dateStr = date.toLocaleDateString("de-DE")
           const timeStr = date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
-          const movementType = movement.qty > 0 ? "Eingang" : "Ausgang"
-          const quantity = Math.abs(movement.qty)
+          const hasQtyGrams = movement.qty_grams !== null && movement.qty_grams !== undefined
+          const movementType = (hasQtyGrams ? movement.qty_grams : movement.qty) > 0 ? "Eingang" : "Ausgang"
+          const quantity = Math.abs(hasQtyGrams ? movement.qty_grams : movement.qty)
           const price = movement.product_price ? movement.product_price.toFixed(2) : "0.00"
+          const productName = movement.product_name || movement.raw_product_group || ""
+          const unit = hasQtyGrams ? (movement.raw_unit_type === "volume" ? "ml" : "g") : movement.product_unit || ""
 
           csvRows.push(
             [
               dateStr,
               timeStr,
               movement.product_id?.toString() || "",
-              `"${(movement.product_name || "").replace(/"/g, '""')}"`,
-              `"${(movement.product_sku || "").replace(/"/g, '""')}"`,
+              `"${productName.replace(/"/g, '""')}"`,
+              `"${(movement.product_sku || "RAW").replace(/"/g, '""')}"`,
               price,
               `"${(movement.category_name || "").replace(/"/g, '""')}"`,
               movementType,
               quantity.toString(),
-              `"${(movement.product_unit || "").replace(/"/g, '""')}"`,
+              `"${unit.replace(/"/g, '""')}"`,
               `"${(movement.reason || "").replace(/"/g, '""')}"`,
               movement.reference_id || "",
               movement.source || "system",
@@ -250,8 +257,14 @@ export async function GET(request: NextRequest) {
         })
 
         // Group summary
-        const groupIncoming = groupMovements.filter((m) => m.qty > 0).reduce((sum, m) => sum + m.qty, 0)
-        const groupOutgoing = Math.abs(groupMovements.filter((m) => m.qty < 0).reduce((sum, m) => sum + m.qty, 0))
+        const groupIncoming = groupMovements
+          .filter((m) => (m.qty_grams !== null && m.qty_grams !== undefined ? m.qty_grams : m.qty) > 0)
+          .reduce((sum, m) => sum + (m.qty_grams || m.qty), 0)
+        const groupOutgoing = Math.abs(
+          groupMovements
+            .filter((m) => (m.qty_grams !== null && m.qty_grams !== undefined ? m.qty_grams : m.qty) < 0)
+            .reduce((sum, m) => sum + (m.qty_grams || m.qty), 0),
+        )
         csvRows.push(`"Zwischensumme ${groupKey}:";Eingänge: ${groupIncoming};Ausgänge: ${groupOutgoing}`)
       })
     } else {
@@ -260,21 +273,24 @@ export async function GET(request: NextRequest) {
         const date = new Date(movement.occurred_at || movement.created_at)
         const dateStr = date.toLocaleDateString("de-DE")
         const timeStr = date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
-        const movementType = movement.qty > 0 ? "Eingang" : "Ausgang"
-        const quantity = Math.abs(movement.qty)
+        const hasQtyGrams = movement.qty_grams !== null && movement.qty_grams !== undefined
+        const movementType = (hasQtyGrams ? movement.qty_grams : movement.qty) > 0 ? "Eingang" : "Ausgang"
+        const quantity = Math.abs(hasQtyGrams ? movement.qty_grams : movement.qty)
         const price = movement.product_price ? movement.product_price.toFixed(2) : "0.00"
+        const productName = movement.product_name || movement.raw_product_group || ""
+        const unit = hasQtyGrams ? (movement.raw_unit_type === "volume" ? "ml" : "g") : movement.product_unit || ""
 
         return [
           dateStr,
           timeStr,
           movement.product_id?.toString() || "",
-          `"${(movement.product_name || "").replace(/"/g, '""')}"`,
-          `"${(movement.product_sku || "").replace(/"/g, '""')}"`,
+          `"${productName.replace(/"/g, '""')}"`,
+          `"${(movement.product_sku || "RAW").replace(/"/g, '""')}"`,
           price,
           `"${(movement.category_name || "").replace(/"/g, '""')}"`,
           movementType,
           quantity.toString(),
-          `"${(movement.product_unit || "").replace(/"/g, '""')}"`,
+          `"${unit.replace(/"/g, '""')}"`,
           `"${(movement.reason || "").replace(/"/g, '""')}"`,
           movement.reference_id || "",
           movement.source || "system",
@@ -286,10 +302,28 @@ export async function GET(request: NextRequest) {
     let summaryRows: string[] = []
     if (showSummary && groupBy !== "analysis") {
       const totalMovements = movements.length
-      const incomingCount = movements.filter((m) => m.qty > 0).length
-      const outgoingCount = movements.filter((m) => m.qty < 0).length
-      const totalIncoming = movements.filter((m) => m.qty > 0).reduce((sum, m) => sum + m.qty, 0)
-      const totalOutgoing = Math.abs(movements.filter((m) => m.qty < 0).reduce((sum, m) => sum + m.qty, 0))
+      const incomingCount = movements.filter((m) => {
+        const val = m.qty_grams !== null && m.qty_grams !== undefined ? m.qty_grams : m.qty
+        return val > 0
+      }).length
+      const outgoingCount = movements.filter((m) => {
+        const val = m.qty_grams !== null && m.qty_grams !== undefined ? m.qty_grams : m.qty
+        return val < 0
+      }).length
+      const totalIncoming = movements
+        .filter((m) => {
+          const val = m.qty_grams !== null && m.qty_grams !== undefined ? m.qty_grams : m.qty
+          return val > 0
+        })
+        .reduce((sum, m) => sum + (m.qty_grams || m.qty), 0)
+      const totalOutgoing = Math.abs(
+        movements
+          .filter((m) => {
+            const val = m.qty_grams !== null && m.qty_grams !== undefined ? m.qty_grams : m.qty
+            return val < 0
+          })
+          .reduce((sum, m) => sum + (m.qty_grams || m.qty), 0),
+      )
 
       summaryRows = [
         "",

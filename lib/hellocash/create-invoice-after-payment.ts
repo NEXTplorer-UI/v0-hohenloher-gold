@@ -11,6 +11,7 @@ interface CreateInvoiceResult {
   success: boolean
   invoiceId?: string
   invoiceNumber?: string
+  pdfBase64?: string // Added pdfBase64 to return type
   error?: string
 }
 
@@ -288,6 +289,7 @@ export async function createInvoiceAfterPayment(
       success: true,
       invoiceId: invoiceData.invoice_id,
       invoiceNumber: invoiceData.invoice_number,
+      pdfBase64: invoiceData.pdf_base64_encoded, // Return the PDF base64 string directly from HelloCash
     }
   } catch (err: any) {
     console.error("[v0] [create-invoice-after-payment] Error:", err.message)

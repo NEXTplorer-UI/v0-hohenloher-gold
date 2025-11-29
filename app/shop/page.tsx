@@ -861,13 +861,13 @@ export default function ShopPage() {
       </div>
 
       <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
-        <DialogContent className="w-[90vw] h-auto md:w-[80vw] md:min-w-[800px] max-w-none p-6">
+        <DialogContent className="w-[95vw] max-w-[95vw] md:w-[80vw] md:max-w-[900px] h-auto max-h-[90vh] overflow-y-auto p-4 md:p-6">
           {selectedProduct && (
             <>
-              <div className="grid md:grid-cols-2 gap-6 md:items-start">
-                {/* Left: Image with fixed size */}
-                <div className="flex items-start">
-                  <div className="w-full aspect-square rounded-lg overflow-hidden bg-secondary">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                {/* Left: Image */}
+                <div className="flex items-start justify-center md:justify-start">
+                  <div className="w-full max-w-[400px] md:max-w-none aspect-square rounded-lg overflow-hidden bg-secondary">
                     <img
                       src={selectedProduct.image_url || selectedProduct.images?.[0] || "/placeholder.svg"}
                       alt={selectedProduct.name}
@@ -876,25 +876,25 @@ export default function ShopPage() {
                   </div>
                 </div>
 
-                {/* Right: Content with flex layout - button at bottom */}
-                <div className="flex flex-col h-full min-h-0">
-                  {/* Title at top */}
-                  <div className="mb-4">
-                    <h2 className="text-3xl font-bold text-primary mb-2">{selectedProduct.name}</h2>
-                    <Badge variant="secondary">{selectedProduct.category}</Badge>
-                    {selectedProduct.organic && (
-                      <Badge variant="outline" className="ml-2">
-                        Bio
-                      </Badge>
-                    )}
+                {/* Right: Content */}
+                <div className="flex flex-col min-h-0">
+                  {/* Title */}
+                  <div className="mb-3 md:mb-4">
+                    <h2 className="text-2xl md:text-3xl font-bold text-primary mb-2 break-words">
+                      {selectedProduct.name}
+                    </h2>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="secondary">{selectedProduct.category}</Badge>
+                      {selectedProduct.organic && <Badge variant="outline">Bio</Badge>}
+                    </div>
                   </div>
 
                   {/* Delivery info for seasonal products */}
                   {selectedProduct.category === "Südfrüchte" && deliverySchedules && deliverySchedules.length > 0 && (
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-                      <div className="flex items-center gap-2 text-base">
-                        <Calendar className="w-4 h-4 text-blue-600" />
-                        <span className="font-medium text-blue-900">
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-3 md:mb-4">
+                      <div className="flex items-center gap-2 text-sm md:text-base">
+                        <Calendar className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                        <span className="font-medium text-blue-900 break-words">
                           Bestellschluss: {(() => {
                             const nextConfirmed = deliverySchedules.find((d: any) => d.status === "confirmed")
                             return nextConfirmed?.orderDeadline || "Siehe Terminübersicht"
@@ -905,7 +905,7 @@ export default function ShopPage() {
                   )}
 
                   {/* Product description */}
-                  <div className="text-base text-muted-foreground leading-relaxed mb-4">
+                  <div className="text-sm md:text-base text-muted-foreground leading-relaxed mb-3 md:mb-4">
                     {selectedProduct.description}
                     {selectedProduct.fullDescription && (
                       <div
@@ -916,14 +916,14 @@ export default function ShopPage() {
                   </div>
 
                   {/* Divider */}
-                  <div className="border-t mb-4" />
+                  <div className="border-t mb-3 md:mb-4" />
 
-                  <div className="grid grid-cols-2 gap-6 mb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-3 md:mb-4">
                     {/* Left: Price info */}
                     <div className="space-y-1">
                       <div>
                         <p className="text-sm text-muted-foreground">Preis:</p>
-                        <p className="text-3xl font-bold text-primary">
+                        <p className="text-2xl md:text-3xl font-bold text-primary">
                           €
                           {calculatePrice(selectedProduct.price, selectedProduct.category).toFixed(2).replace(".", ",")}
                         </p>
@@ -943,19 +943,18 @@ export default function ShopPage() {
                     <div className="space-y-2">
                       <div>
                         <p className="text-sm text-muted-foreground">Herkunft:</p>
-                        <p className="text-base font-medium">{selectedProduct.origin}</p>
+                        <p className="text-sm md:text-base font-medium break-words">{selectedProduct.origin}</p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Gewicht:</p>
-                        <p className="text-base font-medium">{selectedProduct.weight_kg} kg</p>
+                        <p className="text-sm md:text-base font-medium">{selectedProduct.weight_kg} kg</p>
                       </div>
                     </div>
                   </div>
 
                   <div className="flex-1 min-h-4" />
 
-                  {/* Add to cart button - at bottom */}
-                  <div className="mt-auto">
+                  <div className="mt-auto w-full">
                     <AddToCartButton product={selectedProduct} />
                   </div>
                 </div>

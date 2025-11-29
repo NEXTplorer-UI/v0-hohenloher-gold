@@ -25,9 +25,9 @@ export default function ClientPage() {
       <section className="relative bg-gradient-to-br from-card to-background py-16 sm:py-20 lg:py-32">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-            <div className="space-y-6 lg:space-y-8">
+            <div className="space-y-6 lg:space-y-8 text-center lg:text-left">
               <div className="space-y-4">
-                <Badge variant="secondary" className="w-fit">
+                <Badge variant="secondary" className="w-fit mx-auto lg:mx-0">
                   Frisch aus Sizilien
                 </Badge>
                 <h1 className="font-serif font-bold text-3xl sm:text-4xl lg:text-6xl text-foreground leading-tight">
@@ -38,7 +38,7 @@ export default function ClientPage() {
                   Qualität, Nachhaltigkeit und menschliche Beziehungen stehen bei uns im Mittelpunkt.
                 </p>
               </div>
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Link href="/shop">
                   <Button
                     variant="default"
@@ -59,7 +59,7 @@ export default function ClientPage() {
                   </Button>
                 </Link>
               </div>
-              <div className="flex flex-col xs:flex-row items-start xs:items-center space-y-3 xs:space-y-0 xs:space-x-6 pt-4">
+              <div className="flex flex-col xs:flex-row items-center xs:items-center space-y-3 xs:space-y-0 xs:space-x-6 pt-4 justify-center lg:justify-start">
                 <div className="flex items-center space-x-2"></div>
                 <div className="flex items-center space-x-2"></div>
               </div>
@@ -143,9 +143,9 @@ export default function ClientPage() {
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               />
             </div>
-            <div className="space-y-6">
+            <div className="space-y-6 text-center lg:text-left">
               <div className="space-y-4">
-                <Badge variant="outline" className="w-fit">
+                <Badge variant="outline" className="w-fit mx-auto lg:mx-0">
                   Südfrüchte Hohenlohe
                 </Badge>
                 <h2 className="font-serif font-bold text-2xl sm:text-3xl lg:text-4xl text-card-foreground">
@@ -157,25 +157,27 @@ export default function ClientPage() {
                 </p>
               </div>
               <div className="space-y-3">
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 justify-center lg:justify-start">
                   <div className="w-2 h-2 bg-primary rounded-full"></div>
                   <span className="text-card-foreground">Direkt vom Erzeuger</span>
                 </div>
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 justify-center lg:justify-start">
                   <div className="w-2 h-2 bg-primary rounded-full"></div>
                   <span className="text-card-foreground">Unbehandelt und natürlich</span>
                 </div>
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 justify-center lg:justify-start">
                   <div className="w-2 h-2 bg-primary rounded-full"></div>
                   <span className="text-card-foreground">Frisch und aromatisch</span>
                 </div>
               </div>
-              <Link href="/products">
-                <Button size="lg" className="mt-6">
-                  Südfrüchte entdecken
-                  <ArrowRight className="ml-2 w-5 h-5" />
-                </Button>
-              </Link>
+              <div className="flex justify-center lg:justify-start">
+                <Link href="/products">
+                  <Button size="lg" className="mt-6">
+                    Südfrüchte entdecken
+                    <ArrowRight className="ml-2 w-5 h-5" />
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
         </div>

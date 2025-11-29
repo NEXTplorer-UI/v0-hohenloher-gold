@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Plus, Edit, Trash2, Search, RefreshCw, Package, Cloud, CloudOff } from "lucide-react"
+import { Plus, Edit, Trash2, Search, RefreshCw, Package, Cloud, CloudOff, X, Loader2, Save } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -77,6 +77,7 @@ interface RawStockGroup {
   unit_type: "weight" | "volume"
   product_count?: number
   product_names?: string[] | null
+  minimum_stock_grams?: number // Added for minimum stock
 }
 
 interface ProductAssignment {
@@ -137,8 +138,11 @@ export default function ProductManagement() {
   const [editingGroupName, setEditingGroupName] = useState<string>("")
   const [editingGroupType, setEditingGroupType] = useState<"weight" | "volume">("weight")
   const [isCreatingGroup, setIsCreatingGroup] = useState(false)
+  const [showCreateRawGroupDialog, setShowCreateRawGroupDialog] = useState(false) // State for the new dialog
 
   const [selectedProductsForGroup, setSelectedProductsForGroup] = useState<number[]>([])
+
+  const [modifiedProductIds, setModifiedProductIds] = useState<Set<number>>(new Set())
 
   const [formData, setFormData] = useState({
     name: "",
@@ -160,16 +164,10 @@ export default function ProductManagement() {
   })
 
   const loadProductAssignments = () => {
-    console.log("[v0] loadProductAssignments called with selectedRawGroup:", selectedRawGroup)
-    console.log("[v0] Current products:", products.length)
-    console.log("[v0] Current rawStockGroups:", rawStockGroups)
+    if (!selectedRawGroup || products.length === 0) return
 
-    const assignments: ProductAssignment[] = products.map((p) => {
+    const assignments = products.map((p) => {
       const isAssigned = p.inventory_raw_id === selectedRawGroup
-      console.log(
-        `[v0] Product ${p.name} (id: ${p.id}): inventory_raw_id=${p.inventory_raw_id}, isAssigned=${isAssigned}`,
-      )
-
       return {
         product_id: p.id,
         product_name: p.name,
@@ -178,24 +176,21 @@ export default function ProductManagement() {
       }
     })
 
-    console.log("[v0] Created assignments:", assignments)
     setProductAssignments(assignments)
     setHasUnsavedChanges(false)
   }
 
-  // CHANGE: Fixed useEffect dependencies to use products.length instead of products array reference
   useEffect(() => {
-    console.log("[v0] useEffect check - selectedRawGroup:", selectedRawGroup, "products.length:", products.length)
     if (selectedRawGroup && products.length > 0) {
-      console.log("[v0] useEffect triggered - loading product assignments")
       loadProductAssignments()
     }
-  }, [selectedRawGroup, products.length])
+  }, [selectedRawGroup]) // Only run when selectedRawGroup changes, not products.length
 
   const handleProductToggle = (productId: number, checked: boolean) => {
     setProductAssignments((prev) =>
       prev.map((p) => (p.product_id === productId ? { ...p, selected_raw_id: checked ? selectedRawGroup : null } : p)),
     )
+    setModifiedProductIds((prev) => new Set(prev).add(productId))
     setHasUnsavedChanges(true)
   }
 
@@ -212,7 +207,7 @@ export default function ProductManagement() {
     try {
       setLoading(true)
       const updates = productAssignments
-        .filter((p) => p.selected_raw_id !== p.current_raw_id)
+        .filter((p) => modifiedProductIds.has(p.product_id) && p.selected_raw_id !== p.current_raw_id)
         .map((p) => ({
           product_id: p.product_id,
           inventory_raw_id: p.selected_raw_id,
@@ -223,6 +218,7 @@ export default function ProductManagement() {
           title: "Info",
           description: "Keine Änderungen zu speichern",
         })
+        setLoading(false)
         return
       }
 
@@ -243,23 +239,71 @@ export default function ProductManagement() {
         })
 
         await Promise.all([fetchProducts(), fetchRawStockGroups()])
+        await loadProductAssignments()
 
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-
-        loadProductAssignments()
+        setModifiedProductIds(new Set())
+        setHasUnsavedChanges(false)
       } else {
         const error = await response.json()
         toast({
           title: "Fehler",
-          description: error.error || "Fehler beim Speichern",
+          description: error.error || "Fehler beim Zuordnen der Produkte",
           variant: "destructive",
         })
       }
     } catch (error) {
-      console.error("Error saving assignments:", error)
+      console.error("[v0] Error saving product assignments:", error)
       toast({
         title: "Fehler",
-        description: "Verbindungsfehler beim Speichern",
+        description: "Fehler beim Zuordnen der Produkte",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRemoveProductFromGroup = async (productId: number) => {
+    try {
+      setLoading(true)
+      const response = await fetch("/api/admin/inventory/assign-products", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          assignments: [
+            {
+              product_id: productId,
+              inventory_raw_id: null,
+            },
+          ],
+        }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Erfolg",
+          description: "Produkt wurde aus der Gruppe entfernt",
+        })
+
+        await Promise.all([fetchProducts(), fetchRawStockGroups()])
+        if (selectedRawGroup) {
+          await loadProductAssignments()
+        }
+      } else {
+        const error = await response.json()
+        toast({
+          title: "Fehler",
+          description: error.error || "Fehler beim Entfernen des Produkts",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Error removing product from group:", error)
+      toast({
+        title: "Fehler",
+        description: "Ein unerwarteter Fehler ist aufgetreten",
         variant: "destructive",
       })
     } finally {
@@ -563,6 +607,8 @@ export default function ProductManagement() {
     setIsCreatingNewRawStock(false)
     setNewRawStockName("")
     setNewRawStockType("weight")
+    // Reset modified product tracking when resetting the form for a new product
+    setModifiedProductIds(new Set())
   }
 
   const handleCreateCategory = async () => {
@@ -819,6 +865,8 @@ export default function ProductManagement() {
       hellocash_stock_managed: (product as any).hellocash_stock_managed || false, // Load hellocash_stock_managed from product
     })
     setIsDialogOpen(true)
+    // Clear modified product tracking when starting to edit an existing product
+    setModifiedProductIds(new Set())
   }
 
   const handleDelete = async (productId: number) => {
@@ -1674,278 +1722,178 @@ export default function ProductManagement() {
             </TabsContent>
 
             <TabsContent value="raw-stock" className="mt-6">
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold">Rohware-Gruppen verwalten</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Ordnen Sie Produkte Rohware-Gruppen zu für die gramm-basierte Lagerverwaltung
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() => {
-                      setIsCreatingGroup(true)
-                      setEditingGroupName("")
-                      setEditingGroupType("weight")
-                      setSelectedProductsForGroup([]) // Reset selected products when starting a new group creation
-                    }}
-                    disabled={isCreatingGroup}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Neue Gruppe
-                  </Button>
-                </div>
-
-                {isCreatingGroup && (
-                  <Card className="border-primary">
-                    <CardHeader>
-                      <CardTitle className="text-base">Neue Rohware-Gruppe erstellen</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="group-name">Gruppenname *</Label>
-                        <Input
-                          id="group-name"
-                          value={editingGroupName}
-                          onChange={(e) => setEditingGroupName(e.target.value)}
-                          placeholder="z.B. Orangen, Mandeln geröstet, Olivenöl"
-                          autoFocus
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="group-type">Typ</Label>
-                        <Select
-                          value={editingGroupType}
-                          onValueChange={(value) => setEditingGroupType(value as "weight" | "volume")}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="weight">Gewicht (kg/g)</SelectItem>
-                            <SelectItem value="volume">Volumen (L/ml)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label>Produkte zuordnen (optional)</Label>
-                        <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
-                          {products.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">Keine Produkte verfügbar</p>
-                          ) : (
-                            products.map((product) => (
-                              <label
-                                key={product.id}
-                                className="flex items-center gap-2 cursor-pointer hover:bg-accent p-1 rounded"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={selectedProductsForGroup.includes(product.id)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedProductsForGroup([...selectedProductsForGroup, product.id])
-                                    } else {
-                                      setSelectedProductsForGroup(
-                                        selectedProductsForGroup.filter((id) => id !== product.id),
-                                      )
-                                    }
-                                  }}
-                                  className="h-4 w-4"
-                                />
-                                <span className="text-sm">{product.name}</span>
-                              </label>
-                            ))
-                          )}
-                        </div>
-                        {selectedProductsForGroup.length > 0 && (
-                          <p className="text-xs text-muted-foreground">
-                            {selectedProductsForGroup.length} Produkt(e) ausgewählt
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button onClick={handleCreateNewGroup} disabled={loading}>
-                          Erstellen
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setIsCreatingGroup(false)
-                            setEditingGroupName("")
-                            setSelectedProductsForGroup([])
-                          }}
-                        >
-                          Abbrechen
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div>
-                      <Label>Rohware-Gruppe auswählen</Label>
-                      <Select
-                        value={selectedRawGroup?.toString() || ""}
-                        onValueChange={(value) => {
-                          setSelectedRawGroup(Number.parseInt(value))
-                          setHasUnsavedChanges(false) // Reset unsaved changes when group changes
-                        }}
-                      >
-                        <SelectTrigger className="mt-2">
-                          <SelectValue placeholder="Gruppe wählen" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {rawStockGroups.map((group) => (
-                            <SelectItem key={group.id} value={group.id.toString()}>
-                              {group.product_group} ({group.stock_grams / 1000}kg)
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left: Rohwarengruppen Liste */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Rohwarengruppen</CardTitle>
+                    <p className="text-sm text-muted-foreground">Wählen Sie eine Gruppe aus um Produkte zuzuordnen</p>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
+                      {rawStockGroups.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-8">
+                          Noch keine Rohware-Gruppen erstellt
+                        </p>
+                      ) : (
+                        rawStockGroups.map((group) => (
+                          <div
+                            key={group.id}
+                            className={`p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
+                              selectedRawGroup === group.id
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:border-primary/50"
+                            }`}
+                            onClick={() => {
+                              setSelectedRawGroup(group.id)
+                              setHasUnsavedChanges(false)
+                            }}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <h3 className="font-semibold text-lg">{group.product_group}</h3>
+                              <Badge variant="secondary">{group.unit_type === "weight" ? "Gewicht" : "Volumen"}</Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">Bestand:</span>
+                                <p className="font-medium">{(group.stock_grams / 1000).toFixed(2)} kg</p>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Produkte:</span>
+                                <p className="font-medium">{group.product_count || 0}</p>
+                              </div>
+                            </div>
+                            {group.minimum_stock_grams && (
+                              <div className="mt-2 text-xs text-muted-foreground">
+                                Mindestbestand: {(group.minimum_stock_grams / 1000).toFixed(2)} kg
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
                     </div>
+                  </CardContent>
+                </Card>
 
-                    {selectedRawGroup && (
+                {/* Right: Produkte zuordnen */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Produkte zuordnen</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedRawGroup
+                        ? `Produkte für "${rawStockGroups.find((g) => g.id === selectedRawGroup)?.product_group}" auswählen`
+                        : "Wählen Sie links eine Gruppe aus"}
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    {!selectedRawGroup ? (
+                      <div className="text-center py-12">
+                        <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                        <p className="text-muted-foreground">
+                          Wählen Sie links eine Rohwarengruppe aus um Produkte zuzuordnen
+                        </p>
+                      </div>
+                    ) : (
                       <>
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-base">Gruppeninformationen</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-2 text-sm">
-                            {(() => {
-                              const group = rawStockGroups.find((g) => g.id === selectedRawGroup)
-                              if (!group) return null
-                              return (
-                                <>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Name:</span>
-                                    <span className="font-medium">{group.product_group}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Typ:</span>
-                                    <span>{group.unit_type === "weight" ? "Gewicht" : "Volumen"}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Aktueller Bestand:</span>
-                                    <span className="font-bold">{(group.stock_grams / 1000).toFixed(2)} kg</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Zugeordnete Produkte:</span>
-                                    <span>{group.product_count}</span>
-                                  </div>
-                                </>
-                              )
-                            })()}
-                          </CardContent>
-                        </Card>
-
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-base">Zugeordnete Produkte</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            {(() => {
-                              const group = rawStockGroups.find((g) => g.id === selectedRawGroup)
-                              if (!group) return null
-
-                              const productNames = group.product_names || []
-
-                              if (productNames.length === 0) {
-                                return (
-                                  <p className="text-sm text-muted-foreground text-center py-4">
-                                    Keine Produkte zugeordnet
-                                  </p>
-                                )
-                              }
-                              return (
-                                <ul className="space-y-2">
-                                  {productNames.map((name, idx) => (
-                                    <li key={idx} className="text-sm flex items-center gap-2">
-                                      <span className="w-2 h-2 bg-primary rounded-full"></span>
-                                      {name}
-                                    </li>
+                        {selectedRawGroup &&
+                          productAssignments.filter((p) => p.current_raw_id === selectedRawGroup).length > 0 && (
+                            <div className="mb-4">
+                              <h4 className="text-sm font-medium mb-2">Aktuell zugeordnet:</h4>
+                              <div className="flex flex-wrap gap-2">
+                                {productAssignments
+                                  .filter((p) => p.current_raw_id === selectedRawGroup)
+                                  .map((assignment) => (
+                                    <Badge
+                                      key={assignment.product_id}
+                                      variant="secondary"
+                                      className="flex items-center gap-1"
+                                    >
+                                      {assignment.product_name}
+                                      <button
+                                        onClick={() => handleRemoveProductFromGroup(assignment.product_id)}
+                                        className="ml-1 hover:text-destructive"
+                                        disabled={loading}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </Badge>
                                   ))}
-                                </ul>
-                              )
-                            })()}
-                          </CardContent>
-                        </Card>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    {selectedRawGroup ? (
-                      <>
-                        <div className="flex items-center justify-between">
-                          <Label>Produkte zuordnen</Label>
-                          {hasUnsavedChanges && (
-                            <Badge variant="outline" className="text-orange-600 border-orange-600">
-                              Ungespeicherte Änderungen
-                            </Badge>
+                              </div>
+                            </div>
                           )}
-                        </div>
-                        <Card className="max-h-[500px] overflow-y-auto">
-                          <CardContent className="p-4 space-y-2">
-                            {productAssignments.length === 0 ? (
-                              <p className="text-sm text-muted-foreground text-center py-8">Keine Produkte verfügbar</p>
-                            ) : (
-                              productAssignments.map((assignment) => (
+
+                        <div className="max-h-[500px] overflow-y-auto pr-2 space-y-2">
+                          {products.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-8">Keine Produkte verfügbar</p>
+                          ) : (
+                            products.map((product) => {
+                              const assignment = productAssignments.find((p) => p.product_id === product.id)
+                              const isAssignedToThisGroup = assignment?.current_raw_id === selectedRawGroup
+                              const isAssignedToOtherGroup =
+                                assignment?.current_raw_id && assignment.current_raw_id !== selectedRawGroup
+                              const otherGroupName = isAssignedToOtherGroup
+                                ? rawStockGroups.find((g) => g.id === assignment?.current_raw_id)?.product_group
+                                : null
+
+                              return (
                                 <div
-                                  key={assignment.product_id}
-                                  className="flex items-center space-x-3 p-2 rounded hover:bg-muted/50"
+                                  key={product.id}
+                                  className="flex items-center space-x-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
                                 >
                                   <Checkbox
-                                    id={`product-${assignment.product_id}`}
-                                    checked={assignment.selected_raw_id === selectedRawGroup}
-                                    onCheckedChange={(checked) =>
-                                      handleProductToggle(assignment.product_id, checked as boolean)
-                                    }
+                                    id={`product-${product.id}`}
+                                    checked={assignment?.selected_raw_id === selectedRawGroup}
+                                    onCheckedChange={(checked) => handleProductToggle(product.id, checked as boolean)}
+                                    disabled={loading}
                                   />
-                                  <Label
-                                    htmlFor={`product-${assignment.product_id}`}
-                                    className="flex-1 cursor-pointer text-sm"
+                                  <label
+                                    htmlFor={`product-${product.id}`}
+                                    className="flex-1 cursor-pointer select-none"
                                   >
-                                    {assignment.product_name}
-                                    {assignment.current_raw_id && assignment.current_raw_id !== selectedRawGroup && (
-                                      <span className="ml-2 text-xs text-muted-foreground">
-                                        (aktuell:{" "}
-                                        {rawStockGroups.find((g) => g.id === assignment.current_raw_id)?.product_group})
-                                      </span>
+                                    <div className="font-medium">{product.name}</div>
+                                    {otherGroupName && (
+                                      <div className="text-xs text-muted-foreground">aktuell: {otherGroupName}</div>
                                     )}
-                                  </Label>
+                                  </label>
+                                  {isAssignedToThisGroup && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                                      onClick={() => handleRemoveProductFromGroup(product.id)}
+                                      disabled={loading}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  )}
                                 </div>
-                              ))
-                            )}
-                          </CardContent>
-                        </Card>
-                        <Button
-                          onClick={saveProductAssignments}
-                          disabled={!hasUnsavedChanges || loading}
-                          className="w-full"
-                        >
-                          {loading ? (
-                            <>
-                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                              Speichere...
-                            </>
-                          ) : (
-                            <>Änderungen speichern</>
+                              )
+                            })
                           )}
-                        </Button>
+                        </div>
+
+                        <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                          <div className="text-sm text-muted-foreground">
+                            {hasUnsavedChanges && "Ungespeicherte Änderungen"}
+                          </div>
+                          <Button onClick={saveProductAssignments} disabled={!hasUnsavedChanges || loading}>
+                            {loading ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Speichern...
+                              </>
+                            ) : (
+                              <>
+                                <Save className="mr-2 h-4 w-4" />
+                                Änderungen speichern
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       </>
-                    ) : (
-                      <Card>
-                        <CardContent className="p-8 text-center text-muted-foreground">
-                          Wählen Sie eine Rohware-Gruppe aus um Produkte zuzuordnen
-                        </CardContent>
-                      </Card>
                     )}
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               </div>
             </TabsContent>
           </Tabs>

@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Fetching inventory movements...")
     const { data: movements, error: movementsError } = await supabase
       .from("inventory_movements")
-      .select("product_id, qty, created_at")
+      .select("product_id, inventory_raw_id, qty, qty_grams, created_at")
       .order("created_at", { ascending: true })
 
     if (movementsError) {
@@ -54,16 +54,23 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Loaded movements:", movements?.length || 0)
 
-    // Calculate current stock per product
     const stockMap = new Map<number, number>()
+    const rawStockMap = new Map<number, number>()
+
     movements?.forEach((m) => {
+      // Product-based movements
       if (m.product_id) {
         const current = stockMap.get(m.product_id) || 0
         stockMap.set(m.product_id, current + (m.qty || 0))
       }
+      // Raw stock movements
+      if (m.inventory_raw_id && m.qty_grams) {
+        const current = rawStockMap.get(m.inventory_raw_id) || 0
+        rawStockMap.set(m.inventory_raw_id, current + (m.qty_grams || 0))
+      }
     })
 
-    console.log("[v0] Calculated stock for", stockMap.size, "products")
+    console.log("[v0] Calculated stock for", stockMap.size, "products and", rawStockMap.size, "raw stock groups")
 
     console.log("[v0] Fetching products with categories...")
     const { data: products, error: productsError } = await supabase
@@ -76,6 +83,7 @@ export async function GET(request: NextRequest) {
         price,
         min_stock,
         weight_kg,
+        inventory_raw_id,
         categories (
           name
         )

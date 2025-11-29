@@ -25,7 +25,6 @@ export async function POST(request: NextRequest) {
 
     console.log(`[v0] Resending invoice for order ${orderId}`)
 
-    // Fetch order with HelloCash invoice ID
     const { data: order, error: orderError } = await supabase
       .from("orders")
       .select(`
@@ -35,6 +34,12 @@ export async function POST(request: NextRequest) {
           first_name,
           last_name,
           email
+        ),
+        order_items (
+          id,
+          quantity,
+          unit_price,
+          product_name
         )
       `)
       .eq("id", orderId)
@@ -57,12 +62,12 @@ export async function POST(request: NextRequest) {
 
     console.log(`[v0] Fetching invoice ${order.hellocash_invoice_id} from HelloCash`)
 
-    // Fetch PDF from HelloCash
     const pdfResponse = await fetch(
       `https://api.hellocash.business/api/v1/invoices/${order.hellocash_invoice_id}/pdf?cancellation=false&locale=de_DE`,
       {
         headers: {
           Authorization: `Bearer ${process.env.HELLOCASH_API_TOKEN}`,
+          Accept: "application/json",
         },
       },
     )
@@ -72,24 +77,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch invoice from HelloCash" }, { status: 500 })
     }
 
-    const pdfBuffer = await pdfResponse.arrayBuffer()
-    const pdfBase64 = Buffer.from(pdfBuffer).toString("base64")
+    const pdfData = await pdfResponse.json()
+    const pdfBase64 = pdfData.pdf_base64_encoded
 
-    console.log(`[v0] PDF fetched successfully, size: ${pdfBuffer.byteLength} bytes`)
+    if (!pdfBase64) {
+      console.error("[v0] No pdf_base64_encoded in HelloCash response")
+      return NextResponse.json({ error: "Invalid PDF response from HelloCash" }, { status: 500 })
+    }
 
-    // Prepare email variables
+    console.log(`[v0] PDF fetched successfully, base64 length: ${pdfBase64.length}`)
+
+    const orderDate = new Date(order.created_at).toLocaleDateString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    })
+
+    const orderItems = order.order_items.map((item: any) => ({
+      product_name: item.product_name,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      total_price: item.quantity * item.unit_price,
+    }))
+
     const emailVars = {
       customerName: `${order.customers.first_name} ${order.customers.last_name}`,
       orderNumber: order.order_number,
       invoiceNumber: order.hellocash_invoice_number || "N/A",
+      orderDate,
+      paymentMethod: order.payment_method || "cash",
+      orderItems,
+      total: order.total,
     }
 
     // Build email
     const { subject, html } = buildEmail("paymentReceipt", emailVars, emailCopy)
 
-    // Send email with PDF attachment (skip if >3MB)
+    const pdfSizeEstimate = (pdfBase64.length * 3) / 4 // Estimate decoded size
     const attachment =
-      pdfBuffer.byteLength <= 3 * 1024 * 1024
+      pdfSizeEstimate <= 3 * 1024 * 1024
         ? {
             filename: `Rechnung_${order.hellocash_invoice_number || order.order_number}.pdf`,
             content: pdfBase64,

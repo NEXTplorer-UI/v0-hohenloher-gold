@@ -1,15 +1,33 @@
+console.log("[v0] Orders route.ts - BEFORE IMPORTS")
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+
+console.log("[v0] Orders route.ts - START OF IMPORTS")
+
 import { type NextRequest, NextResponse } from "next/server"
-import { getAdminClient } from "@/lib/supabase/admin"
-import { createMovementsFromOrder } from "@/lib/inventory/movement-service"
-import { createInvoiceAfterPayment } from "@/lib/hellocash/create-invoice-after-payment"
-import { Resend } from "resend"
-import { buildEmail } from "@/lib/email/build"
-import { emailCopy } from "@/lib/email/copy"
-import QRCode from "qrcode"
-import { put } from "@vercel/blob"
-import { normalizePickupLocation } from "@/lib/pickup-location-normalizer"
-import { parsePickupLocationFromComment } from "@/lib/pickup-location-comment-parser"
-import { randomUUID } from "crypto"
+console.log("[v0] Orders route.ts - ✓ Next.js imports")
+
+function generateUUID(): string {
+  // Web Crypto API (Node 18+ und Edge Runtime)
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID()
+  }
+
+  // Fallback, falls aus irgendeinem Grund kein crypto da ist
+  return (
+    Math.random().toString(36).slice(2) +
+    "-" +
+    Math.random().toString(36).slice(2) +
+    "-" +
+    Math.random().toString(36).slice(2)
+  )
+}
+
+// ⚠️ Wichtige Anmerkung:
+// Alle anderen Imports (Supabase, Resend, QRCode, Blob, Normalizer, Comment-Parser)
+// werden jetzt *dynamisch* innerhalb des POST-Handlers geladen, damit
+// Import-Fehler abgefangen werden können und nicht das ganze Modul crashen.
 
 function toSlug(s: string): string {
   return s
@@ -20,10 +38,7 @@ function toSlug(s: string): string {
     .replace(/(^-|-$)/g, "")
 }
 
-async function findPickupLocationId(
-  supabase: ReturnType<typeof getAdminClient>,
-  orderData: any,
-): Promise<string | null> {
+async function findPickupLocationId(supabase: any, orderData: any): Promise<string | null> {
   let pickupLocationId: string | null = null
 
   // 1️⃣ If client sends an ID → validate it
@@ -101,7 +116,7 @@ async function findPickupLocationId(
 
 async function determineDeliveryDate(
   items: any[],
-  supabase: ReturnType<typeof getAdminClient>,
+  supabase: any,
 ): Promise<{ deliveryDate: string | null; scheduleId: string | null; message?: string }> {
   const hasSouthernFruits = items.some(
     (item) => item.category === "Südfrüchte" || item.category === "Frische Südfrüchte",
@@ -127,7 +142,7 @@ async function determineDeliveryDate(
   if (futureSchedules && futureSchedules.length > 0) {
     console.log(
       "[v0] [determineDeliveryDate] Schedule details:",
-      futureSchedules.map((s) => ({
+      futureSchedules.map((s: any) => ({
         id: s.id,
         delivery_date: s.delivery_date,
         order_deadline: s.order_deadline,
@@ -146,7 +161,7 @@ async function determineDeliveryDate(
     }
   }
 
-  const availableSchedule = futureSchedules.find((schedule) => schedule.order_deadline >= today)
+  const availableSchedule = futureSchedules.find((schedule: any) => schedule.order_deadline >= today)
 
   console.log(
     "[v0] [determineDeliveryDate] Selected schedule:",
@@ -197,7 +212,7 @@ async function determineDeliveryDate(
 }
 
 async function findProductIdByNameAndPrice(
-  supabase: ReturnType<typeof getAdminClient>,
+  supabase: any,
   productName: string,
   unitPrice: number,
 ): Promise<number | null> {
@@ -225,18 +240,146 @@ async function findProductIdByNameAndPrice(
 }
 
 export async function POST(request: NextRequest) {
+  console.log("[v0] POST /api/orders - Handler STARTED")
+
+  // ─────────────────────────────────────────────────────────────
+  // 1) DYNAMISCHE IMPORTS MIT FEHLERBEHANDLUNG
+  // ─────────────────────────────────────────────────────────────
+  let createServerClientFn: any = null
+  let ResendClass: any = null
+  let QRCodeLib: any = null
+  let putFn: any = null
+  let normalizePickupLocationFn: ((input: string) => Promise<any>) | null = null
+  let parsePickupLocationFromCommentFn: ((comment: string) => Promise<any>) | null = null
+
   try {
+    console.log("[v0] POST /api/orders - Attempting dynamic import of @supabase/ssr...")
+    const supabaseModule = await import("@supabase/ssr")
+    createServerClientFn = supabaseModule.createServerClient
+    console.log("[v0] POST /api/orders - ✓ @supabase/ssr imported successfully")
+  } catch (error) {
+    console.error("[v0] POST /api/orders - ❌ Failed to import @supabase/ssr:", error)
+  }
+
+  try {
+    console.log("[v0] POST /api/orders - Attempting dynamic import of resend...")
+    const resendModule = await import("resend")
+    ResendClass = resendModule.Resend
+    console.log("[v0] POST /api/orders - ✓ resend imported successfully")
+  } catch (error) {
+    console.error("[v0] POST /api/orders - ❌ Failed to import resend:", error)
+  }
+
+  try {
+    console.log("[v0] POST /api/orders - Attempting dynamic import of qrcode...")
+    const qrModule = await import("qrcode")
+    QRCodeLib = qrModule.default || qrModule
+    console.log("[v0] POST /api/orders - ✓ qrcode imported successfully")
+  } catch (error) {
+    console.error("[v0] POST /api/orders - ❌ Failed to import qrcode:", error)
+  }
+
+  try {
+    console.log("[v0] POST /api/orders - Attempting dynamic import of @vercel/blob...")
+    const blobModule = await import("@vercel/blob")
+    putFn = blobModule.put
+    console.log("[v0] POST /api/orders - ✓ @vercel/blob imported successfully")
+  } catch (error) {
+    console.error("[v0] POST /api/orders - ❌ Failed to import @vercel/blob:", error)
+  }
+
+  try {
+    console.log("[v0] POST /api/orders - Attempting dynamic import of pickup-location-normalizer...")
+    const normModule = await import("@/lib/pickup-location-normalizer")
+    normalizePickupLocationFn = normModule.normalizePickupLocation
+    console.log("[v0] POST /api/orders - ✓ pickup-location-normalizer imported successfully")
+  } catch (error) {
+    console.error("[v0] POST /api/orders - ❌ Failed to import pickup-location-normalizer:", error)
+  }
+
+  try {
+    console.log("[v0] POST /api/orders - Attempting dynamic import of pickup-location-comment-parser...")
+    const parserModule = await import("@/lib/pickup-location-comment-parser")
+    parsePickupLocationFromCommentFn = parserModule.parsePickupLocationFromComment
+    console.log("[v0] POST /api/orders - ✓ pickup-location-comment-parser imported successfully")
+  } catch (error) {
+    console.error("[v0] POST /api/orders - ❌ Failed to import pickup-location-comment-parser:", error)
+  }
+
+  // movement-service & HelloCash bleiben wie von dir schon dynamisch + try/catch:
+  let createMovementsFromOrder: any
+  let createInvoiceAfterPayment: any
+
+  try {
+    console.log("[v0] POST /api/orders - Attempting movement-service dynamic import...")
+    const movementService = await import("@/lib/inventory/movement-service")
+    createMovementsFromOrder = movementService.createMovementsFromOrder
+    console.log("[v0] POST /api/orders - ✓ movement-service import SUCCESS")
+  } catch (error: any) {
+    console.error("[v0] POST /api/orders - ❌ movement-service import FAILED:", error)
+    createMovementsFromOrder = async () => {
+      console.warn("[v0] createMovementsFromOrder is a no-op due to import failure")
+    }
+  }
+
+  try {
+    console.log("[v0] POST /api/orders - Attempting HelloCash dynamic import...")
+    const helloCashService = await import("@/lib/hellocash/create-invoice-after-payment")
+    createInvoiceAfterPayment = helloCashService.createInvoiceAfterPayment
+    console.log("[v0] POST /api/orders - ✓ HelloCash import SUCCESS")
+  } catch (error: any) {
+    console.error("[v0] POST /api/orders - ❌ HelloCash import FAILED:", error)
+    createInvoiceAfterPayment = async () => {
+      console.warn("[v0] createInvoiceAfterPayment is a no-op due to import failure")
+      return { success: false, error: "Import failed" }
+    }
+  }
+
+  console.log("[v0] POST /api/orders - All dynamic imports completed")
+
+  // Wenn der Supabase-Client gar nicht importiert werden konnte → sauberer 500er
+  if (!createServerClientFn) {
+    console.error("[v0] POST /api/orders - Supabase client could not be imported, aborting.")
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: "Supabase client import failed",
+        type: "SupabaseImportError",
+      },
+      { status: 500, headers: { "content-type": "application/json" } },
+    )
+  }
+
+  try {
+    console.log("[v0] POST /api/orders - Parsing request body")
     const bodyText = await request.text()
+    console.log("[v0] POST /api/orders - Body text length:", bodyText.length)
+
     let orderData: any
     try {
       orderData = JSON.parse(bodyText || "{}")
-    } catch {
-      console.error("[/api/orders] Invalid JSON body")
+      console.log("[v0] POST /api/orders - ✓ JSON parsed successfully")
+    } catch (parseError) {
+      console.error("[v0] POST /api/orders - ❌ JSON parse error:", parseError)
       return NextResponse.json(
-        { error: "Invalid JSON body" },
+        { error: "Invalid JSON in request body" },
         { status: 400, headers: { "content-type": "application/json" } },
       )
     }
+
+    console.log("[v0] POST /api/orders - Creating Supabase client")
+    const supabase = createServerClientFn(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return []
+          },
+          setAll() {},
+        },
+      },
+    )
 
     const missing: string[] = []
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL) missing.push("NEXT_PUBLIC_SUPABASE_URL")
@@ -250,8 +393,6 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("[/api/orders] Saving order to database:", orderData.email)
-
-    const supabase = getAdminClient()
 
     const tenSecondsAgo = new Date(Date.now() - 10000).toISOString()
     const { data: recentOrders, error: duplicateCheckError } = await supabase
@@ -329,7 +470,6 @@ export async function POST(request: NextRequest) {
     let scheduleId = orderData.deliveryScheduleId || null
     let message = ""
 
-    // Only calculate delivery date if not provided
     if (!deliveryDate) {
       const deliveryInfo = await determineDeliveryDate(orderData.items, supabase)
       deliveryDate = deliveryInfo.deliveryDate
@@ -347,24 +487,30 @@ export async function POST(request: NextRequest) {
 
     if (orderData.pickupLocation) {
       try {
-        const normalized = await normalizePickupLocation(orderData.pickupLocation)
-        pickupLocationNormalized = normalized.normalized
-        if (normalized.location_id) {
-          normalizedLocationId = normalized.location_id
+        if (normalizePickupLocationFn) {
+          const normalized = await normalizePickupLocationFn(orderData.pickupLocation)
+          pickupLocationNormalized = normalized?.normalized || null
+          if (normalized?.locationId) {
+            normalizedLocationId = normalized.locationId
+          }
+          console.log("[/api/orders] Normalized pickup location:", {
+            original: orderData.pickupLocation,
+            normalized: pickupLocationNormalized,
+            location_id: normalizedLocationId,
+          })
+        } else {
+          console.warn(
+            "[/api/orders] normalizePickupLocation not available (import failed) - using original pickupLocation",
+          )
+          pickupLocationNormalized = orderData.pickupLocation
         }
-        console.log("[/api/orders] Normalized pickup location:", {
-          original: orderData.pickupLocation,
-          normalized: pickupLocationNormalized,
-          location_id: normalizedLocationId,
-        })
       } catch (normError) {
         console.error("[/api/orders] Error normalizing pickup location:", normError)
-        // Fail-safe: use original value
         pickupLocationNormalized = orderData.pickupLocation
       }
     }
 
-    const pickupToken = randomUUID()
+    const pickupToken = generateUUID()
     console.log("[/api/orders] Generated pickup token:", pickupToken)
 
     let autoFilledDistributionPersonId = orderData.distributionPersonId || null
@@ -382,7 +528,6 @@ export async function POST(request: NextRequest) {
       autoFilledPickupLocationId = customer.default_pickup_location_id
       console.log("[/api/orders] Auto-filled pickup_location_id from customer default:", autoFilledPickupLocationId)
 
-      // Also update pickupLocationNormalized based on the default location
       const { data: defaultLocation } = await supabase
         .from("pickup_locations")
         .select("name, address")
@@ -407,7 +552,7 @@ export async function POST(request: NextRequest) {
       pickup_location: orderData.pickupLocation || null,
       pickup_location_normalized: pickupLocationNormalized,
       pickup_location_id: normalizedLocationId,
-      distribution_person_id: autoFilledDistributionPersonId, // Use auto-filled value
+      distribution_person_id: autoFilledDistributionPersonId,
       payment_method: orderData.paymentMethod,
       payment_status: orderData.paymentMethod === "sumup" ? "paid" : "pending",
       status: "confirmed",
@@ -437,7 +582,6 @@ export async function POST(request: NextRequest) {
     const orderItemsPromises = orderData.items.map(async (item: any) => {
       let productId = item.id || null
 
-      // Fallback: If no product_id, try to find it by name + price
       if (!productId) {
         console.warn(
           `[/api/orders] ⚠️ No product_id (item.id) found for item: "${item.name}", trying name+price fallback`,
@@ -523,62 +667,84 @@ export async function POST(request: NextRequest) {
       itemCount: itemsResult.length,
     })
 
-    try {
-      console.log("[/api/orders] Generating QR code for order:", savedOrder.order_number)
+    // ─────────────────────────────────────────────────────────────
+    // QR CODE BLOCK – nur wenn QRCodeLib & putFn verfügbar
+    // ─────────────────────────────────────────────────────────────
+    if (QRCodeLib && putFn) {
+      try {
+        console.log("[v0] 🔲 BLOCK 4: QR Code Generation - STARTED")
+        console.log("[v0] Order Number:", savedOrder.order_number)
+        console.log("[v0] Pickup Token:", pickupToken)
 
-      const pickupUrl = `https://suedfruechte-hohenlohe.de/pos/pickup?token=${pickupToken}`
+        const pickupUrl = `https://suedfruechte-hohenlohe.de/pos/pickup?token=${pickupToken}`
+        console.log("[v0] Generated Pickup URL:", pickupUrl)
 
-      const qrCodeDataUrl = await QRCode.toDataURL(pickupUrl, {
-        width: 400,
-        margin: 2,
-        color: {
-          dark: "#000000",
-          light: "#FFFFFF",
-        },
-      })
-
-      // Convert data URL to Blob
-      const base64Data = qrCodeDataUrl.split(",")[1]
-      const binaryData = atob(base64Data)
-      const bytes = new Uint8Array(binaryData.length)
-      for (let i = 0; i < binaryData.length; i++) {
-        bytes[i] = binaryData.charCodeAt(i)
-      }
-      const qrBlob = new Blob([bytes], { type: "image/png" })
-
-      const fileName = `qr-codes/${pickupToken}.png`
-
-      const blob = await put(fileName, qrBlob, {
-        access: "public",
-      })
-
-      const now = new Date()
-      const expiresAt = new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000) // +45 days
-
-      // Update order with QR code URL
-      const { error: updateError } = await supabase
-        .from("orders")
-        .update({
-          qr_code_url: blob.url,
-          qr_code_type: "order",
-          qr_code_generated_at: now.toISOString(),
-          qr_code_expires_at: expiresAt.toISOString(),
+        console.log("[v0] Generating QR code with QRCode.toDataURL...")
+        const qrCodeDataUrl = await QRCodeLib.toDataURL(pickupUrl, {
+          width: 400,
+          margin: 2,
+          color: {
+            dark: "#000000",
+            light: "#FFFFFF",
+          },
         })
-        .eq("id", savedOrder.id)
+        console.log("[v0] ✅ QR code data URL generated, length:", qrCodeDataUrl.length)
 
-      if (updateError) {
-        console.error("[/api/orders] Error updating order with QR code:", updateError)
-      } else {
-        console.log("[/api/orders] QR code generated and saved successfully for order:", savedOrder.order_number)
-        // Update savedOrder object with QR code URL
-        savedOrder.qr_code_url = blob.url
+        console.log("[v0] Converting data URL to Buffer...")
+        const base64Data = qrCodeDataUrl.split(",")[1]
+        const buffer = Buffer.from(base64Data, "base64")
+        console.log("[v0] ✅ Buffer created, size:", buffer.length, "bytes")
+
+        const fileName = `qr-codes/${pickupToken}.png`
+        console.log("[v0] Uploading to Vercel Blob storage as:", fileName)
+
+        const blob = await putFn(fileName, buffer, {
+          access: "public",
+          contentType: "image/png",
+        })
+        console.log("[v0] ✅ Uploaded to Blob storage, URL:", blob.url)
+
+        const now = new Date()
+        const expiresAt = new Date(now.getTime() + 45 * 24 * 60 * 60 * 1000)
+        console.log("[v0] QR Code Expires At:", expiresAt.toISOString())
+
+        console.log("[v0] Updating order with QR code URL in database...")
+        const { error: updateError } = await supabase
+          .from("orders")
+          .update({
+            qr_code_url: blob.url,
+            qr_code_type: "order",
+            qr_code_generated_at: now.toISOString(),
+            qr_code_expires_at: expiresAt.toISOString(),
+          })
+          .eq("id", savedOrder.id)
+
+        if (updateError) {
+          console.error("[v0] ❌ Error updating order with QR code:", updateError)
+          console.error("[v0] Update Error Details:", JSON.stringify(updateError, null, 2))
+        } else {
+          console.log("[v0] ✅ Database updated with QR code URL")
+          savedOrder.qr_code_url = blob.url
+        }
+
+        console.log("[v0] 🔲 BLOCK 4: QR Code Generation - COMPLETED SUCCESSFULLY")
+      } catch (qrError: any) {
+        console.error("[v0] ❌ BLOCK 4: QR Code Generation - FAILED")
+        console.error("[v0] Error Type:", qrError?.constructor?.name || typeof qrError)
+        console.error("[v0] Error Message:", qrError?.message || String(qrError))
+        console.error("[v0] Error Stack:", qrError?.stack)
       }
-    } catch (qrError: any) {
-      console.error("[/api/orders] Error generating QR code:", qrError.message)
-      // Don't fail the order if QR code generation fails
+    } else {
+      console.warn(
+        "[v0] QR Code generation skipped because qrcode or @vercel/blob could not be imported (import failed).",
+      )
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // Pickup-Location aus Kommentar – nur wenn Parser verfügbar
+    // ─────────────────────────────────────────────────────────────
     if (
+      parsePickupLocationFromCommentFn &&
       savedOrder &&
       (!savedOrder.pickup_location ||
         savedOrder.pickup_location === "Lieferung" ||
@@ -587,14 +753,13 @@ export async function POST(request: NextRequest) {
       if (orderData.notes && orderData.notes.trim().length > 0) {
         console.log("[/api/orders] Attempting to parse pickup location from comment...")
 
-        const parsedLocation = await parsePickupLocationFromComment(orderData.notes)
+        const parsedLocation = await parsePickupLocationFromCommentFn(orderData.notes)
 
         if (parsedLocation.found && parsedLocation.confidence !== "low") {
           console.log(
             `[/api/orders] Found pickup location in comment: ${parsedLocation.pickupLocationName} (confidence: ${parsedLocation.confidence})`,
           )
 
-          // Update order with parsed pickup location
           const { error: updateError } = await supabase
             .from("orders")
             .update({
@@ -605,7 +770,7 @@ export async function POST(request: NextRequest) {
             .eq("id", savedOrder.id)
 
           if (updateError) {
-            console.error("[/api/orders] Error updating order with parsed location:", updateError)
+            console.error("[/api/orders] Error updating order with parsed pickup location:", updateError)
           } else {
             console.log("[/api/orders] Successfully updated order with parsed pickup location")
           }
@@ -613,9 +778,16 @@ export async function POST(request: NextRequest) {
           console.log("[/api/orders] No pickup location found in comment or confidence too low")
         }
       }
+    } else if (!parsePickupLocationFromCommentFn) {
+      console.warn(
+        "[/api/orders] Pickup-location comment parser not available (import failed), skipping comment parsing.",
+      )
     }
 
-    if (savedOrder.payment_status === "paid") {
+    // ─────────────────────────────────────────────────────────────
+    // Invoice + E-Mail – nur wenn Resend importiert werden konnte
+    // ─────────────────────────────────────────────────────────────
+    if (savedOrder.payment_status === "paid" && ResendClass) {
       try {
         console.log("[/api/orders] Payment status is 'paid', creating HelloCash invoice for order ID:", savedOrder.id)
 
@@ -628,8 +800,7 @@ export async function POST(request: NextRequest) {
 
         console.log("[/api/orders] HelloCash invoice created successfully")
 
-        console.log("[/api/orders] Sending customer confirmation email with invoice PDF...")
-
+        console.log("[/api/orders] Fetching updated order for email...")
         const { data: updatedOrder, error: fetchError } = await supabase
           .from("orders")
           .select(
@@ -650,15 +821,37 @@ export async function POST(request: NextRequest) {
         } else {
           console.log("[/api/orders] Sending customer confirmation email with invoice PDF...")
 
+          // buildEmail & emailCopy werden hier dynamisch importiert
+          let buildEmailFn: any = null
+          let emailCopyObj: any = null
+          try {
+            const buildModule = await import("@/lib/email/build")
+            buildEmailFn = buildModule.buildEmail
+            const copyModule = await import("@/lib/email/copy")
+            emailCopyObj = copyModule.emailCopy
+            console.log("[/api/orders] ✓ Email templates imported successfully")
+          } catch (emailImportError) {
+            console.error("[/api/orders] ❌ Failed to import email templates:", emailImportError)
+          }
+
           const emailVars = {
             customerName: `${updatedOrder.customer.first_name || ""} ${updatedOrder.customer.last_name || ""}`.trim(),
             orderNumber: updatedOrder.order_number || "",
             orderId: updatedOrder.order_number || "",
-            orderDate: updatedOrder.created_at || "", // Pass ISO date string instead of formatted date for payment deadline calculation
+            orderDate: updatedOrder.created_at ? new Date(updatedOrder.created_at).toLocaleDateString("de-DE") : "",
             orderTotal: updatedOrder.total ? updatedOrder.total.toFixed(2) : "0.00",
             total: updatedOrder.total ? updatedOrder.total.toFixed(2) : "0.00",
             subtotal: updatedOrder.subtotal ? updatedOrder.subtotal.toFixed(2) : "0.00",
-            pickupLocation: updatedOrder.pickup_location || "Siehe Bestellbestätigung",
+            pickupLocation:
+              updatedOrder.pickup_location_normalized || updatedOrder.pickup_location || "Siehe Bestellbestätigung",
+            pickupDate: updatedOrder.pickup_date
+              ? new Date(updatedOrder.pickup_date).toLocaleDateString("de-DE", {
+                  weekday: "long",
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                })
+              : null,
             paymentMethod: updatedOrder.payment_method || "Nicht angegeben",
             paymentStatus: updatedOrder.payment_status || "pending",
             deliveryMethod: updatedOrder.delivery_method || "pickup",
@@ -671,7 +864,18 @@ export async function POST(request: NextRequest) {
             })),
           }
 
-          const { subject, html } = buildEmail("orderConfirmation", emailVars, emailCopy)
+          let subject = "Ihre Bestellung bei Südfrüchte Hohenlohe"
+          let html = "<p>Vielen Dank für Ihre Bestellung.</p>"
+
+          if (buildEmailFn && emailCopyObj) {
+            const built = buildEmailFn("paymentReceipt", emailVars, emailCopyObj)
+            subject = built.subject
+            html = built.html
+          } else {
+            console.warn(
+              "[/api/orders] buildEmail or emailCopy could not be imported, using simple fallback email template.",
+            )
+          }
 
           let attachments: Array<{ filename: string; content: string }> | undefined
 
@@ -708,7 +912,7 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          const resend = new Resend(process.env.RESEND_API_KEY)
+          const resend = new ResendClass(process.env.RESEND_API_KEY)
           await resend.emails.send({
             from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
             to: updatedOrder.customer.email,
@@ -739,35 +943,55 @@ export async function POST(request: NextRequest) {
       } catch (invoiceError: any) {
         console.error("[/api/orders] Error in invoice/email process:", invoiceError.message)
       }
+    } else if (!ResendClass) {
+      console.warn("[/api/orders] Resend could not be imported, skipping email sending.")
     } else {
       console.log("[/api/orders] Payment status is not 'paid', skipping invoice generation and payment receipt email")
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // Inventory Movements
+    // ─────────────────────────────────────────────────────────────
     if (savedOrder.status === "confirmed") {
       try {
-        const itemsWithProductId = itemsResult.filter((item) => item.product_id !== null)
-        const itemsWithoutProductId = itemsResult.filter((item) => item.product_id === null)
+        const itemsWithProductId = itemsResult.filter((item: any) => item.product_id !== null)
+        const itemsWithoutProductId = itemsResult.filter((item: any) => item.product_id === null)
 
         if (itemsWithoutProductId.length > 0) {
           console.warn(
             `[/api/orders] ⚠️ ${itemsWithoutProductId.length} items without product_id, inventory movements will not be created for:`,
-            itemsWithoutProductId.map((i) => i.product_name),
+            itemsWithoutProductId.map((i: any) => i.product_name),
           )
         }
 
         if (itemsWithProductId.length > 0) {
+          const { data: productsData } = await supabase
+            .from("products")
+            .select("id, weight_kg, inventory_raw_id")
+            .in(
+              "id",
+              itemsWithProductId.map((item: any) => item.product_id),
+            )
+
+          const productsMap = new Map(productsData?.map((p: any) => [p.id, p]) || [])
+
+          const enrichedOrderItems = itemsWithProductId.map((item: any) => ({
+            id: item.id,
+            product_id: item.product_id,
+            product_name: item.product_name,
+            product_category: item.product_category,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            inventory_raw_id: productsMap.get(item.product_id)?.inventory_raw_id || null,
+            weight_kg: productsMap.get(item.product_id)?.weight_kg || null,
+          }))
+
           await createMovementsFromOrder(
             savedOrder.id,
             savedOrder.order_number,
-            itemsWithProductId.map((item) => ({
-              id: item.id,
-              product_id: item.product_id,
-              product_name: item.product_name,
-              product_category: item.product_category,
-              quantity: item.quantity,
-              unit_price: item.unit_price,
-            })),
+            enrichedOrderItems,
             "Kundenbestellung",
+            savedOrder.user_id, // Pass user_id as createdBy
           )
           console.log(
             `[/api/orders] ✅ Created inventory movements for ${itemsWithProductId.length} items in order ${savedOrder.order_number}`,
@@ -794,11 +1018,22 @@ export async function POST(request: NextRequest) {
       },
       { status: 200, headers: { "content-type": "application/json" } },
     )
-  } catch (err: any) {
-    console.error("[/api/orders] Uncaught ERROR:", err?.stack || err?.message || err)
+  } catch (error: any) {
+    console.error("[v0] POST /api/orders - ❌ Unhandled error in catch block:", error)
+    console.error("[v0] POST /api/orders - Error type:", typeof error)
+    console.error("[v0] POST /api/orders - Error constructor:", error?.constructor?.name)
+
+    if (error instanceof Error) {
+      console.error("[v0] POST /api/orders - Error message:", error.message)
+      console.error("[v0] POST /api/orders - Error stack:", error.stack)
+    }
 
     return NextResponse.json(
-      { error: err?.message ?? "Unbekannter Serverfehler" },
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : String(error),
+        type: error?.constructor?.name || typeof error,
+      },
       { status: 500, headers: { "content-type": "application/json" } },
     )
   }

@@ -208,9 +208,9 @@ const CustomerRow = memo(
             </div>
           )
         case "pickup_location":
-          return (customer as any).default_pickup_location_name || "-"
+          return customer.default_pickup_location_name || "noch nicht zugewiesen"
         case "distribution_person":
-          return (customer as any).default_distribution_person_name || "-"
+          return customer.default_distribution_person_name || "noch nicht zugewiesen"
         case "actions":
           return (
             <div className="flex gap-2">

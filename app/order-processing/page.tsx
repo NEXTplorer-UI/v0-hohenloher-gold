@@ -97,7 +97,16 @@ function OrderProcessingContent() {
           body: JSON.stringify(orderDataWithCheckoutId),
         })
 
-        const orderParsed = await orderResponse.json()
+        const rawText = await orderResponse.text()
+        console.log("[checkout] raw response from /api/orders:", orderResponse.status, rawText)
+
+        let orderParsed: any
+        try {
+          orderParsed = JSON.parse(rawText)
+        } catch (e) {
+          console.error("[checkout] Failed to parse JSON:", e)
+          throw new Error(`Non-JSON response from /api/orders: ${rawText}`)
+        }
 
         if (!orderResponse.ok) {
           console.error("[v0] Failed to save SumUp order:", orderParsed.error)
@@ -258,12 +267,24 @@ function OrderProcessingContent() {
               body: JSON.stringify(orderData.orderData),
             })
 
-            if (!orderResponse.ok) {
-              const errorData = await orderResponse.json()
-              throw new Error(errorData.error || "Fehler beim Erstellen der Bestellung")
+            const rawText = await orderResponse.text()
+            console.log("[checkout] raw response from /api/orders:", orderResponse.status, rawText.substring(0, 200))
+
+            let parsedResponse: any
+            try {
+              parsedResponse = JSON.parse(rawText)
+            } catch (e) {
+              console.error("[checkout] Failed to parse JSON:", e)
+              throw new Error(
+                `Non-JSON response from /api/orders (${orderResponse.status}): ${rawText.substring(0, 100)}`,
+              )
             }
 
-            return orderResponse.json()
+            if (!orderResponse.ok) {
+              throw new Error(parsedResponse.error || "Fehler beim Erstellen der Bestellung")
+            }
+
+            return parsedResponse
           },
           {
             maxAttempts: 3,
@@ -436,7 +457,7 @@ function OrderProcessingContent() {
                         Kontaktieren Sie uns unter <strong>0157 357 038 64</strong>
                       </li>
                       <li>
-                        Oder per E-Mail: <strong>info@hohenloher-gold.de</strong>
+                        Oder per E-Mail: <strong>kontakt@suedfruechte-hohenlohe.de</strong>
                       </li>
                     </ul>
                   </div>

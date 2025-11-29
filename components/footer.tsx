@@ -39,8 +39,8 @@ export function Footer() {
     <footer className="bg-sidebar border-t border-sidebar-border">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-12">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-0 lg:gap-8">
-          <div className="space-y-3 pb-6 lg:pb-0">
-            <div className="flex items-center space-x-2">
+          <div className="space-y-3 pb-6 lg:pb-0 text-center lg:text-left">
+            <div className="flex items-center space-x-2 justify-center lg:justify-start">
               <img
                 src="/hohenloher-gold-logo-original.png"
                 alt="Hohenloher Gold Logo"
@@ -52,7 +52,7 @@ export function Footer() {
           </div>
 
           <FooterSection title="Navigation">
-            <div className="space-y-2 text-sm">
+            <div className="space-y-2 text-sm text-center lg:text-left">
               <Link href="/about" className="block text-muted-foreground hover:text-sidebar-primary transition-colors">
                 Über uns
               </Link>
@@ -72,7 +72,7 @@ export function Footer() {
           </FooterSection>
 
           <FooterSection title="Service">
-            <div className="space-y-2 text-sm">
+            <div className="space-y-2 text-sm text-center lg:text-left">
               <Link
                 href="/distributor"
                 className="block text-muted-foreground hover:text-sidebar-primary transition-colors"
@@ -89,7 +89,7 @@ export function Footer() {
           </FooterSection>
 
           <FooterSection title="Kontakt">
-            <div className="space-y-1 text-sm text-muted-foreground">
+            <div className="space-y-1 text-sm text-muted-foreground text-center lg:text-left">
               <p>Gerlinde Fink</p>
               <p>Weststraße 28</p>
               <p>74629 Pfedelbach</p>
@@ -100,23 +100,20 @@ export function Footer() {
 
         <div className="border-t border-sidebar-border mt-6 lg:mt-8 pt-6 lg:pt-8 text-center text-sm text-muted-foreground">
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:flex sm:flex-row sm:items-center sm:justify-center sm:space-x-6 sm:gap-0 mb-4">
-            <Link href="/agb" className="hover:text-sidebar-primary transition-colors text-left sm:text-center">
+            <Link href="/agb" className="hover:text-sidebar-primary transition-colors text-center">
               AGB
             </Link>
-            <Link href="/widerruf" className="hover:text-sidebar-primary transition-colors text-left sm:text-center">
+            <Link href="/widerruf" className="hover:text-sidebar-primary transition-colors text-center">
               Widerrufsbelehrung
             </Link>
-            <Link href="/privacy" className="hover:text-sidebar-primary transition-colors text-left sm:text-center">
+            <Link href="/privacy" className="hover:text-sidebar-primary transition-colors text-center">
               Datenschutz
             </Link>
-            <Link
-              href="/cookie-policy"
-              className="hover:text-sidebar-primary transition-colors text-left sm:text-center"
-            >
+            <Link href="/cookie-policy" className="hover:text-sidebar-primary transition-colors text-center">
               Cookie-Richtlinie
             </Link>
             <CookieSettingsLink />
-            <Link href="/impressum" className="hover:text-sidebar-primary transition-colors text-left sm:text-center">
+            <Link href="/impressum" className="hover:text-sidebar-primary transition-colors text-center">
               Impressum
             </Link>
           </div>

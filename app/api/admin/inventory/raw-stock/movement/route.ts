@@ -35,7 +35,6 @@ export async function POST(request: Request) {
       movement_type: "raw",
       reason: reason,
       reference_id: `MANUAL-${Date.now()}`,
-      source: "manual",
       occurred_at: new Date().toISOString(),
       created_by: user.id,
     })

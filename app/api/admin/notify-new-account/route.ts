@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     // Send notification email to admin
     const { data, error } = await resend.emails.send({
       from: "Hohenloher Gold <noreply@hohenloher-gold.de>",
-      to: process.env.SUMUP_PAY_TO_EMAIL || "info@hohenloher-gold.de",
+      to: process.env.SUMUP_PAY_TO_EMAIL || "kontakt@suedfruechte-hohenlohe.de",
       subject: "Neues Kundenkonto erstellt",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

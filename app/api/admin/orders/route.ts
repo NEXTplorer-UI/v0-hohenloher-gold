@@ -18,19 +18,49 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const q = searchParams.get("q") ?? ""
     const status = searchParams.get("status") ?? ""
-    const limit = Number(searchParams.get("limit") ?? 200)
+    const limit = Number(searchParams.get("limit") ?? 50)
     const offset = Number(searchParams.get("offset") ?? 0)
 
     console.log("[v0] [admin/orders] Creating admin client...")
     const supabase = getAdminClient()
 
-    console.log("[v0] [admin/orders] Fetching orders with direct query...")
+    console.log("[v0] [admin/orders] Fetching orders with pagination:", { limit, offset })
+
+    const countQuery = supabase.from("orders").select("*", { count: "exact", head: true })
+
+    // Apply status filter to count
+    if (status && status !== "all") {
+      const dbStatus = status === "picked_up" ? "completed" : status
+      countQuery.eq("status", dbStatus)
+    }
+
+    const { count: totalCount, error: countError } = await countQuery
+
+    if (countError) {
+      console.error("[v0] [admin/orders] Count error:", countError)
+      return NextResponse.json({ error: "Database error", details: countError.message }, { status: 500 })
+    }
 
     // Build the query
     let query = supabase
       .from("orders")
       .select(`
-        *,
+        id,
+        order_number,
+        customer_id,
+        status,
+        total,
+        delivery_method,
+        pickup_location,
+        payment_method,
+        payment_status,
+        notes,
+        created_at,
+        qr_code_url,
+        pickup_token,
+        admin_notes,
+        hellocash_invoice_id,
+        hellocash_invoice_number,
         customer:customers(first_name, last_name, email, phone),
         order_items(
           id,
@@ -79,7 +109,7 @@ export async function GET(req: Request) {
         )
       })
 
-      // Apply pagination
+      // Apply pagination to filtered results
       const paginated = filtered.slice(offset, offset + limit)
 
       console.log("[v0] [admin/orders] Fetched", paginated.length, "orders (filtered from", allOrders?.length, ")")
@@ -97,12 +127,14 @@ export async function GET(req: Request) {
         notes: row.notes,
         created_at: row.created_at,
         qr_code_url: row.qr_code_url,
+        hellocash_invoice_id: row.hellocash_invoice_id,
+        hellocash_invoice_number: row.hellocash_invoice_number,
         customer: row.customer ?? { first_name: "", last_name: "", email: "", phone: null },
         order_items: Array.isArray(row.order_items) ? row.order_items : [],
       }))
 
       console.log("[v0] [admin/orders] Successfully shaped orders")
-      return NextResponse.json(shaped, { status: 200 })
+      return NextResponse.json({ orders: shaped, total: filtered.length }, { status: 200 })
     }
 
     // No search query - apply pagination directly
@@ -128,12 +160,14 @@ export async function GET(req: Request) {
       notes: row.notes,
       created_at: row.created_at,
       qr_code_url: row.qr_code_url,
+      hellocash_invoice_id: row.hellocash_invoice_id,
+      hellocash_invoice_number: row.hellocash_invoice_number,
       customer: row.customer ?? { first_name: "", last_name: "", email: "", phone: null },
       order_items: Array.isArray(row.order_items) ? row.order_items : [],
     }))
 
     console.log("[v0] [admin/orders] Successfully shaped orders")
-    return NextResponse.json(shaped, { status: 200 })
+    return NextResponse.json({ orders: shaped, total: totalCount ?? 0 }, { status: 200 })
   } catch (e: any) {
     console.error("[v0] [admin/orders] Unexpected:", e)
     return NextResponse.json({ error: "Server error", details: e?.message }, { status: 500 })

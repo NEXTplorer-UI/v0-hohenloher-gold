@@ -1,7 +1,7 @@
 import { getAdminClient } from "@/lib/supabase/admin"
 
 const HELLOCASH_API_URL = "https://api.hellocash.business"
-const HELLOCASH_BEARER_TOKEN = process.env.HELLOCASH_BEARER_TOKEN
+const HELLOCASH_API_TOKEN = process.env.HELLOCASH_API_TOKEN
 
 interface SyncResult {
   success: boolean
@@ -47,7 +47,7 @@ export async function syncInvoiceStatus(orderId: string): Promise<SyncResult> {
     const response = await fetch(`${HELLOCASH_API_URL}/invoices/${order.hellocash_invoice_id}`, {
       method: "GET",
       headers: {
-        Authorization: `Bearer ${HELLOCASH_BEARER_TOKEN}`,
+        Authorization: `Bearer ${HELLOCASH_API_TOKEN}`,
         "Content-Type": "application/json",
       },
     })

@@ -58,8 +58,12 @@ export async function GET(request: Request) {
       console.log("[v0] [/api/crm/customers] First customer from RPC:", {
         email: data[0].email,
         newsletter_subscribed: data[0].newsletter_subscribed,
-        marketing_consent: data[0].marketing_consent,
-        reminder_notifications: data[0].reminder_notifications,
+        pickup_location_normalized: data[0].pickup_location_normalized,
+        default_distribution_person_name: data[0].default_distribution_person_name,
+        last_activity: data[0].last_activity,
+        favorite_products: data[0].favorite_products,
+        order_count: data[0].order_count,
+        total_spent: data[0].total_spent,
       })
     }
 

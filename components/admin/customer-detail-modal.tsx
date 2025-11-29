@@ -39,31 +39,68 @@ export default function CustomerDetailModal({
   const [resendingInvoice, setResendingInvoice] = useState<string | null>(null)
   const [customerOrders, setCustomerOrders] = useState<any[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (isOpen && customer?.id) {
+      console.log("[v0] CustomerDetailModal - fetching orders for customer:", customer.id, customer.name)
       const fetchCustomerOrders = async () => {
         setLoadingOrders(true)
         try {
           const supabase = createBrowserClient()
+          console.log("[v0] CustomerDetailModal - querying orders table with customer_id:", customer.id)
+
           const { data, error } = await supabase
             .from("orders")
-            .select("id, order_number, created_at, total_amount, hellocash_invoice_id, hellocash_invoice_number")
+            .select(`
+              id, 
+              order_number, 
+              created_at, 
+              total, 
+              hellocash_invoice_id, 
+              hellocash_invoice_number,
+              delivery_method,
+              pickup_location_id,
+              order_items (
+                id,
+                product_id,
+                product_name,
+                quantity,
+                unit_price
+              )
+            `)
             .eq("customer_id", customer.id)
             .order("created_at", { ascending: false })
-            .limit(10)
+            .limit(50)
+
+          console.log("[v0] CustomerDetailModal - orders query result:", {
+            count: data?.length || 0,
+            error: error?.message || null,
+            data: data?.slice(0, 2), // First 2 orders for debugging
+          })
+
+          if (error) {
+            console.error("[v0] CustomerDetailModal - Supabase error:", error)
+          }
 
           if (!error && data) {
+            console.log("[v0] CustomerDetailModal - setting", data.length, "orders")
             setCustomerOrders(data)
+          } else {
+            console.log("[v0] CustomerDetailModal - no orders found or error occurred")
+            setCustomerOrders([])
           }
         } catch (error) {
-          console.error("[v0] Error fetching customer orders:", error)
+          console.error("[v0] CustomerDetailModal - Error fetching customer orders:", error)
+          setCustomerOrders([])
         } finally {
           setLoadingOrders(false)
         }
       }
 
       fetchCustomerOrders()
+    } else {
+      console.log("[v0] CustomerDetailModal - NOT fetching orders. isOpen:", isOpen, "customer.id:", customer?.id)
     }
   }, [isOpen, customer?.id])
 
@@ -103,10 +140,6 @@ export default function CustomerDetailModal({
       setResendingInvoice(null)
     }
   }
-
-  if (!customer) return null
-
-  const fullName = [customer.first_name, customer.last_name].filter(Boolean).join(" ")
 
   const sendNotification = async (type: string, subject?: string, content?: string) => {
     if (!customer.email) {
@@ -177,12 +210,16 @@ export default function CustomerDetailModal({
         setNotificationError("Fehler beim Senden der E-Mail")
       }
     } catch (error) {
-      console.error("[v0] Error sending notification:", error)
+      console.error("[v0] CustomerDetailModal - Error sending notification:", error)
       setNotificationError("Unerwarteter Fehler beim Senden")
     } finally {
       setNotificationLoading(false)
     }
   }
+
+  if (!customer) return null
+
+  const fullName = [customer.first_name, customer.last_name].filter(Boolean).join(" ")
 
   console.log("[v0] CustomerDetailModal - customer data:", {
     id: customer?.id,
@@ -197,7 +234,7 @@ export default function CustomerDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[120rem] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle className="text-2xl">Kundendetails</DialogTitle>
@@ -254,6 +291,9 @@ export default function CustomerDetailModal({
           {/* Aktivität / KPIs */}
           <section className="space-y-3 p-4 bg-gray-50 rounded-lg">
             <h3 className="font-semibold text-lg border-b pb-2">Aktivität & KPIs</h3>
+            <p className="text-xs text-gray-500 italic">
+              Hinweis: KPI-Statistiken berücksichtigen nur erfolgreich abgeschlossene Bestellungen (ohne stornierte).
+            </p>
             <div className="text-sm space-y-2">
               <div>
                 <span className="font-medium">Bestellungen gesamt:</span> {customer.order_count ?? 0}
@@ -302,7 +342,7 @@ export default function CustomerDetailModal({
             <div className="flex flex-wrap gap-2">
               {customer.favorite_products.slice(0, 10).map((fp, idx) => (
                 <Badge key={`${fp.product_id}-${idx}`} variant="outline" className="text-xs">
-                  {fp.name || `#${fp.product_id}`} · {fp.quantity}×
+                  {fp.name || `Produkt #${fp.product_id}`} · {fp.quantity}×
                 </Badge>
               ))}
               {customer.favorite_products.length > 10 && (
@@ -353,35 +393,92 @@ export default function CustomerDetailModal({
             </div>
           ) : customerOrders.length > 0 ? (
             <div className="space-y-2">
-              {customerOrders.map((order) => (
-                <div key={order.id} className="flex items-center justify-between p-3 border rounded-lg bg-white">
-                  <div className="flex-1">
-                    <div className="font-medium">#{order.order_number}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {formatDate(order.created_at)} • {formatCurrency(order.total_amount)}
+              {customerOrders.map((order) => {
+                const isExpanded = expandedOrders.has(order.id)
+                return (
+                  <div key={order.id} className="border rounded-lg bg-white overflow-hidden">
+                    <div
+                      className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                      onClick={() => {
+                        const newExpanded = new Set(expandedOrders)
+                        if (isExpanded) {
+                          newExpanded.delete(order.id)
+                        } else {
+                          newExpanded.add(order.id)
+                        }
+                        setExpandedOrders(newExpanded)
+                      }}
+                    >
+                      <div className="flex-1">
+                        <div className="font-medium">#{order.order_number}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {formatDate(order.created_at)} • {formatCurrency(order.total)}
+                          {order.delivery_method && (
+                            <Badge variant="outline" className="ml-2 text-xs">
+                              {order.delivery_method === "pickup" ? "Abholung" : "Lieferung"}
+                            </Badge>
+                          )}
+                        </div>
+                        {order.hellocash_invoice_number && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Rechnung: {order.hellocash_invoice_number}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {order.hellocash_invoice_id && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleResendInvoice(order.id, order.order_number)
+                            }}
+                            disabled={resendingInvoice === order.id}
+                          >
+                            <Mail className="h-4 w-4 mr-2" />
+                            {resendingInvoice === order.id ? "Wird gesendet..." : "Rechnung senden"}
+                          </Button>
+                        )}
+                        <Button size="sm" variant="ghost">
+                          {isExpanded ? "Weniger" : "Details"}
+                        </Button>
+                      </div>
                     </div>
-                    {order.hellocash_invoice_number && (
-                      <div className="text-xs text-muted-foreground mt-1">
-                        Rechnung: {order.hellocash_invoice_number}
+
+                    {isExpanded && order.order_items && order.order_items.length > 0 && (
+                      <div className="px-3 pb-3 border-t bg-gray-50">
+                        <h4 className="font-medium text-sm mt-3 mb-2">Bestellpositionen:</h4>
+                        <div className="space-y-1">
+                          {order.order_items.map((item: any) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between text-sm py-2 px-3 bg-white rounded border"
+                            >
+                              <div className="flex-1">
+                                <div className="font-medium">{item.product_name}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {item.quantity}× à {formatCurrency(item.unit_price / 100)}
+                                </div>
+                              </div>
+                              <div className="font-semibold">
+                                {formatCurrency((item.quantity * item.unit_price) / 100)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-3 pt-2 border-t flex justify-between items-center font-semibold">
+                          <span>Gesamt:</span>
+                          <span>{formatCurrency(order.total)}</span>
+                        </div>
                       </div>
                     )}
                   </div>
-                  {order.hellocash_invoice_id && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleResendInvoice(order.id, order.order_number)}
-                      disabled={resendingInvoice === order.id}
-                    >
-                      <Mail className="h-4 w-4 mr-2" />
-                      {resendingInvoice === order.id ? "Wird gesendet..." : "Rechnung senden"}
-                    </Button>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Noch keine Bestellungen</p>
+            <div className="text-sm text-gray-500">Keine Bestellungen gefunden</div>
           )}
         </section>
 

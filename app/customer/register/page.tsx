@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { useState } from "react"
-import { getBrowserClient } from "@/lib/supabase/browser"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,7 +27,6 @@ export default function CustomerRegisterPage() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const router = useRouter()
-  const supabase = getBrowserClient()
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -41,47 +39,71 @@ export default function CustomerRegisterPage() {
     setError("")
     setSuccess("")
 
-    // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
       setError("Die Passwörter stimmen nicht überein")
       setLoading(false)
       return
     }
 
+    if (formData.password.length < 6) {
+      setError("Das Passwort muss mindestens 6 Zeichen lang sein")
+      setLoading(false)
+      return
+    }
+
     try {
       console.log("[v0] Customer registration attempt:", formData.email)
+      console.log("[v0] Current hostname:", window.location.hostname)
+      console.log("[v0] Current origin:", window.location.origin)
 
-      const isLocalhost =
-        typeof window !== "undefined" &&
-        (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
-
-      const redirectUrl = isLocalhost
-        ? process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL
-        : process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "")
-
-      // Register user with Supabase Auth
-      const { data, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          emailRedirectTo: `${redirectUrl}/customer/account-confirmed`,
-          data: {
-            first_name: formData.firstName,
-            last_name: formData.lastName,
-            phone: formData.phone,
-            address: formData.address,
-            city: formData.city,
-            postal_code: formData.postalCode,
-            user_type: "customer",
-          },
+      const response = await fetch("/api/auth/create-account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          street: formData.address,
+          zip: formData.postalCode,
+          city: formData.city,
+        }),
       })
 
-      if (authError) {
-        console.log("[v0] Registration error:", authError.message)
-        setError(authError.message)
+      const data = await response.json()
+
+      console.log("[v0] API response status:", response.status)
+      console.log("[v0] API response data:", data)
+
+      if (!response.ok || !data.success) {
+        console.log("[v0] Registration failed:", data.error)
+        console.log("[v0] Error code:", data.code)
+
+        if (data.code === "user_already_exists") {
+          setError(data.error || "Diese E-Mail-Adresse ist bereits registriert.")
+        } else if (data.error?.includes("User already registered")) {
+          setError(
+            "Diese E-Mail-Adresse ist bereits registriert. Bitte verwenden Sie eine andere E-Mail oder melden Sie sich an.",
+          )
+        } else if (data.error?.includes("Invalid email")) {
+          setError("Bitte geben Sie eine gültige E-Mail-Adresse ein.")
+        } else if (data.error?.includes("Password")) {
+          setError("Das Passwort erfüllt nicht die Sicherheitsanforderungen. Bitte verwenden Sie mindestens 6 Zeichen.")
+        } else if (data.error?.includes("email")) {
+          setError(
+            "Die Bestätigungs-E-Mail konnte nicht versendet werden. Bitte versuchen Sie es später erneut oder kontaktieren Sie den Support.",
+          )
+        } else {
+          setError(data.error || "Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.")
+        }
       } else {
-        console.log("[v0] Registration successful:", data)
+        console.log("[v0] Registration successful!")
+        console.log("[v0] User ID:", data.user?.id)
+        console.log("[v0] Message:", data.message)
+
         setSuccess("Registrierung erfolgreich! Bitte prüfen Sie Ihre E-Mails zur Bestätigung.")
 
         // Clear form
@@ -99,7 +121,7 @@ export default function CustomerRegisterPage() {
       }
     } catch (err) {
       console.log("[v0] Registration exception:", err)
-      setError("Ein unerwarteter Fehler ist aufgetreten")
+      setError("Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.")
     } finally {
       setLoading(false)
     }

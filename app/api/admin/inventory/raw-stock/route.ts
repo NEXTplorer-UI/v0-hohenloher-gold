@@ -6,14 +6,33 @@ export async function GET() {
   try {
     const supabase = await createServerClient()
 
-    const { data: rawStocks, error } = await supabase.rpc("get_raw_stock_overview")
+    const { data: rawStocks, error } = await supabase
+      .from("inventory_raw_stock")
+      .select(`
+        id,
+        product_group,
+        unit_type,
+        stock_grams,
+        min_stock_grams,
+        created_at,
+        updated_at,
+        products:products(id, name)
+      `)
+      .order("product_group")
 
     if (error) {
       console.error("[API] Error fetching raw stocks:", error)
       throw error
     }
 
-    return NextResponse.json({ success: true, rawStocks })
+    const transformedData =
+      rawStocks?.map((stock) => ({
+        ...stock,
+        product_names: stock.products?.map((p) => p.name) || [],
+        product_count: stock.products?.length || 0,
+      })) || []
+
+    return NextResponse.json({ success: true, rawStocks: transformedData })
   } catch (error: any) {
     console.error("[API] Error in raw-stock GET:", error)
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
@@ -28,10 +47,7 @@ export async function POST(request: Request) {
     const { product_group, unit_type, stock_grams, min_stock_grams } = body
 
     if (!product_group || !unit_type) {
-      return NextResponse.json(
-        { error: "product_group and unit_type are required" },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "product_group and unit_type are required" }, { status: 400 })
     }
 
     const { data: existing, error: checkError } = await supabase
@@ -42,17 +58,11 @@ export async function POST(request: Request) {
 
     if (checkError) {
       console.error("[v0] Error checking for duplicate:", checkError)
-      return NextResponse.json(
-        { error: checkError.message },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: checkError.message }, { status: 500 })
     }
 
     if (existing) {
-      return NextResponse.json(
-        { error: `Rohware-Gruppe "${product_group}" existiert bereits` },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: `Rohware-Gruppe "${product_group}" existiert bereits` }, { status: 400 })
     }
 
     // Create new raw stock group
@@ -69,18 +79,12 @@ export async function POST(request: Request) {
 
     if (insertError) {
       console.error("[v0] Error creating raw stock group:", insertError)
-      return NextResponse.json(
-        { error: insertError.message },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: insertError.message }, { status: 500 })
     }
 
     return NextResponse.json({ success: true, ...newGroup })
   } catch (error: any) {
     console.error("[v0] Error in raw stock POST:", error)
-    return NextResponse.json(
-      { error: error.message || "Internal server error" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
   }
 }

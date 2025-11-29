@@ -21,11 +21,12 @@ export async function POST(request: NextRequest) {
       orderId,
       paymentMethod,
       createInvoice = true,
+      sendEmail = true, // New parameter to control email sending
       discountPercent,
       testMode,
       cashierId,
       invoiceText,
-      includeCustomerAddress = true, // New parameter to control customer address
+      includeCustomerAddress = true,
     } = await request.json()
 
     if (!orderId) {
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
     console.log("[v0] [mark-order-paid] Order found:", order.order_number)
     console.log("[v0] [mark-order-paid] Payment method:", paymentMethod || order.payment_method)
     console.log("[v0] [mark-order-paid] Create invoice:", createInvoice)
+    console.log("[v0] [mark-order-paid] Send email:", sendEmail) // Log sendEmail parameter
 
     let invoiceResult = null
     if (createInvoice) {
@@ -117,11 +119,17 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] [mark-order-paid] Payment status updated to 'paid'")
 
-    if (!createInvoice) {
-      console.log("[v0] [mark-order-paid] Skipping email (no invoice created)")
+    if (!createInvoice || !sendEmail) {
+      const message = !createInvoice
+        ? "Order marked as paid (no invoice created)"
+        : "Order marked as paid and invoice created (no email sent)"
+
+      console.log("[v0] [mark-order-paid]", message)
       return NextResponse.json({
         success: true,
-        message: "Order marked as paid (no invoice created)",
+        message,
+        invoiceId: invoiceResult?.invoiceId,
+        invoiceNumber: invoiceResult?.invoiceNumber,
       })
     }
 
@@ -130,7 +138,7 @@ export async function POST(request: NextRequest) {
       console.warn("[v0] [mark-order-paid] No customer email, skipping email")
       return NextResponse.json({
         success: true,
-        message: "Order marked as paid, but no email sent (no customer email)",
+        message: "Order marked as paid and invoice created (no customer email)",
         invoiceId: invoiceResult?.invoiceId,
         invoiceNumber: invoiceResult?.invoiceNumber,
       })
@@ -157,56 +165,38 @@ export async function POST(request: NextRequest) {
 
       // Fetch invoice PDF as attachment
       const attachments = []
-      const helloCashToken = process.env.HELLOCASH_API_TOKEN
 
-      if (helloCashToken && invoiceResult?.invoiceId) {
+      if (invoiceResult?.invoiceId && invoiceResult?.pdfBase64) {
         try {
-          console.log("[v0] [mark-order-paid] Fetching invoice PDF...")
-          console.log("[v0] [mark-order-paid] Invoice ID:", invoiceResult.invoiceId)
+          console.log("[v0] [mark-order-paid] Using PDF from invoice creation response")
+          console.log("[v0] [mark-order-paid] PDF base64 length:", invoiceResult.pdfBase64.length)
 
-          const pdfResponse = await fetch(
-            `https://api.hellocash.business/api/v1/invoices/${invoiceResult.invoiceId}/pdf?cancellation=false&locale=de_DE`,
-            {
-              headers: {
-                Authorization: `Bearer ${helloCashToken}`,
-              },
-            },
-          )
+          // Convert base64 string to Buffer for Resend
+          const pdfBuffer = Buffer.from(invoiceResult.pdfBase64, "base64")
+          console.log("[v0] [mark-order-paid] PDF buffer size:", pdfBuffer.byteLength, "bytes")
 
-          console.log("[v0] [mark-order-paid] PDF response status:", pdfResponse.status)
-
-          if (pdfResponse.ok) {
-            console.log("[v0] [mark-order-paid] Converting PDF to buffer...")
-            const pdfBuffer = await pdfResponse.arrayBuffer()
-            console.log("[v0] [mark-order-paid] PDF buffer size:", pdfBuffer.byteLength, "bytes")
-
-            if (pdfBuffer.byteLength === 0) {
-              console.error("[v0] [mark-order-paid] PDF buffer is empty!")
-            } else if (pdfBuffer.byteLength > 3 * 1024 * 1024) {
-              console.warn(
-                "[v0] [mark-order-paid] PDF too large for email attachment:",
-                pdfBuffer.byteLength,
-                "bytes - skipping attachment",
-              )
-              console.log("[v0] [mark-order-paid] Invoice can be downloaded from HelloCash directly")
-            } else {
-              attachments.push({
-                filename: `Rechnung_${order.order_number}.pdf`,
-                content: Buffer.from(pdfBuffer),
-              })
-              console.log(
-                "[v0] [mark-order-paid] Invoice PDF attached successfully, size:",
-                pdfBuffer.byteLength,
-                "bytes",
-              )
-            }
+          if (pdfBuffer.byteLength === 0) {
+            console.error("[v0] [mark-order-paid] PDF buffer is empty!")
+          } else if (pdfBuffer.byteLength > 3 * 1024 * 1024) {
+            console.warn(
+              "[v0] [mark-order-paid] PDF too large for email attachment:",
+              pdfBuffer.byteLength,
+              "bytes - skipping attachment",
+            )
+            console.log("[v0] [mark-order-paid] Invoice can be downloaded from HelloCash directly")
           } else {
-            const errorText = await pdfResponse.text()
-            console.error("[v0] [mark-order-paid] Failed to fetch invoice PDF:", pdfResponse.status)
-            console.error("[v0] [mark-order-paid] Error response:", errorText)
+            attachments.push({
+              filename: `Rechnung_${order.order_number}.pdf`,
+              content: pdfBuffer,
+            })
+            console.log(
+              "[v0] [mark-order-paid] Invoice PDF attached successfully, size:",
+              pdfBuffer.byteLength,
+              "bytes",
+            )
           }
         } catch (pdfError) {
-          console.error("[v0] [mark-order-paid] Error fetching invoice PDF:", pdfError)
+          console.error("[v0] [mark-order-paid] Error processing invoice PDF:", pdfError)
           console.log("[v0] [mark-order-paid] Continuing without PDF attachment")
         }
       }
