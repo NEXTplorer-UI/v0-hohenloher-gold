@@ -134,7 +134,18 @@ export async function GET(req: Request) {
       }))
 
       console.log("[v0] [admin/orders] Successfully shaped orders")
-      return NextResponse.json({ orders: shaped, total: filtered.length }, { status: 200 })
+
+      return NextResponse.json(
+        { orders: shaped, total: filtered.length },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        },
+      )
     }
 
     // No search query - apply pagination directly
@@ -167,7 +178,18 @@ export async function GET(req: Request) {
     }))
 
     console.log("[v0] [admin/orders] Successfully shaped orders")
-    return NextResponse.json({ orders: shaped, total: totalCount ?? 0 }, { status: 200 })
+
+    return NextResponse.json(
+      { orders: shaped, total: totalCount ?? 0 },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
+    )
   } catch (e: any) {
     console.error("[v0] [admin/orders] Unexpected:", e)
     return NextResponse.json({ error: "Server error", details: e?.message }, { status: 500 })

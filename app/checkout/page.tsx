@@ -2120,18 +2120,27 @@ export default function CheckoutPage() {
                 </Button>
                 <Button
                   onClick={handleOrderSubmission}
-                  className="flex-1"
+                  className="flex-1 whitespace-normal h-auto py-3"
                   size="lg"
                   disabled={isSubmitting || !isPaymentStepValid()}
                 >
-                  {isSubmitting
-                    ? "Bestellung wird verarbeitet..."
-                    : `Zahlungspflichtig bestellen - €${formatPrice(
-                        state.items.reduce(
-                          (sum, item) => sum + safeCalculatePrice(item.price, item.category) * item.quantity,
-                          0,
-                        ) + (deliveryMethod === "delivery" ? 4.9 : 0),
-                      )}`}
+                  {isSubmitting ? (
+                    "Bestellung wird verarbeitet..."
+                  ) : (
+                    <>
+                      <span className="hidden sm:inline">Zahlungspflichtig bestellen - </span>
+                      <span className="sm:hidden">Bestellen - </span>
+                      <span className="font-semibold">
+                        €
+                        {formatPrice(
+                          state.items.reduce(
+                            (sum, item) => sum + safeCalculatePrice(item.price, item.category) * item.quantity,
+                            0,
+                          ) + (deliveryMethod === "delivery" ? 4.9 : 0),
+                        )}
+                      </span>
+                    </>
+                  )}
                 </Button>
               </div>
             </CardContent>

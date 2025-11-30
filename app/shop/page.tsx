@@ -258,7 +258,11 @@ export default function ShopPage() {
   } = useSWR("/api/delivery-schedules", fetcher)
 
   const allProducts = useMemo(() => {
-    if (loading || error || !dbProducts) return []
+    if (loading || error || !dbProducts) {
+      console.log("[v0] allProducts: loading, error, or no data", { loading, error, hasData: !!dbProducts })
+      return []
+    }
+    console.log("[v0] allProducts: returning", dbProducts.length, "products")
     return dbProducts
   }, [dbProducts, loading, error])
 

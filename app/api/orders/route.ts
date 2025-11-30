@@ -922,23 +922,6 @@ export async function POST(request: NextRequest) {
           })
 
           console.log(`[/api/orders] ✅ Customer confirmation email sent to ${updatedOrder.customer.email}`)
-
-          const adminEmail = process.env.SUMUP_PAY_TO_EMAIL || "kontakt@suedfruechte-hohenlohe.de"
-          await resend.emails.send({
-            from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
-            to: adminEmail,
-            subject: `[KOPIE] ${subject}`,
-            html: `
-              <div style="background: #fef3c7; border: 2px solid #f59e0b; padding: 15px; margin-bottom: 20px; border-radius: 8px;">
-                <strong style="color: #92400e;">📧 Admin-Kopie</strong><br>
-                <span style="color: #78350f;">Diese E-Mail wurde an ${updatedOrder.customer.email} gesendet</span>
-              </div>
-              ${html}
-            `,
-            attachments,
-          })
-
-          console.log(`[/api/orders] ✅ Admin copy sent to ${adminEmail}`)
         }
       } catch (invoiceError: any) {
         console.error("[/api/orders] Error in invoice/email process:", invoiceError.message)
@@ -947,6 +930,140 @@ export async function POST(request: NextRequest) {
       console.warn("[/api/orders] Resend could not be imported, skipping email sending.")
     } else {
       console.log("[/api/orders] Payment status is not 'paid', skipping invoice generation and payment receipt email")
+    }
+
+    if (ResendClass) {
+      try {
+        console.log("[/api/orders] Sending admin copy for order:", savedOrder.id)
+
+        const { data: orderForAdmin, error: adminFetchError } = await supabase
+          .from("orders")
+          .select(
+            `
+            *,
+            customer:customers(*),
+            order_items(
+              *, 
+              products(*)
+            )
+          `,
+          )
+          .eq("id", savedOrder.id)
+          .single()
+
+        if (adminFetchError || !orderForAdmin) {
+          console.error("[/api/orders] Error fetching order for admin copy:", adminFetchError)
+        } else {
+          let buildEmailFn: any = null
+          let emailCopyObj: any = null
+          try {
+            const buildModule = await import("@/lib/email/build")
+            buildEmailFn = buildModule.buildEmail
+            const copyModule = await import("@/lib/email/copy")
+            emailCopyObj = copyModule.emailCopy
+          } catch (emailImportError) {
+            console.error("[/api/orders] Failed to import email templates for admin copy:", emailImportError)
+          }
+
+          const emailVars = {
+            customerName: `${orderForAdmin.customer.first_name || ""} ${orderForAdmin.customer.last_name || ""}`.trim(),
+            orderNumber: orderForAdmin.order_number || "",
+            orderId: orderForAdmin.order_number || "",
+            orderDate: orderForAdmin.created_at ? new Date(orderForAdmin.created_at).toLocaleDateString("de-DE") : "",
+            orderTotal: orderForAdmin.total ? orderForAdmin.total.toFixed(2) : "0.00",
+            total: orderForAdmin.total ? orderForAdmin.total.toFixed(2) : "0.00",
+            subtotal: orderForAdmin.subtotal ? orderForAdmin.subtotal.toFixed(2) : "0.00",
+            pickupLocation:
+              orderForAdmin.pickup_location_normalized || orderForAdmin.pickup_location || "Siehe Bestellbestätigung",
+            pickupDate: orderForAdmin.pickup_date
+              ? new Date(orderForAdmin.pickup_date).toLocaleDateString("de-DE", {
+                  weekday: "long",
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                })
+              : null,
+            paymentMethod: orderForAdmin.payment_method || "Nicht angegeben",
+            paymentStatus: orderForAdmin.payment_status || "pending",
+            deliveryMethod: orderForAdmin.delivery_method || "pickup",
+            orderItems: (orderForAdmin.order_items || []).map((item: any) => ({
+              product_name: item.products?.name || item.product_name || "Unbekanntes Produkt",
+              quantity: item.quantity || 0,
+              unit_price: item.unit_price || 0,
+              total_price: item.total_price || item.quantity * item.unit_price || 0,
+              product_size: item.product_size || item.products?.unit || null,
+            })),
+          }
+
+          let subject = "Ihre Bestellung bei Südfrüchte Hohenlohe"
+          let html = "<p>Vielen Dank für Ihre Bestellung.</p>"
+
+          if (buildEmailFn && emailCopyObj) {
+            const built = buildEmailFn("orderConfirmation", emailVars, emailCopyObj)
+            subject = built.subject
+            html = built.html
+          }
+
+          let attachments: Array<{ filename: string; content: string }> | undefined
+
+          // Only attach PDF if invoice was created (paid orders)
+          if (orderForAdmin.hellocash_invoice_id && orderForAdmin.payment_status === "paid") {
+            try {
+              const helloCashToken = process.env.HELLOCASH_API_TOKEN
+              if (helloCashToken) {
+                const pdfResponse = await fetch(
+                  `https://api.hellocash.business/api/v1/invoices/${orderForAdmin.hellocash_invoice_id}/pdf?cancellation=false&locale=de_DE`,
+                  {
+                    method: "GET",
+                    headers: {
+                      Authorization: `Bearer ${helloCashToken}`,
+                      Accept: "application/json",
+                    },
+                  },
+                )
+
+                if (pdfResponse.ok) {
+                  const pdfData = await pdfResponse.json()
+                  attachments = [
+                    {
+                      filename: `Rechnung_${orderForAdmin.order_number}.pdf`,
+                      content: pdfData.pdf_base64_encoded,
+                    },
+                  ]
+                  console.log("[/api/orders] Invoice PDF attached to admin copy")
+                } else {
+                  console.error("[/api/orders] Error fetching PDF for admin copy:", await pdfResponse.text())
+                }
+              }
+            } catch (pdfError) {
+              console.error("[/api/orders] Error fetching PDF for admin copy:", pdfError)
+            }
+          }
+
+          const adminEmail = process.env.SUMUP_PAY_TO_EMAIL || "kontakt@suedfruechte-hohenlohe.de"
+          const resend = new ResendClass(process.env.RESEND_API_KEY)
+
+          await resend.emails.send({
+            from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
+            to: adminEmail,
+            subject: `[ADMIN-KOPIE] ${subject}`,
+            html: `
+              <div style="background: #fef3c7; border: 2px solid #f59e0b; padding: 15px; margin-bottom: 20px; border-radius: 8px;">
+                <strong style="color: #92400e;">Admin-Kopie der Bestellung</strong><br>
+                <span style="color: #78350f;">Kunde: ${orderForAdmin.customer.email}</span><br>
+                <span style="color: #78350f;">Zahlungsstatus: ${orderForAdmin.payment_status}</span><br>
+                <span style="color: #78350f;">Zahlungsmethode: ${orderForAdmin.payment_method}</span>
+              </div>
+              ${html}
+            `,
+            attachments,
+          })
+
+          console.log(`[/api/orders] ✅ Admin copy sent to ${adminEmail}`)
+        }
+      } catch (adminEmailError: any) {
+        console.error("[/api/orders] Error sending admin copy:", adminEmailError.message)
+      }
     }
 
     // ─────────────────────────────────────────────────────────────
