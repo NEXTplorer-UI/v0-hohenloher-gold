@@ -5,6 +5,7 @@
 
 import { renderTemplate, type TemplateVars } from "./engine"
 import { emailCopy } from "./copy"
+import { formatTime } from "../format-time"
 
 export interface EmailTemplateResult {
   subject: string
@@ -44,7 +45,7 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
           const scheduleHeader = schedule
             ? `<div style="background: #fef3c7; padding: 12px; border-radius: 6px; margin: 20px 0 12px 0; border-left: 4px solid #d4af37;">
                <p style="margin: 0; font-weight: bold; color: #000;">📅 Liefertermin: ${new Date(schedule.delivery_date).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</p>
-               ${schedule.pickup_start_time && schedule.pickup_end_time ? `<p style="margin: 5px 0 0 0; color: #666;">⏰ Abholzeit: ${schedule.pickup_start_time} - ${schedule.pickup_end_time} Uhr</p>` : ""}
+               ${schedule.pickup_start_time && schedule.pickup_end_time ? `<p style="margin: 5px 0 0 0; color: #666;">⏰ Abholzeit: ${formatTime(schedule.pickup_start_time)} - ${formatTime(schedule.pickup_end_time)} Uhr</p>` : ""}
              </div>`
             : ""
 
@@ -52,9 +53,9 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
             .map(
               (item: any) =>
                 `<div class="data-row">
-            <span class="data-label">${item.products?.name || item.product_name || "Unbekanntes Produkt"}${item.product_size ? ` (${item.product_size})` : ""}</span>
-            <span class="data-value">${item.quantity} ${item.products?.unit || item.unit || "Stück"} à €${(item.unit_price / 100).toFixed(2)} = €${(item.total_price / 100).toFixed(2)}</span>
-          </div>`,
+          <span class="data-label">${item.products?.name || item.product_name || "Unbekanntes Produkt"}${item.product_size ? ` (${item.product_size})` : ""}</span>
+          <span class="data-value">${item.quantity}x à €${Number(item.unit_price || 0).toFixed(2)} = €${Number(item.total_price || 0).toFixed(2)}</span>
+        </div>`,
             )
             .join("")
 
@@ -67,7 +68,7 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
             (item) =>
               `<div class="data-row">
             <span class="data-label">${item.product_name}${item.product_size ? ` (${item.product_size})` : ""}</span>
-            <span class="data-value">${item.quantity} ${item.unit || "Stück"} à €${item.unit_price?.toFixed(2) || "0.00"} = €${item.total_price?.toFixed(2) || "0.00"}</span>
+            <span class="data-value">${item.quantity} ${item.unit || "Stück"} à €${Number(item.unit_price || 0).toFixed(2)} = €${Number(item.total_price || 0).toFixed(2)}</span>
           </div>`,
           )
           .join("")
@@ -373,7 +374,7 @@ export function paymentReceiptContent(vars: TemplateVars, customCopy?: EmailCopy
           (item) =>
             `<div class="data-row">
           <span class="data-label">${item.product_name}</span>
-          <span class="data-value">${item.quantity}x à €${item.unit_price.toFixed(2)} = €${item.total_price.toFixed(2)}</span>
+          <span class="data-value">${item.quantity}x à €${Number(item.unit_price || 0).toFixed(2)} = €${Number(item.total_price || 0).toFixed(2)}</span>
         </div>`,
         )
         .join("")

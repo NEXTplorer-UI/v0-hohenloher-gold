@@ -35,7 +35,6 @@ import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { ExportOptionsDialog, type ExportOptions } from "@/components/admin/export-options-dialog"
-import { usePersistedState } from "@/hooks/use-persisted-state"
 import { useTestMode } from "./test-mode-toggle" // Import useTestMode hook
 import { useAdminCache } from "@/hooks/use-admin-cache"
 import { Combobox } from "@/components/ui/combobox" // Import Combobox
@@ -757,67 +756,25 @@ OrderItem.displayName = "OrderItem"
 
 function OrderManagement() {
   const testMode = useTestMode()
-
-  const {
-    data: ordersResponse,
-    isLoading: loading,
-    error: errorData,
-    refresh: fetchOrders,
-    updateCache: updateOrdersCache,
-  } = useAdminCache<{ orders: Order[]; total: number } | Order[]>("/api/admin/orders", {
-    fallbackData: [],
-    revalidateOnMount: true,
-  })
-
-  const error = errorData ? String(errorData) : null
-
-  const orders = Array.isArray(ordersResponse) ? ordersResponse : (ordersResponse?.orders ?? [])
-  const totalOrdersCount = Array.isArray(ordersResponse) ? orders.length : (ordersResponse?.total ?? 0)
+  const { toast } = useToast()
 
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 50
 
-  const [searchTerm, setSearchTerm] = usePersistedState({
-    key: "admin-orders-search",
-    defaultValue: "",
-    expirationHours: 12,
-  })
-  const [statusFilter, setStatusFilter] = usePersistedState({
-    key: "admin-orders-status-filter",
-    defaultValue: "all",
-    expirationHours: 12,
-  })
-  const [commentFilter, setCommentFilter] = usePersistedState({
-    key: "admin-orders-comment-filter",
-    defaultValue: "all",
-    expirationHours: 12,
-  })
-  const [deliveryMethodFilter, setDeliveryMethodFilter] = usePersistedState({
-    key: "admin-orders-delivery-filter",
-    defaultValue: "all",
-    expirationHours: 12,
-  })
-  const [pickupLocationFilter, setPickupLocationFilter] = usePersistedState({
-    key: "admin-orders-pickup-location-filter",
-    defaultValue: "all",
-    expirationHours: 12,
-  })
+  const [searchInput, setSearchInput] = useState("") // User input field
+  const [searchTerm, setSearchTerm] = useState("") // Actual search query sent to API
 
+  // State for customer search in manual order form
   const [customerSearchQuery, setCustomerSearchQuery] = useState("")
-  const [customerSearchResults, setCustomerSearchResults] = useState<
-    Array<{ id: string; email: string; first_name: string; last_name: string }>
-  >([])
+  const [customerSearchResults, setCustomerSearchResults] = useState<CustomerDetails[]>([])
   const [isSearchingCustomers, setIsSearchingCustomers] = useState(false)
 
-  const [showFilters, setShowFilters] = useState(false)
-  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
+  // State for manual order form
   const [showManualOrderForm, setShowManualOrderForm] = useState(false)
   const [isCreatingOrder, setIsCreatingOrder] = useState(false)
-  const [customers, setCustomers] = useState<
-    Array<{ id: string; email: string; first_name: string; last_name: string }>
-  >([])
-  const [products, setProducts] = useState<Array<{ id: number; name: string; price: number; unit: string }>>([])
-  const [pickupLocations, setPickupLocations] = useState<Array<{ id: string; name: string }>>([])
+  const [customers, setCustomers] = useState<CustomerDetails[]>([])
+  const [products, setProducts] = useState<any[]>([])
+  const [pickupLocations, setPickupLocations] = useState<{ id: string; name: string }[]>([])
   const [manualOrderForm, setManualOrderForm] = useState({
     customerId: "",
     customerEmail: "",
@@ -829,34 +786,20 @@ function OrderManagement() {
     notes: "",
     items: [{ productId: "", quantity: 1, price: 0 }],
   })
-  const { toast } = useToast()
 
+  // State for filters
+  const [showFilters, setShowFilters] = useState(false)
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [commentFilter, setCommentFilter] = useState("all")
+  const [deliveryMethodFilter, setDeliveryMethodFilter] = useState("all")
+  const [pickupLocationFilter, setPickupLocationFilter] = useState("all")
+
+  // State for selected orders and export
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set())
   const [showExportDialog, setShowExportDialog] = useState(false)
+  const [includeCustomerAddress, setIncludeCustomerAddress] = useState(true) // State for export option
 
-  // Added modal state for marking as paid
-  const [showMarkAsPaidModal, setShowMarkAsPaidModal] = useState(false)
-  // Track selected order for payment confirmation
-  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<string | null>(null)
-  // Payment method selection for manual payment
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("cash")
-  const [createInvoice, setCreateInvoice] = useState<boolean>(true)
-  const [sendInvoiceEmail, setSendInvoiceEmail] = useState(true)
-  const [discountPercent, setDiscountPercent] = useState<string>("")
-  const [customDiscountPercent, setCustomDiscountPercent] = useState<string>("")
-  const [invoiceTestMode, setInvoiceTestMode] = useState<boolean>(false)
-  const [includeCustomerAddress, setIncludeCustomerAddress] = useState<boolean>(true) // Added state for customer address checkbox
-  const [helloCashEmployees, setHelloCashEmployees] = useState<any[]>([])
-  const [selectedCashierId, setSelectedCashierId] = useState<string>("")
-  const [loadingEmployees, setLoadingEmployees] = useState(false)
-  // Loading state for marking as paid
-  const [isMarkingAsPaid, setIsMarkingAsPaid] = useState(false)
-
-  const [invoiceText, setInvoiceText] = useState("")
-
-  // State for notifications (moved from OrderItem)
-  const [selectedNotification, setSelectedNotification] = useState<EmailTemplateId | "">("")
-  const [isSendingNotification, setIsSendingNotification] = useState(false)
-
+  // State for new customer dialog in manual order form
   const [showNewCustomerDialog, setShowNewCustomerDialog] = useState(false)
   const [newCustomerForm, setNewCustomerForm] = useState({
     first_name: "",
@@ -870,8 +813,59 @@ function OrderManagement() {
   })
   const [isCreatingCustomer, setIsCreatingCustomer] = useState(false)
 
-  // Alias fetchOrders to loadOrders for clarity in handleConfirmMarkAsPaid
-  const loadOrders = fetchOrders
+  // State for "Mark as Paid" modal
+  const [showMarkAsPaidModal, setShowMarkAsPaidModal] = useState(false)
+  const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<string | null>(null)
+  const [isMarkingAsPaid, setIsMarkingAsPaid] = useState(false)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("cash")
+  const [createInvoice, setCreateInvoice] = useState(true)
+  const [sendInvoiceEmail, setSendInvoiceEmail] = useState(true)
+  const [discountPercent, setDiscountPercent] = useState("")
+  const [customDiscountPercent, setCustomDiscountPercent] = useState("")
+  const [invoiceTestMode, setInvoiceTestMode] = useState(false)
+  const [selectedCashierId, setSelectedCashierId] = useState("")
+  const [helloCashEmployees, setHelloCashEmployees] = useState<any[]>([])
+  const [loadingEmployees, setLoadingEmployees] = useState(false)
+  const [invoiceText, setInvoiceText] = useState("")
+
+  const buildUrl = useCallback(() => {
+    const params = new URLSearchParams()
+
+    if (searchTerm && searchTerm.trim() !== "") {
+      params.append("q", searchTerm.trim())
+    }
+
+    // Add limit to get all orders when no search
+    if (!searchTerm || searchTerm.trim() === "") {
+      params.append("limit", "999999")
+    } else {
+      params.append("limit", "5000")
+    }
+
+    return `/api/admin/orders${params.toString() ? `?${params.toString()}` : ""}`
+  }, [searchTerm]) // Only searchTerm in dependencies
+
+  const apiUrl = buildUrl()
+
+  const {
+    data: ordersResponse,
+    isLoading,
+    error: errorData,
+    refresh: fetchOrders,
+    updateCache: updateOrdersCache,
+  } = useAdminCache<{ orders: Order[]; total: number } | Order[]>(apiUrl, {
+    fallbackData: [],
+    revalidateOnMount: true,
+  })
+
+  const error = errorData ? String(errorData) : null
+
+  const orders = Array.isArray(ordersResponse) ? ordersResponse : (ordersResponse?.orders ?? [])
+  const totalOrdersCount = Array.isArray(ordersResponse) ? orders.length : (ordersResponse?.total ?? 0)
+
+  const loadOrders = useCallback(async () => {
+    await fetchOrders()
+  }, [fetchOrders])
 
   useEffect(() => {
     if (!customerSearchQuery || customerSearchQuery.length < 2) {
@@ -899,7 +893,6 @@ function OrderManagement() {
 
   const fetchFormData = useCallback(async () => {
     try {
-      console.log("[v0] Fetching form data...")
       const [customersRes, productsRes, locationsRes] = await Promise.all([
         fetch("/api/crm/customers"),
         fetch("/api/products"),
@@ -911,7 +904,6 @@ function OrderManagement() {
         const customersArray = customersData.customers || customersData
         if (Array.isArray(customersArray)) {
           setCustomers(customersArray)
-          console.log("[v0] Customers loaded:", customersArray.length)
         } else {
           console.error("[v0] Customers data is not an array:", customersData)
           setCustomers([])
@@ -921,7 +913,6 @@ function OrderManagement() {
       if (productsRes.ok) {
         const productsData = await productsRes.json()
         setProducts(productsData)
-        console.log("[v0] Products loaded:", productsData.length)
       }
 
       if (locationsRes.ok) {
@@ -934,7 +925,6 @@ function OrderManagement() {
               name: loc.name,
             })),
           )
-          console.log("[v0] Pickup locations loaded:", locations.length)
         } else {
           console.error("[v0] Pickup locations data is not an array:", locations)
         }
@@ -1122,40 +1112,28 @@ function OrderManagement() {
   )
 
   const filteredOrders = useMemo(() => {
-    // Filter orders based on current page
-    const startIndex = (currentPage - 1) * itemsPerPage
-    const endIndex = startIndex + itemsPerPage
-
-    return orders.slice(startIndex, endIndex).filter((order) => {
-      const searchLower = (searchTerm || "").toLowerCase()
-      const customerName = `${order.customer.first_name || ""} ${order.customer.last_name || ""}`.toLowerCase()
-      const matchesSearch =
-        customerName.includes(searchLower) ||
-        order.order_number.toLowerCase().includes(searchLower) ||
-        order.customer.email.toLowerCase().includes(searchLower)
-
+    return orders.filter((order) => {
       const matchesStatus = statusFilter === "all" || order.status === statusFilter
+
       const matchesComment =
         commentFilter === "all" ||
         (commentFilter === "with" && order.admin_notes && order.admin_notes.trim() !== "") ||
         (commentFilter === "without" && (!order.admin_notes || order.admin_notes.trim() === ""))
+
       const matchesDeliveryMethod = deliveryMethodFilter === "all" || order.delivery_method === deliveryMethodFilter
 
       const matchesPickupLocation =
         pickupLocationFilter === "all" || order.pickup_location_normalized === pickupLocationFilter
 
-      return matchesSearch && matchesStatus && matchesComment && matchesDeliveryMethod && matchesPickupLocation
+      return matchesStatus && matchesComment && matchesDeliveryMethod && matchesPickupLocation
     })
-  }, [
-    orders,
-    searchTerm,
-    statusFilter,
-    commentFilter,
-    deliveryMethodFilter,
-    pickupLocationFilter,
-    currentPage,
-    itemsPerPage,
-  ])
+  }, [orders, statusFilter, commentFilter, deliveryMethodFilter, pickupLocationFilter])
+
+  const paginatedOrders = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    return filteredOrders.slice(startIndex, endIndex)
+  }, [filteredOrders, currentPage, itemsPerPage])
 
   const uniquePickupLocations = useMemo(() => {
     const locations = new Set<string>()
@@ -1170,8 +1148,6 @@ function OrderManagement() {
   const exportOrders = useCallback(
     async (options: ExportOptions, orderIds?: string[]) => {
       try {
-        console.log("[v0] Starting advanced orders export...", options)
-
         const params = new URLSearchParams({
           format: options.format,
           sorting: options.sorting,
@@ -1196,7 +1172,7 @@ function OrderManagement() {
           params.append("ids", filteredIds.join(","))
         } else {
           // Otherwise, export all orders for the current page
-          const pageOrderIds = filteredOrders.map((order) => order.id)
+          const pageOrderIds = paginatedOrders.map((order) => order.id)
           params.append("ids", pageOrderIds.join(","))
         }
 
@@ -1214,8 +1190,6 @@ function OrderManagement() {
         a.download = `bestellungen-${options.format}-${new Date().toISOString().split("T")[0]}.csv`
         a.click()
         URL.revokeObjectURL(downloadUrl)
-
-        console.log("[v0] Orders export completed")
 
         if (orderIds && orderIds.length > 0) {
           setSelectedOrderIds(new Set())
@@ -1237,12 +1211,13 @@ function OrderManagement() {
       toast,
       includeCustomerAddress,
       filteredOrders,
+      paginatedOrders,
       searchTerm,
       statusFilter,
       commentFilter,
       deliveryMethodFilter,
       pickupLocationFilter,
-    ], // Added filter dependencies
+    ],
   )
 
   const handleNotify = useCallback(
@@ -1250,10 +1225,7 @@ function OrderManagement() {
       const order = orders.find((o) => o.id === orderId)
       if (!order) return
 
-      // Moved loading state and reset selected notification logic to OrderItem
       try {
-        console.log(`[v0] Sending notification for order ${order.order_number}`)
-
         const response = await fetch("/api/admin/notify-customer", {
           method: "POST",
           headers: {
@@ -1266,14 +1238,12 @@ function OrderManagement() {
         })
 
         if (response.ok) {
-          console.log(`[v0] Notification sent successfully for order ${order.order_number}`)
           toast({
             title: "Benachrichtigung gesendet",
             description: `Eine ${templateId || "Standard-Benachrichtigung"} wurde an ${order.customer.email} gesendet.`,
           })
         } else {
           const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
-          console.error(`[v0] Failed to send notification for order ${order.order_number}:`, errorData)
           toast({
             title: "Fehler beim Senden",
             description: errorData.error || "Benachrichtigung konnte nicht gesendet werden",
@@ -1289,17 +1259,15 @@ function OrderManagement() {
         })
       }
     },
-    [orders, toast], // Added toast to dependencies
+    [orders, toast],
   )
 
   const handleStatusChange = useCallback(
     async (orderId: string, status?: string, paymentStatus?: string) => {
       try {
-        console.log(`[v0] Updating order ${orderId} status:`, { status, paymentStatus })
-
-        // Optimistic update
-        updateOrdersCache((prevOrders) =>
-          prevOrders?.map((order) => {
+        updateOrdersCache((prevData) => {
+          const prevOrders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
+          const updatedOrders = prevOrders.map((order) => {
             if (order.id === orderId) {
               return {
                 ...order,
@@ -1308,8 +1276,9 @@ function OrderManagement() {
               }
             }
             return order
-          }),
-        )
+          })
+          return Array.isArray(prevData) ? updatedOrders : { orders: updatedOrders, total: prevData?.total ?? 0 }
+        })
 
         const response = await fetch("/api/admin/update-order-status", {
           method: "POST",
@@ -1324,13 +1293,11 @@ function OrderManagement() {
         })
 
         if (response.ok) {
-          console.log(`[v0] Order status updated successfully`)
-
           const { order: updatedOrder } = await response.json()
 
-          // Update cache with actual data from backend
-          updateOrdersCache((prevOrders) =>
-            prevOrders?.map((order) => {
+          updateOrdersCache((prevData) => {
+            const prevOrders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
+            const updatedOrders = prevOrders.map((order) => {
               if (order.id === orderId && updatedOrder) {
                 return {
                   ...order,
@@ -1339,8 +1306,9 @@ function OrderManagement() {
                 }
               }
               return order
-            }),
-          )
+            })
+            return Array.isArray(prevData) ? updatedOrders : { orders: updatedOrders, total: prevData?.total ?? 0 }
+          })
 
           toast({
             title: "Status aktualisiert",
@@ -1348,8 +1316,6 @@ function OrderManagement() {
           })
         } else {
           const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
-          console.error(`[v0] Failed to update order status:`, errorData)
-
           // Revert optimistic update if failed
           await fetchOrders()
 
@@ -1361,7 +1327,6 @@ function OrderManagement() {
         }
       } catch (error) {
         console.error(`[v0] Error updating order status:`, error)
-
         // Revert optimistic update if failed
         await fetchOrders()
 
@@ -1372,14 +1337,12 @@ function OrderManagement() {
         })
       }
     },
-    [updateOrdersCache, fetchOrders, toast, orders], // Added orders to dependencies
+    [updateOrdersCache, fetchOrders, toast, orders],
   )
 
   const handleAdminNotesChange = useCallback(
     async (orderId: string, adminNotes: string) => {
       try {
-        console.log(`[v0] Updating admin notes for order ${orderId}`)
-
         // Optimistic update
         updateOrdersCache((prevOrders) =>
           prevOrders?.map((order) => {
@@ -1405,8 +1368,6 @@ function OrderManagement() {
         })
 
         if (response.ok) {
-          console.log(`[v0] Admin notes updated successfully`)
-
           // Update cache with actual data from backend
           updateOrdersCache((prevOrders) =>
             prevOrders?.map((order) => {
@@ -1426,8 +1387,6 @@ function OrderManagement() {
           })
         } else {
           const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
-          console.error(`[v0] Failed to update admin notes:`, errorData)
-
           // Revert optimistic update if failed
           await fetchOrders()
 
@@ -1439,7 +1398,6 @@ function OrderManagement() {
         }
       } catch (error) {
         console.error(`[v0] Error updating admin notes:`, error)
-
         // Revert optimistic update if failed
         await fetchOrders()
 
@@ -1453,12 +1411,9 @@ function OrderManagement() {
     [updateOrdersCache, fetchOrders, toast],
   )
 
-  // Added handleSyncStatus function
   const handleSyncStatus = useCallback(
     async (orderId: string) => {
       try {
-        console.log(`[v0] Syncing helloCash status for order ${orderId}`)
-
         const response = await fetch("/api/pos/hellocash/sync-status", {
           method: "POST",
           headers: {
@@ -1469,8 +1424,6 @@ function OrderManagement() {
 
         if (response.ok) {
           const result = await response.json()
-          console.log(`[v0] Sync result:`, result)
-
           // Reload orders to show updated status
           await fetchOrders()
 
@@ -1511,9 +1464,6 @@ function OrderManagement() {
       if (!order) return
 
       try {
-        console.log(`[v0] Cancelling invoice for order ${order.order_number}`)
-
-        // Use a more descriptive prompt or an input field if available
         const reason = prompt("Stornierungsgrund:")
         if (!reason) return
 
@@ -1526,14 +1476,10 @@ function OrderManagement() {
         })
 
         if (response.ok) {
-          const result = await response.json()
-          console.log(`[v0] Invoice cancelled successfully:`, result)
-
           toast({
             title: "Rechnung storniert",
             description: `Rechnung für ${order.order_number} wurde erfolgreich storniert`,
           })
-
           // Reload orders to show updated status
           await fetchOrders()
         } else {
@@ -1627,7 +1573,6 @@ function OrderManagement() {
       if (response.ok) {
         const data = await response.json()
         setHelloCashEmployees(data.employees || [])
-        console.log("[v0] Loaded", data.employees?.length || 0, "HelloCash employees")
       } else {
         console.error("[v0] Failed to load HelloCash employees:", response.status)
         toast({
@@ -1662,10 +1607,6 @@ function OrderManagement() {
         ? Number.parseFloat(discountPercent)
         : Number.parseFloat(customDiscountPercent) || 0
 
-      console.log(
-        `[v0] Marking order ${selectedOrderForPayment} as paid with payment method: ${selectedPaymentMethod}, createInvoice: ${createInvoice}, sendEmail: ${sendInvoiceEmail}, discountPercent: ${percent}, testMode: ${invoiceTestMode}, cashierId: ${selectedCashierId}`,
-      )
-
       const response = await fetch("/api/admin/mark-order-paid", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1687,8 +1628,6 @@ function OrderManagement() {
       if (!response.ok) {
         throw new Error(result.error || result.details || "Failed to mark as paid")
       }
-
-      console.log(`[v0] Order marked as paid successfully:`, result)
 
       let successMessage = "Bestellung wurde als bezahlt markiert"
       if (createInvoice && result.invoiceNumber) {
@@ -1731,7 +1670,7 @@ function OrderManagement() {
     selectedOrderForPayment,
     selectedPaymentMethod,
     createInvoice,
-    sendInvoiceEmail, // Added to dependencies
+    sendInvoiceEmail,
     discountPercent,
     customDiscountPercent,
     invoiceTestMode,
@@ -1757,21 +1696,21 @@ function OrderManagement() {
   const handleSelectAll = useCallback(
     (checked: boolean) => {
       if (checked) {
-        setSelectedOrderIds(new Set(filteredOrders.map((order) => order.id)))
+        setSelectedOrderIds(new Set(paginatedOrders.map((order) => order.id)))
       } else {
         setSelectedOrderIds(new Set())
       }
     },
-    [filteredOrders],
+    [paginatedOrders],
   )
 
   const allFilteredSelected = useMemo(() => {
-    return filteredOrders.length > 0 && filteredOrders.every((order) => selectedOrderIds.has(order.id))
-  }, [filteredOrders, selectedOrderIds])
+    return paginatedOrders.length > 0 && paginatedOrders.every((order) => selectedOrderIds.has(order.id))
+  }, [paginatedOrders, selectedOrderIds])
 
   const someFilteredSelected = useMemo(() => {
-    return filteredOrders.some((order) => selectedOrderIds.has(order.id)) && !allFilteredSelected
-  }, [filteredOrders, selectedOrderIds, allFilteredSelected])
+    return paginatedOrders.some((order) => selectedOrderIds.has(order.id)) && !allFilteredSelected
+  }, [paginatedOrders, selectedOrderIds, allFilteredSelected])
 
   const totalPages = Math.ceil(totalOrdersCount / itemsPerPage)
   const showPagination = !searchTerm && totalPages > 1
@@ -1784,7 +1723,18 @@ function OrderManagement() {
     setCurrentPage((prev) => Math.min(prev + 1, totalPages))
   }
 
-  if (loading) {
+  const handleSearch = useCallback(() => {
+    setSearchTerm(searchInput.trim())
+    setCurrentPage(1)
+  }, [searchInput])
+
+  const handleClearSearch = useCallback(() => {
+    setSearchInput("")
+    setSearchTerm("")
+    setCurrentPage(1)
+  }, [])
+
+  if (isLoading) {
     return (
       <div className="space-y-6">
         <Card>
@@ -1814,7 +1764,7 @@ function OrderManagement() {
           <CardContent>
             <div className="text-center p-8">
               <p className="text-red-600 mb-4">{error}</p>
-              <Button onClick={fetchOrders}>Erneut versuchen</Button>
+              <Button onClick={loadOrders}>Erneut versuchen</Button>
             </div>
           </CardContent>
         </Card>
@@ -2107,16 +2057,29 @@ function OrderManagement() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="flex-1">
-              <div className="relative">
+            <div className="flex-1 flex gap-2">
+              <div className="relative flex-1">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Nach Kunde oder Bestellnummer suchen..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleSearch()
+                    }
+                  }}
                   className="pl-10"
                 />
               </div>
+              <Button onClick={handleSearch} variant="secondary">
+                Suchen
+              </Button>
+              {searchTerm && (
+                <Button onClick={handleClearSearch} variant="ghost" size="icon">
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
 
             <div className="relative">
@@ -2227,7 +2190,6 @@ function OrderManagement() {
               )}
             </div>
 
-            {/* CHANGE: Increased height to show more orders and reduced bottom margin */}
             <Button onClick={() => window.open("/admin/print-qr-codes", "_blank")} variant="outline">
               <Printer className="h-4 w-4 mr-2" />
               QR-Codes drucken
@@ -2249,7 +2211,7 @@ function OrderManagement() {
                 Exportieren
               </Button>
             )}
-            <Button onClick={fetchOrders} variant="outline">
+            <Button onClick={loadOrders} variant="outline">
               <RefreshCw className="h-4 w-4 mr-2" />
               Aktualisieren
             </Button>
@@ -2264,24 +2226,22 @@ function OrderManagement() {
               />
               <span className="text-sm text-muted-foreground">
                 {selectedOrderIds.size > 0
-                  ? `${selectedOrderIds.size} von ${filteredOrders.length} ausgewählt`
-                  : `${totalOrdersCount} Bestellungen`}{" "}
-                {/* CHANGE: Display total orders count */}
+                  ? `${selectedOrderIds.size} von ${paginatedOrders.length} ausgewählt`
+                  : `${totalOrdersCount} Bestellungen`}
               </span>
             </div>
           </div>
 
-          {/* CHANGE: Increased height to show more orders and reduced bottom margin */}
           <div className="h-[600px] overflow-auto border rounded-lg">
             <div className="space-y-2 p-4">
-              {filteredOrders.length === 0 ? (
+              {paginatedOrders.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   {orders.length === 0
                     ? "Keine Bestellungen vorhanden"
                     : "Keine Bestellungen entsprechen den Filterkriterien"}
                 </div>
               ) : (
-                filteredOrders.map((order) => (
+                paginatedOrders.map((order) => (
                   <OrderItem
                     key={order.id}
                     order={order}
@@ -2290,7 +2250,7 @@ function OrderManagement() {
                     onAdminNotesChange={handleAdminNotesChange}
                     onSyncStatus={handleSyncStatus}
                     onCancelInvoice={handleCancelInvoice}
-                    onMarkAsPaid={handleMarkAsPaid} // Added onMarkAsPaid handler
+                    onMarkAsPaid={handleMarkAsPaid}
                     isSelected={selectedOrderIds.has(order.id)}
                     onSelectionChange={handleOrderSelection}
                   />
@@ -2549,7 +2509,7 @@ function OrderManagement() {
                     setSelectedOrderForPayment(null)
                     setSelectedPaymentMethod("cash")
                     setCreateInvoice(true)
-                    setSendInvoiceEmail(true) // Reset send email state
+                    setSendInvoiceEmail(true)
                     setDiscountPercent("")
                     setCustomDiscountPercent("")
                     setInvoiceTestMode(false)
@@ -2572,7 +2532,7 @@ function OrderManagement() {
                       "Rechnung versenden"
                     ) : (
                       "Rechnung erstellen"
-                    ) // Dynamic button text
+                    )
                   ) : (
                     "Als bezahlt markieren"
                   )}

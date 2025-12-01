@@ -1,6 +1,7 @@
 import { createServerClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import { requireAdmin } from "@/lib/auth/api-auth"
+import { getAdminClient } from "@/lib/supabase/admin"
 
 export async function GET() {
   try {
@@ -39,10 +40,15 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
-  const { supabase } = await requireAdmin()
+export async function POST(request: NextRequest) {
+  const authResult = await requireAdmin(request)
+  if (authResult instanceof NextResponse) {
+    return authResult
+  }
 
   try {
+    const supabase = getAdminClient()
+
     const body = await request.json()
     const { product_group, unit_type, stock_grams, min_stock_grams } = body
 
@@ -54,7 +60,7 @@ export async function POST(request: Request) {
       .from("inventory_raw_stock")
       .select("id, product_group")
       .eq("product_group", product_group)
-      .maybeSingle() // Returns null if no rows found, doesn't throw 406
+      .maybeSingle()
 
     if (checkError) {
       console.error("[v0] Error checking for duplicate:", checkError)
@@ -65,7 +71,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Rohware-Gruppe "${product_group}" existiert bereits` }, { status: 400 })
     }
 
-    // Create new raw stock group
     const { data: newGroup, error: insertError } = await supabase
       .from("inventory_raw_stock")
       .insert({

@@ -226,13 +226,15 @@ export default function ShopPage() {
   const { cart } = useCart()
 
   const {
-    data: dbProducts,
+    data: products,
     error,
     isLoading: loading,
     mutate,
   } = useSWR("/api/products", fetcher, {
-    revalidateOnFocus: false,
+    revalidateOnFocus: true, // Revalidate when user returns to tab
     revalidateOnReconnect: false,
+    dedupingInterval: 5000, // Prevent duplicate requests within 5 seconds
+    refreshInterval: 300000, // Auto-refresh every 5 minutes
   })
 
   const {
@@ -240,16 +242,11 @@ export default function ShopPage() {
     error: categoriesError,
     isLoading: categoriesLoading,
   } = useSWR("/api/categories", fetcher, {
-    revalidateOnFocus: false,
+    revalidateOnFocus: true,
     revalidateOnReconnect: false,
+    dedupingInterval: 5000,
+    refreshInterval: 300000,
   })
-
-  useEffect(() => {
-    if (cart?.items?.length > 0) {
-      console.log("[v0] Cart changed, refreshing product stock data")
-      mutate()
-    }
-  }, [cart?.items?.length]) // Only depend on the length, not the mutate function
 
   const {
     data: deliverySchedules,
@@ -258,13 +255,13 @@ export default function ShopPage() {
   } = useSWR("/api/delivery-schedules", fetcher)
 
   const allProducts = useMemo(() => {
-    if (loading || error || !dbProducts) {
-      console.log("[v0] allProducts: loading, error, or no data", { loading, error, hasData: !!dbProducts })
+    if (loading || error || !products) {
+      console.log("[v0] allProducts: loading, error, or no data", { loading, error, hasData: !!products })
       return []
     }
-    console.log("[v0] allProducts: returning", dbProducts.length, "products")
-    return dbProducts
-  }, [dbProducts, loading, error])
+    console.log("[v0] allProducts: returning", products.length, "products")
+    return products
+  }, [products, loading, error])
 
   const filteredProducts = useMemo(() => {
     let filtered =
@@ -350,15 +347,15 @@ export default function ShopPage() {
   const categories = useMemo(() => {
     if (categoriesLoading || !dbCategories) {
       // Fallback to extracting from products while loading
-      if (!dbProducts || dbProducts.length === 0) return ["alle"]
-      const uniqueCategories = [...new Set(dbProducts.map((p: any) => p.category).filter(Boolean))]
+      if (!products || products.length === 0) return ["alle"]
+      const uniqueCategories = [...new Set(products.map((p: any) => p.category).filter(Boolean))]
       return ["alle", ...uniqueCategories.sort()]
     }
 
     const categoriesArray = dbCategories.categories || dbCategories
     const categoryNames = categoriesArray.map((cat: any) => cat.name)
     return ["alle", ...categoryNames]
-  }, [dbCategories, categoriesLoading, dbProducts])
+  }, [dbCategories, categoriesLoading, products])
 
   console.log("[v0] Final categories for filter:", categories)
   console.log("[v0] Selected category:", selectedCategory)

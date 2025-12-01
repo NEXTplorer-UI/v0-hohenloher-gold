@@ -114,6 +114,10 @@ export default function ProductManagement() {
   const [newRawStockType, setNewRawStockType] = useState<"weight" | "volume">("weight")
   const { toast } = useToast()
 
+  // CHANGE: Added state for minimum stock in dialog
+  const [newRawStockMinStock, setNewRawStockMinStock] = useState<string>("5000")
+  const [showCreateRawGroupDialog, setShowCreateRawGroupDialog] = useState(false) // State for the new dialog
+
   const [showCategoryMappings, setShowCategoryMappings] = useState(false)
   const [categoryMappings, setCategoryMappings] = useState<
     Array<{
@@ -138,7 +142,6 @@ export default function ProductManagement() {
   const [editingGroupName, setEditingGroupName] = useState<string>("")
   const [editingGroupType, setEditingGroupType] = useState<"weight" | "volume">("weight")
   const [isCreatingGroup, setIsCreatingGroup] = useState(false)
-  const [showCreateRawGroupDialog, setShowCreateRawGroupDialog] = useState(false) // State for the new dialog
 
   const [selectedProductsForGroup, setSelectedProductsForGroup] = useState<number[]>([])
 
@@ -311,6 +314,56 @@ export default function ProductManagement() {
     }
   }
 
+  // CHANGE: Added handler for creating new raw stock group
+  const handleCreateRawStockGroup = async () => {
+    if (!newRawStockName.trim()) {
+      toast({
+        title: "Fehler",
+        description: "Bitte geben Sie einen Namen ein",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setLoading(true)
+    try {
+      const response = await fetch("/api/admin/inventory/raw-stock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product_group: newRawStockName.trim(),
+          unit_type: newRawStockType,
+          min_stock_grams: newRawStockType === "weight" ? 5000 : 5000, // 5kg or 5L default
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Fehler beim Erstellen der Rohware-Gruppe")
+      }
+
+      const newGroup = await response.json()
+
+      setRawStockGroups([...rawStockGroups, newGroup])
+      setShowCreateRawGroupDialog(false)
+      setNewRawStockName("")
+      setNewRawStockType("weight")
+
+      toast({
+        title: "Erfolg",
+        description: `Rohware-Gruppe "${newRawStockName}" wurde erstellt`,
+      })
+    } catch (error) {
+      toast({
+        title: "Fehler",
+        description: error instanceof Error ? error.message : "Fehler beim Erstellen der Rohware-Gruppe",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleCreateNewGroup = async () => {
     if (!editingGroupName.trim()) {
       toast({
@@ -329,7 +382,7 @@ export default function ProductManagement() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
+        body: JSON.JSON.stringify({
           product_group: editingGroupName.trim(),
           unit_type: editingGroupType,
           stock_grams: 0,
@@ -663,63 +716,8 @@ export default function ProductManagement() {
     }
   }
 
-  const handleCreateRawStockGroup = async () => {
-    if (!newRawStockName.trim()) {
-      toast({
-        title: "Fehler",
-        description: "Bitte geben Sie einen Namen für die Rohware-Gruppe ein",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      console.log("[v0] Creating new raw stock group:", newRawStockName.trim(), newRawStockType)
-      const response = await fetch("/api/admin/inventory/raw-stock", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          product_group: newRawStockName.trim(),
-          unit_type: newRawStockType,
-          stock_grams: 0,
-          min_stock_grams: newRawStockType === "weight" ? 2000 : 5000,
-        }),
-      })
-
-      if (response.ok) {
-        const newGroup = await response.json()
-        console.log("[v0] Raw stock group created:", newGroup)
-
-        toast({
-          title: "Erfolg",
-          description: "Rohware-Gruppe wurde erstellt",
-        })
-
-        await fetchRawStockGroups()
-        setFormData({ ...formData, inventory_raw_id: newGroup.id })
-        setIsCreatingNewRawStock(false)
-        setNewRawStockName("")
-        setNewRawStockType("weight")
-      } else {
-        const error = await response.json()
-        console.error("[v0] Error creating raw stock group:", error)
-        toast({
-          title: "Fehler",
-          description: error.error || "Fehler beim Erstellen der Rohware-Gruppe",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("[v0] Error creating raw stock group:", error)
-      toast({
-        title: "Fehler",
-        description: "Verbindungsfehler beim Erstellen der Rohware-Gruppe",
-        variant: "destructive",
-      })
-    }
-  }
+  // DELETED: Redeclared handleCreateRawStockGroup removed
+  // const handleCreateRawStockGroup = async () => { ... }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1035,6 +1033,62 @@ export default function ProductManagement() {
     fetchProducts()
     fetchCategories()
   }, [])
+
+  // CHANGE: Handle create raw group logic
+  const handleCreateRawGroup = async () => {
+    if (!newRawStockName.trim() || !newRawStockType) {
+      toast({
+        title: "Fehler",
+        description: "Bitte füllen Sie alle Pflichtfelder aus",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const minStockValue = Number.parseInt(newRawStockMinStock) || (newRawStockType === "weight" ? 5000 : 5000)
+
+    setIsCreatingNewRawStock(true)
+    try {
+      const response = await fetch("/api/admin/inventory/raw-stock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product_group: newRawStockName,
+          unit_type: newRawStockType,
+          stock_grams: 0,
+          min_stock_grams: minStockValue, // : Send user-defined min stock
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Fehler beim Erstellen der Gruppe")
+      }
+
+      // Refresh the list
+      fetchRawStockGroups()
+
+      // Reset form
+      setNewRawStockName("")
+      setNewRawStockType("weight")
+      setNewRawStockMinStock("5000") // : Reset min stock field
+      setShowCreateRawGroupDialog(false)
+
+      toast({
+        title: "Erfolg",
+        description: `Rohware-Gruppe "${newRawStockName}" wurde erstellt`,
+      })
+    } catch (error: any) {
+      toast({
+        title: "Fehler",
+        description: error.message || "Fehler beim Erstellen der Gruppe",
+        variant: "destructive",
+      })
+    } finally {
+      setIsCreatingNewRawStock(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -1726,8 +1780,84 @@ export default function ProductManagement() {
                 {/* Left: Rohwarengruppen Liste */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Rohwarengruppen</CardTitle>
-                    <p className="text-sm text-muted-foreground">Wählen Sie eine Gruppe aus um Produkte zuzuordnen</p>
+                    {/* CHANGE: Added button to create new raw stock group */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Rohwarengruppen</CardTitle>
+                        <p className="text-sm text-muted-foreground">
+                          Wählen Sie eine Gruppe aus um Produkte zuzuordnen
+                        </p>
+                      </div>
+                      <Dialog open={showCreateRawGroupDialog} onOpenChange={setShowCreateRawGroupDialog}>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Neue Gruppe
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Neue Rohware-Gruppe erstellen</DialogTitle>
+                            <DialogDescription>
+                              Erstellen Sie eine neue Rohware-Gruppe für gramm- oder literbasierte Produkte
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="raw-group-name">Name der Gruppe *</Label>
+                              <Input
+                                id="raw-group-name"
+                                placeholder="z.B. Orangen, Zitronen, Olivenöl"
+                                value={newRawStockName}
+                                onChange={(e) => setNewRawStockName(e.target.value)}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="raw-group-type">Typ *</Label>
+                              <Select
+                                value={newRawStockType}
+                                onValueChange={(value: "weight" | "volume") => setNewRawStockType(value)}
+                              >
+                                <SelectTrigger id="raw-group-type">
+                                  <SelectValue placeholder="Typ auswählen" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="weight">Gewicht (kg)</SelectItem>
+                                  <SelectItem value="volume">Volumen (Liter)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="raw-group-min-stock">
+                                Mindestbestand ({newRawStockType === "weight" ? "g" : "ml"})
+                              </Label>
+                              <Input
+                                id="raw-group-min-stock"
+                                type="number"
+                                placeholder="z.B. 5000"
+                                value={newRawStockMinStock}
+                                onChange={(e) => setNewRawStockMinStock(e.target.value)}
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Standard: 5000{newRawStockType === "weight" ? "g (5kg)" : "ml (5L)"}
+                              </p>
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button
+                              variant="outline"
+                              onClick={() => setShowCreateRawGroupDialog(false)}
+                              disabled={isCreatingNewRawStock}
+                            >
+                              Abbrechen
+                            </Button>
+                            <Button onClick={handleCreateRawGroup} disabled={isCreatingNewRawStock}>
+                              {isCreatingNewRawStock ? "Wird erstellt..." : "Erstellen"}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
@@ -1828,7 +1958,7 @@ export default function ProductManagement() {
                           ) : (
                             products.map((product) => {
                               const assignment = productAssignments.find((p) => p.product_id === product.id)
-                              const isAssignedToThisGroup = assignment?.current_raw_id === selectedRawGroup
+                              const isAssignedToThisGroup = assignment?.selected_raw_id === selectedRawGroup
                               const isAssignedToOtherGroup =
                                 assignment?.current_raw_id && assignment.current_raw_id !== selectedRawGroup
                               const otherGroupName = isAssignedToOtherGroup
