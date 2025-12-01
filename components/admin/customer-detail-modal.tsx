@@ -2,11 +2,11 @@
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Edit, Mail, Loader2 } from "lucide-react"
+import { Mail, Loader2, ExternalLink } from "lucide-react"
 import { useState, useEffect } from "react"
 import type { ExtendedCustomer } from "@/types/customer"
-import { useToast } from "@/hooks/use-toast"
-import { createBrowserClient } from "@/lib/supabase/client"
+import { createClient } from "@/lib/supabase/client"
+import { toast } from "react-hot-toast"
 
 function formatCurrency(amount?: number) {
   return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(amount ?? 0)
@@ -22,24 +22,22 @@ export default function CustomerDetailModal({
   customer,
   isOpen,
   onClose,
-  onEdit,
 }: {
   customer: ExtendedCustomer | null
   isOpen: boolean
   onClose: () => void
-  onEdit?: (c: ExtendedCustomer) => void
 }) {
-  const [notificationLoading, setNotificationLoading] = useState(false)
-  const [notificationSuccess, setNotificationSuccess] = useState<string | null>(null)
-  const [notificationError, setNotificationError] = useState<string | null>(null)
-  const [customSubject, setCustomSubject] = useState("")
-  const [customContent, setCustomContent] = useState("")
-  const [selectedNotificationType, setSelectedNotificationType] = useState<string>("")
-  const { toast } = useToast()
-  const [resendingInvoice, setResendingInvoice] = useState<string | null>(null)
   const [customerOrders, setCustomerOrders] = useState<any[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set())
+  const [resendingInvoice, setResendingInvoice] = useState<string | null>(null)
+
+  const [selectedNotificationType, setSelectedNotificationType] = useState<string>("")
+  const [customSubject, setCustomSubject] = useState<string>("")
+  const [customContent, setCustomContent] = useState<string>("")
+  const [notificationLoading, setNotificationLoading] = useState(false)
+  const [notificationError, setNotificationError] = useState<string | null>(null)
+  const [notificationSuccess, setNotificationSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     if (isOpen && customer?.id) {
@@ -47,7 +45,7 @@ export default function CustomerDetailModal({
       const fetchCustomerOrders = async () => {
         setLoadingOrders(true)
         try {
-          const supabase = createBrowserClient()
+          const supabase = createClient()
           console.log("[v0] CustomerDetailModal - querying orders table with customer_id:", customer.id)
 
           const { data, error } = await supabase
@@ -225,25 +223,24 @@ export default function CustomerDetailModal({
     id: customer?.id,
     name: `${customer?.first_name} ${customer?.last_name}`,
     email: customer?.email,
-    account_status: customer?.account_status,
-    reminder_notifications: customer?.reminder_notifications,
-    newsletter_subscription: customer?.newsletter_subscription,
+    pickup_location_name: customer?.pickup_location_name,
+    distribution_person_name: customer?.distribution_person_name,
+    has_pickup: !!customer?.pickup_location_name,
+    has_distribution: !!customer?.distribution_person_name,
   })
+
+  console.log("[v0] CustomerDetailModal - account_status:", customer?.account_status)
+  console.log("[v0] CustomerDetailModal - reminder_notifications:", customer?.reminder_notifications)
+  console.log("[v0] CustomerDetailModal - newsletter_subscription:", customer?.newsletter_subscription)
 
   console.log("[v0] CustomerDetailModal - isOpen:", isOpen, "customer:", customer?.first_name, customer?.last_name)
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[120rem] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[80rem] sm:max-w-[80rem] md:max-w-[80rem] lg:max-w-[80rem] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle className="text-2xl">Kundendetails</DialogTitle>
-            {onEdit && (
-              <Button onClick={() => onEdit(customer)} size="sm">
-                <Edit className="w-4 h-4 mr-2" />
-                Bearbeiten
-              </Button>
-            )}
           </div>
           <DialogDescription>Alle verfügbaren Informationen zu {fullName || customer.email}</DialogDescription>
         </DialogHeader>
@@ -357,10 +354,36 @@ export default function CustomerDetailModal({
         </section>
 
         <section className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <h3 className="font-semibold text-lg border-b pb-2 mb-3">Standard-Zuordnungen</h3>
+          <div className="space-y-2">
+            <div>
+              <span className="font-medium text-sm">Standard Abholort:</span>{" "}
+              {customer.pickup_location_name && customer.pickup_location_name !== "noch nicht zugewiesen" ? (
+                <Badge variant="secondary" className="text-xs ml-2">
+                  {customer.pickup_location_name}
+                </Badge>
+              ) : (
+                <span className="text-sm text-gray-500 ml-2">Keine Zuordnung</span>
+              )}
+            </div>
+            <div>
+              <span className="font-medium text-sm">Standard Verteilperson:</span>{" "}
+              {customer.distribution_person_name && customer.distribution_person_name !== "noch nicht zugewiesen" ? (
+                <Badge variant="secondary" className="text-xs ml-2">
+                  {customer.distribution_person_name}
+                </Badge>
+              ) : (
+                <span className="text-sm text-gray-500 ml-2">Keine Zuordnung</span>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-6 p-4 bg-gray-50 rounded-lg">
           <h3 className="font-semibold text-lg border-b pb-2 mb-3">Notizen</h3>
           <div className="text-sm whitespace-pre-wrap">
-            {customer.notes?.trim() ? (
-              <p className="leading-relaxed">{customer.notes}</p>
+            {customer.special_requests?.trim() ? (
+              <p className="leading-relaxed">{customer.special_requests}</p>
             ) : (
               <span className="text-gray-500">Keine Notizen vorhanden</span>
             )}
@@ -410,7 +433,21 @@ export default function CustomerDetailModal({
                       }}
                     >
                       <div className="flex-1">
-                        <div className="font-medium">#{order.order_number}</div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              onClose() // Close modal first
+                              setTimeout(() => {
+                                window.location.hash = `order-${order.id}` // Navigate to order
+                              }, 100)
+                            }}
+                            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
+                            title="Zur Bestellung in Bestellübersicht"
+                          >
+                            #{order.order_number}
+                            <ExternalLink className="h-3 w-3" />
+                          </button>
+                        </div>
                         <div className="text-sm text-muted-foreground">
                           {formatDate(order.created_at)} • {formatCurrency(order.total)}
                           {order.delivery_method && (

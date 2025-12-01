@@ -761,8 +761,46 @@ function OrderManagement() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 50
 
-  const [searchInput, setSearchInput] = useState("") // User input field
-  const [searchTerm, setSearchTerm] = useState("") // Actual search query sent to API
+  const [searchInput, setSearchInput] = useState("")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+
+  const loadOrders = useCallback(({ q }: { q?: string }) => {
+    if (q !== undefined) {
+      setSearchTerm(q)
+    }
+  }, [])
+
+  const apiUrl = useMemo(() => {
+    const params = new URLSearchParams()
+    if (searchTerm?.trim()) {
+      params.append("q", searchTerm.trim())
+      params.append("limit", "5000")
+    } else {
+      params.append("limit", "999999")
+    }
+    const url = `/api/admin/orders${params.toString() ? `?${params.toString()}` : ""}`
+    return url
+  }, [searchTerm])
+
+  const {
+    data: ordersResponse,
+    isLoading,
+    error: errorData,
+    updateCache: updateOrdersCache, // Fixed: useAdminCache returns 'updateCache', not 'mutate'
+  } = useAdminCache<Order[] | { orders: Order[]; total: number }>(apiUrl, {
+    revalidateOnMount: true,
+  })
+
+  // Removed unused fetchOrders, using mutate directly now.
+  const error = errorData ? String(errorData) : null
+
+  const orders = Array.isArray(ordersResponse) ? ordersResponse : (ordersResponse?.orders ?? [])
+  const totalOrdersCount = Array.isArray(ordersResponse) ? orders.length : (ordersResponse?.total ?? 0)
+
+  const fetchOrders = useCallback(async () => {
+    await updateOrdersCache() // Use mutate to refresh data
+  }, [updateOrdersCache]) // Dependency on updateOrdersCache
 
   // State for customer search in manual order form
   const [customerSearchQuery, setCustomerSearchQuery] = useState("")
@@ -789,7 +827,6 @@ function OrderManagement() {
 
   // State for filters
   const [showFilters, setShowFilters] = useState(false)
-  const [statusFilter, setStatusFilter] = useState("all")
   const [commentFilter, setCommentFilter] = useState("all")
   const [deliveryMethodFilter, setDeliveryMethodFilter] = useState("all")
   const [pickupLocationFilter, setPickupLocationFilter] = useState("all")
@@ -827,45 +864,6 @@ function OrderManagement() {
   const [helloCashEmployees, setHelloCashEmployees] = useState<any[]>([])
   const [loadingEmployees, setLoadingEmployees] = useState(false)
   const [invoiceText, setInvoiceText] = useState("")
-
-  const buildUrl = useCallback(() => {
-    const params = new URLSearchParams()
-
-    if (searchTerm && searchTerm.trim() !== "") {
-      params.append("q", searchTerm.trim())
-    }
-
-    // Add limit to get all orders when no search
-    if (!searchTerm || searchTerm.trim() === "") {
-      params.append("limit", "999999")
-    } else {
-      params.append("limit", "5000")
-    }
-
-    return `/api/admin/orders${params.toString() ? `?${params.toString()}` : ""}`
-  }, [searchTerm]) // Only searchTerm in dependencies
-
-  const apiUrl = buildUrl()
-
-  const {
-    data: ordersResponse,
-    isLoading,
-    error: errorData,
-    refresh: fetchOrders,
-    updateCache: updateOrdersCache,
-  } = useAdminCache<{ orders: Order[]; total: number } | Order[]>(apiUrl, {
-    fallbackData: [],
-    revalidateOnMount: true,
-  })
-
-  const error = errorData ? String(errorData) : null
-
-  const orders = Array.isArray(ordersResponse) ? ordersResponse : (ordersResponse?.orders ?? [])
-  const totalOrdersCount = Array.isArray(ordersResponse) ? orders.length : (ordersResponse?.total ?? 0)
-
-  const loadOrders = useCallback(async () => {
-    await fetchOrders()
-  }, [fetchOrders])
 
   useEffect(() => {
     if (!customerSearchQuery || customerSearchQuery.length < 2) {
@@ -1062,7 +1060,7 @@ function OrderManagement() {
       })
       setShowManualOrderForm(false)
 
-      await fetchOrders()
+      await fetchOrders() // Use fetchOrders which triggers update
     } catch (error) {
       console.error("[v0] Error creating manual order:", error)
       toast({
@@ -1655,7 +1653,7 @@ function OrderManagement() {
       setInvoiceText("")
 
       // Reload orders
-      await loadOrders()
+      await fetchOrders()
     } catch (error) {
       console.error(`[v0] Error marking as paid:`, error)
       toast({
@@ -1678,7 +1676,7 @@ function OrderManagement() {
     invoiceText,
     includeCustomerAddress,
     toast,
-    loadOrders,
+    fetchOrders,
   ])
 
   const handleOrderSelection = useCallback((orderId: string, selected: boolean) => {
@@ -1764,7 +1762,7 @@ function OrderManagement() {
           <CardContent>
             <div className="text-center p-8">
               <p className="text-red-600 mb-4">{error}</p>
-              <Button onClick={loadOrders}>Erneut versuchen</Button>
+              <Button onClick={fetchOrders}>Erneut versuchen</Button>
             </div>
           </CardContent>
         </Card>
@@ -2211,7 +2209,7 @@ function OrderManagement() {
                 Exportieren
               </Button>
             )}
-            <Button onClick={loadOrders} variant="outline">
+            <Button onClick={fetchOrders} variant="outline">
               <RefreshCw className="h-4 w-4 mr-2" />
               Aktualisieren
             </Button>

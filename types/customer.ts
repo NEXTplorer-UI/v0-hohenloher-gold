@@ -27,6 +27,12 @@ export interface ExtendedCustomer {
   email_confirmed?: boolean
   email_confirmed_at?: string | null
 
+  default_pickup_location_id?: string | null
+  default_distribution_person_id?: string | null
+  pickup_location_name?: string | null
+  distribution_person_name?: string | null
+  special_requests?: string | null
+
   // KPIs aus RPC
   order_count?: number
   total_spent?: number

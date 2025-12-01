@@ -30,37 +30,27 @@ import { usePersistedState } from "@/hooks/use-persisted-state"
 
 interface ExtendedCustomer {
   id: string
-  first_name: string
-  last_name: string
+  first_name?: string
+  last_name?: string
+  name: string
   email: string
-  street?: string
-  house_number?: string
-  postal_code?: string
-  city?: string
   phone?: string
-  tags: string[]
-  account_status?: "has_account" | "no_account"
-  customer_status?: "active" | "inactive" | "blocked"
-  registration_date?: string
-  last_activity?: string
-  newsletter_subscription?: boolean
-  reminder_notifications?: boolean
-  special_requests?: string
-  referral_source?: string
-  distribution_system_benefits?: {
-    participated: boolean
-    total_benefits: number
-    last_benefit_date?: string
-  }
+  address?: string
+  city?: string
+  postal_code?: string
+  country?: string
+  company?: string
+  newsletter_subscribed?: boolean
+  account_status?: "registered" | "no_account" | "pending"
+  last_activity?: string | null
+  favorite_products?: { product_id: number; name: string; quantity: number }[]
   order_count?: number
-  average_order_value?: number
-  favorite_categories?: string[]
-  total_orders?: number
   total_spent?: number
-  last_order_date?: string
-  email_confirmed?: boolean
-  default_pickup_location_name?: string
-  default_distribution_person_name?: string
+  has_pickup?: boolean
+  has_distribution?: boolean
+  customer_tags?: { tag_id: string; tag_name: string }[]
+  pickup_location_name?: string
+  distribution_person_name?: string
 }
 
 const AVAILABLE_COLUMNS = [
@@ -110,9 +100,13 @@ const CustomerRow = memo(
 
     const getStatusBadge = (status?: string, type: "account" | "customer" = "customer") => {
       if (type === "account") {
-        return status === "has_account" ? (
+        return status === "registered" ? (
           <Badge variant="default" className="bg-green-100 text-green-800 text-xs">
-            Konto
+            Registriert
+          </Badge>
+        ) : status === "pending" ? (
+          <Badge variant="secondary" className="bg-amber-100 text-amber-800 text-xs">
+            Ausstehend
           </Badge>
         ) : (
           <Badge variant="secondary" className="text-xs">
@@ -157,7 +151,7 @@ const CustomerRow = memo(
               onClick={() => onViewDetails(customer)}
               className="text-left hover:text-blue-600 hover:underline cursor-pointer"
             >
-              {customer.first_name} {customer.last_name}
+              {customer.name}
             </button>
           )
         case "email":
@@ -191,26 +185,26 @@ const CustomerRow = memo(
         case "tags":
           return (
             <div className="flex flex-wrap gap-1">
-              {customer.tags && customer.tags.length > 0 ? (
-                customer.tags.slice(0, 2).map((tag: string, index: number) => (
+              {customer.customer_tags && customer.customer_tags.length > 0 ? (
+                customer.customer_tags.slice(0, 2).map((tag: { tag_name: string }, index: number) => (
                   <Badge key={index} variant="secondary" className="text-xs">
-                    {tag}
+                    {tag.tag_name}
                   </Badge>
                 ))
               ) : (
                 <span className="text-gray-400 text-sm">-</span>
               )}
-              {customer.tags && customer.tags.length > 2 && (
+              {customer.customer_tags && customer.customer_tags.length > 2 && (
                 <Badge variant="outline" className="text-xs">
-                  +{customer.tags.length - 2}
+                  +{customer.customer_tags.length - 2}
                 </Badge>
               )}
             </div>
           )
         case "pickup_location":
-          return customer.default_pickup_location_name || "noch nicht zugewiesen"
+          return customer.pickup_location_name || "noch nicht zugewiesen"
         case "distribution_person":
-          return customer.default_distribution_person_name || "noch nicht zugewiesen"
+          return customer.distribution_person_name || "noch nicht zugewiesen"
         case "actions":
           return (
             <div className="flex gap-2">
@@ -380,8 +374,8 @@ const CustomerTable = memo(() => {
 
       switch (sortBy) {
         case "name":
-          aValue = `${a.first_name || ""} ${a.last_name || ""}`.trim()
-          bValue = `${b.first_name || ""} ${b.last_name || ""}`.trim()
+          aValue = `${a.name || ""}`.trim()
+          bValue = `${b.name || ""}`.trim()
           break
         case "email":
           aValue = a.email || ""

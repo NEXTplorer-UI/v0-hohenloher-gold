@@ -27,6 +27,8 @@ type RpcCustomerRow = {
   favorite_categories?: string[]
   account_status?: "has_account" | "no_account"
   customer_status?: "active" | "inactive" | "blocked"
+  pickup_location_name?: string | null
+  distribution_person_name?: string | null
 }
 
 function mapRpcToCustomer(row: RpcCustomerRow): ExtendedCustomer {
@@ -35,6 +37,7 @@ function mapRpcToCustomer(row: RpcCustomerRow): ExtendedCustomer {
     email: row.email,
     first_name: row.first_name,
     last_name: row.last_name,
+    name: `${row.first_name} ${row.last_name}`.trim(),
     phone: row.phone,
     street: row.street,
     house_number: row.house_number,
@@ -55,6 +58,8 @@ function mapRpcToCustomer(row: RpcCustomerRow): ExtendedCustomer {
     account_status: row.account_status ?? "no_account",
     customer_status: row.customer_status ?? "active",
     tags: Array.isArray(row.favorite_categories) ? row.favorite_categories : [],
+    pickup_location_name: row.pickup_location_name ?? null,
+    distribution_person_name: row.distribution_person_name ?? null,
   }
 }
 
@@ -78,7 +83,7 @@ const fetcher = async (url: string) => {
 
   return {
     customers: rows.map(mapRpcToCustomer),
-    total: json?.total || rows.length
+    total: json?.total || rows.length,
   }
 }
 
@@ -99,52 +104,48 @@ export function useCustomerData() {
     return `/api/crm/customers?${params.toString()}`
   }, [currentPage, searchTerm, pageSize])
 
-  const { data, error, mutate, isLoading } = useSWR(
-    buildUrl(),
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      revalidateOnReconnect: false,
-      dedupingInterval: 60000, // 1 minute
-      keepPreviousData: true,
-    }
-  )
+  const { data, error, mutate, isLoading } = useSWR(buildUrl(), fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    dedupingInterval: 60000, // 1 minute
+    keepPreviousData: true,
+  })
 
   const customers = data?.customers || []
   const totalCount = data?.total || 0
   const loading = isLoading
 
-  const loadCustomers = useCallback(async (opts?: LoadOptions) => {
-    if (opts?.q !== undefined) {
-      setSearchTerm(opts.q)
-      setCurrentPage(1)
-    } else if (opts?.offset !== undefined && opts?.limit !== undefined) {
-      const page = Math.floor(opts.offset / opts.limit) + 1
-      setCurrentPage(page)
-      setSearchTerm("")
-    } else {
-      await mutate()
-    }
-  }, [mutate])
-
-  const loadPage = useCallback(
-    (page: number) => {
-      setCurrentPage(page)
-      setSearchTerm("")
+  const loadCustomers = useCallback(
+    async (opts?: LoadOptions) => {
+      if (opts?.q !== undefined) {
+        setSearchTerm(opts.q)
+        setCurrentPage(1)
+      } else if (opts?.offset !== undefined && opts?.limit !== undefined) {
+        const page = Math.floor(opts.offset / opts.limit) + 1
+        setCurrentPage(page)
+        setSearchTerm("")
+      } else {
+        await mutate()
+      }
     },
-    [],
+    [mutate],
   )
+
+  const loadPage = useCallback((page: number) => {
+    setCurrentPage(page)
+    setSearchTerm("")
+  }, [])
 
   const nextPage = useCallback(() => {
     const totalPages = Math.ceil(totalCount / pageSize)
     if (currentPage < totalPages) {
-      setCurrentPage(prev => prev + 1)
+      setCurrentPage((prev) => prev + 1)
     }
   }, [currentPage, totalCount, pageSize])
 
   const prevPage = useCallback(() => {
     if (currentPage > 1) {
-      setCurrentPage(prev => prev - 1)
+      setCurrentPage((prev) => prev - 1)
     }
   }, [currentPage])
 
@@ -162,6 +163,8 @@ export function useCustomerData() {
         account_status: customer.account_status || "no_account",
         customer_status: customer.customer_status || "active",
         favorite_categories: customer.favorite_categories ?? customer.tags ?? [],
+        pickup_location_name: customer.pickup_location_name || null,
+        distribution_person_name: customer.distribution_person_name || null,
       }
 
       const res = await fetch("/api/crm/customer", {
