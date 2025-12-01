@@ -854,7 +854,8 @@ function OrderManagement() {
   const [showMarkAsPaidModal, setShowMarkAsPaidModal] = useState(false)
   const [selectedOrderForPayment, setSelectedOrderForPayment] = useState<string | null>(null)
   const [isMarkingAsPaid, setIsMarkingAsPaid] = useState(false)
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("cash")
+  // CHANGE: Changed default payment method from "cash" to "bank_transfer" (Rechnung)
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("bank_transfer")
   const [createInvoice, setCreateInvoice] = useState(true)
   const [sendInvoiceEmail, setSendInvoiceEmail] = useState(true)
   const [discountPercent, setDiscountPercent] = useState("")
@@ -1598,6 +1599,15 @@ function OrderManagement() {
   const handleConfirmMarkAsPaid = useCallback(async () => {
     if (!selectedOrderForPayment) return
 
+    if (selectedPaymentMethod === "cash" && !selectedCashierId) {
+      toast({
+        variant: "destructive",
+        title: "Fehler",
+        description: "Bitte wählen Sie einen Kassierer aus für Barzahlung",
+      })
+      return
+    }
+
     setIsMarkingAsPaid(true)
 
     try {
@@ -1642,7 +1652,7 @@ function OrderManagement() {
 
       setShowMarkAsPaidModal(false)
       setSelectedOrderForPayment(null)
-      setSelectedPaymentMethod("cash")
+      setSelectedPaymentMethod("bank_transfer")
       setCreateInvoice(true)
       setSendInvoiceEmail(true) // Reset send email state
       setDiscountPercent("")
@@ -2350,10 +2360,20 @@ function OrderManagement() {
               {createInvoice && (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="cashierSelect">Kassierer</Label>
+                    <Label htmlFor="cashierSelect">
+                      Kassierer {selectedPaymentMethod === "cash" && <span className="text-destructive">*</span>}
+                    </Label>
                     <Select value={selectedCashierId} onValueChange={setSelectedCashierId} disabled={loadingEmployees}>
                       <SelectTrigger id="cashierSelect">
-                        <SelectValue placeholder={loadingEmployees ? "Lädt..." : "Kassierer auswählen (optional)"}>
+                        <SelectValue
+                          placeholder={
+                            loadingEmployees
+                              ? "Lädt..."
+                              : selectedPaymentMethod === "cash"
+                                ? "Kassierer auswählen (Pflicht für Bar)"
+                                : "Kassierer auswählen (optional)"
+                          }
+                        >
                           {selectedCashierId && helloCashEmployees.length > 0
                             ? (() => {
                                 const selected = helloCashEmployees.find(
@@ -2505,7 +2525,7 @@ function OrderManagement() {
                   onClick={() => {
                     setShowMarkAsPaidModal(false)
                     setSelectedOrderForPayment(null)
-                    setSelectedPaymentMethod("cash")
+                    setSelectedPaymentMethod("bank_transfer")
                     setCreateInvoice(true)
                     setSendInvoiceEmail(true)
                     setDiscountPercent("")
