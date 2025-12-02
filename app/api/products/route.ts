@@ -3,6 +3,8 @@ console.log("[v0] DEBUG: route.ts LOADED")
 import { getAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 
+export const dynamic = "force-dynamic"
+
 async function getNextDeliverySchedule(supabase: any) {
   try {
     const { data: futureSchedules, error } = await supabase

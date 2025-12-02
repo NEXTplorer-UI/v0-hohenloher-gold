@@ -185,6 +185,7 @@ export async function createInvoiceAfterPayment(
     const invoicePayload: any = {
       invoice_paymentMethod: helloCashPaymentMethod, // Use mapped payment method
       invoice_type: "pdf", // Changed from "json" to "pdf" to get PDF invoices
+      invoice_locale: "de_DE", // Set German locale for HelloCash invoice PDFs
       items,
     }
 

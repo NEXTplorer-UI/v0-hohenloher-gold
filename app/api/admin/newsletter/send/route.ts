@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/server"
 import { requireAdmin } from "@/lib/auth/api-auth"
 import { buildEmail } from "@/lib/email/build"
+import { markdownToHtml } from "@/lib/markdown"
 import { Resend } from "resend"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -258,9 +259,11 @@ export async function POST(request: Request) {
           continue
         }
 
+        // Convert markdown content to HTML
+        const htmlContent = await markdownToHtml(personalizedContent)
         const { html } = buildEmail("newsletter", {
           customerName,
-          content: personalizedContent,
+          content: htmlContent,
           imageUrl,
           newsletterId: newsletterSend?.id || "",
         })
