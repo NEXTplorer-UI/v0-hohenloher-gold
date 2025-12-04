@@ -134,7 +134,10 @@ function parseAndAccumulateProducts(row: any, totals: Record<string, number>) {
   if (!text || typeof text !== "string") return
 
   // Aktuell trennst du in der UI ja mit Kommas -> wiederverwenden
-  const parts = text.split(",").map((p) => p.trim()).filter(Boolean)
+  const parts = text
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean)
 
   for (const part of parts) {
     // Versuche: "3x Orange", "3× Orange", "3 Orange"
@@ -152,11 +155,7 @@ function parseAndAccumulateProducts(row: any, totals: Record<string, number>) {
   }
 }
 
-function addProductTotalsPerGroup(
-  rows: any[],
-  groupBy: string[],
-  enabled: boolean,
-): any[] {
+function addProductTotalsPerGroup(rows: any[], groupBy: string[], enabled: boolean): any[] {
   // Wenn nicht gruppiert oder ausgeschaltet: Originaldaten zurückgeben
   if (!enabled || !rows || !rows.length || groupBy.length === 0) {
     return rows || []
@@ -231,7 +230,6 @@ function addProductTotalsPerGroup(
 
   return result
 }
-
 
 export default function ReportBuilder() {
   const [selectedPreset, setSelectedPreset] = useState<string>("")
@@ -633,16 +631,18 @@ export default function ReportBuilder() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(reportConfig),
     })
-  const dataWithProductTotals = useMemo(() => {
-    const base = reportData?.data || []
-    return addProductTotalsPerGroup(base, groupBy, showAggregations)
-  }, [reportData?.data, groupBy, showAggregations])
+
     if (!response.ok) {
       throw new Error("Failed to fetch report")
     }
 
     return await response.json()
   })
+
+  const dataWithProductTotals = useMemo(() => {
+    const base = reportData?.data || []
+    return addProductTotalsPerGroup(base, groupBy, showAggregations)
+  }, [reportData?.data, groupBy, showAggregations])
 
   const columns = useMemo<ColumnDef<any>[]>(() => {
     return selectedColumns.map((col) => ({
@@ -716,7 +716,6 @@ export default function ReportBuilder() {
       sorting,
     },
   })
-
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return
