@@ -19,9 +19,9 @@ export async function POST(request: NextRequest) {
   try {
     console.log("[v0] [update-order-status] Updating order status")
 
-    const { orderId, status, paymentStatus } = await request.json()
+    const { orderId, status, paymentStatus, internalStatus } = await request.json()
 
-    if (!orderId || (!status && !paymentStatus)) {
+    if (!orderId || (!status && !paymentStatus && internalStatus === undefined)) {
       return NextResponse.json({ error: "Order ID and at least one status field required" }, { status: 400 })
     }
 
@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
       console.log(`[v0] [update-order-status] Mapping UI status "${status}" to DB status "${dbStatus}"`)
     }
     if (paymentStatus) updateData.payment_status = paymentStatus
+    if (internalStatus !== undefined) updateData.internal_status = internalStatus
 
     const { data, error } = await supabase
       .from("orders")

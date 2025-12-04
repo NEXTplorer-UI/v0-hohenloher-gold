@@ -16,8 +16,11 @@ type EmailCopyType = typeof emailCopy
 
 function getPaymentMethodLabel(method: string): string {
   switch (method) {
+    case "transfer":
     case "bank_transfer":
       return "Überweisung"
+    case "invoice":
+      return "Rechnung"
     case "cash":
       return "Barzahlung bei Abholung"
     case "card":
@@ -92,7 +95,7 @@ export function orderConfirmationContent(vars: TemplateVars, customCopy?: EmailC
     : ""
 
   const bankDetailsSection =
-    vars.paymentMethod === "bank_transfer"
+    vars.paymentMethod === "bank_transfer" || vars.paymentMethod === "transfer"
       ? `
     <div class="highlight-box">
       <h3 style="margin-top: 0;">${copy.orderConfirmation.bankDetailsHeading}</h3>

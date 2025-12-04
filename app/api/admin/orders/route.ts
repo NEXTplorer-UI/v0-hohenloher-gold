@@ -69,6 +69,7 @@ export async function GET(req: NextRequest) {
         last_name: row.customer_last_name || "",
         email: row.customer_email || "",
         phone: row.customer_phone || null,
+        special_requests: row.customer_special_requests || null,
       },
       order_items: Array.isArray(row.order_items) ? row.order_items : [],
     }))

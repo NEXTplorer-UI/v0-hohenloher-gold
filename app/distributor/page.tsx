@@ -723,7 +723,7 @@ export default function DistributorPage() {
                 <Mail className="h-5 w-5" />
                 kontakt@suedfruechte-hohenlohe.de
               </a>
-              <a href="tel:+4979407059" className="flex items-center gap-2 text-lg hover:underline">
+              <a href="tel:+491573 5703864" className="flex items-center gap-2 text-lg hover:underline">
                 <Phone className="h-5 w-5" />
                 07940 7059
               </a>

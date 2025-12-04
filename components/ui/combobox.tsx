@@ -38,17 +38,27 @@ export function Combobox({
 
   React.useEffect(() => {
     if (open) {
-      console.log("[v0] Combobox opened, attempting to focus input")
-      // Use longer timeout to ensure the popover is fully rendered in production
-      setTimeout(() => {
-        const input = document.querySelector("[cmdk-input]") as HTMLInputElement
-        if (input) {
-          console.log("[v0] Found input, focusing")
-          input.focus()
-        } else {
-          console.log("[v0] Input not found")
+      // Strategy 1: Try immediate focus on ref
+      if (inputRef.current) {
+        inputRef.current.focus()
+        return
+      }
+
+      // Strategy 2: Use requestAnimationFrame for better timing
+      requestAnimationFrame(() => {
+        if (inputRef.current) {
+          inputRef.current.focus()
+          return
         }
-      }, 200) // Increased from 50ms to 200ms for production reliability
+
+        // Strategy 3: Fall back to querySelector with longer timeout
+        setTimeout(() => {
+          const input = document.querySelector("[cmdk-input]") as HTMLInputElement
+          if (input) {
+            input.focus()
+          }
+        }, 300) // Increased to 300ms for production reliability
+      })
     }
   }, [open])
 
@@ -58,7 +68,6 @@ export function Combobox({
     <Popover
       open={open}
       onOpenChange={(newOpen) => {
-        console.log("[v0] Popover onOpenChange:", newOpen)
         setOpen(newOpen)
       }}
     >
@@ -68,32 +77,18 @@ export function Combobox({
           role="combobox"
           aria-expanded={open}
           className={cn("w-full justify-between", className)}
-          onClick={() => {
-            console.log("[v0] Trigger button clicked, current open state:", open)
-          }}
         >
           {selectedOption ? selectedOption.label : placeholder}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        className="w-(--radix-popover-trigger-width) p-0"
-        align="start"
-        onOpenAutoFocus={(e) => {
-          console.log("[v0] PopoverContent onOpenAutoFocus")
-          // Prevent default behavior and manually focus the input
-          e.preventDefault()
-        }}
-      >
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
             ref={inputRef}
             placeholder="Suchen..."
             value={searchValue}
-            onValueChange={(newValue) => {
-              console.log("[v0] Search value changed:", newValue)
-              onSearchChange(newValue)
-            }}
+            onValueChange={onSearchChange}
             autoFocus
           />
           <CommandList>
@@ -104,7 +99,6 @@ export function Combobox({
                   key={option.value}
                   value={option.value}
                   onSelect={() => {
-                    console.log("[v0] Option selected:", option.value)
                     onValueChange(option.value)
                     setOpen(false)
                   }}

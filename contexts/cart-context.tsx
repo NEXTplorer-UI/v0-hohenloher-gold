@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { createContext, useContext, useReducer, useEffect, useMemo, useCallback, useState } from "react"
+import { toast } from "sonner"
 
 export interface CartItem {
   id: number
@@ -35,7 +36,7 @@ const CartContext = createContext<{
   dispatch: React.Dispatch<CartAction>
   addToCart: (product: Omit<CartItem, "quantity">, quantity?: number) => Promise<boolean>
   removeItem: (id: number) => void
-  updateQuantity: (id: number, quantity: number) => void
+  updateQuantity: (id: number, quantity: number) => Promise<void>
   clearCart: () => void
   isEmpty: boolean
   hasItems: boolean
@@ -196,8 +197,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   )
 
   const checkStockAvailability = async (productId: number, quantity: number): Promise<boolean> => {
+    console.log("[v0] checkStockAvailability called - productId:", productId, "quantity:", quantity)
+
     try {
-      setIsCheckingStock(true)
+      const allItems = [
+        // All existing cart items
+        ...state.items.map((item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+        })),
+        // The new item being added with ONLY the new quantity (not totalQuantity)
+        // If item already exists in cart, this represents the additional quantity
+        { productId, quantity },
+      ]
+
+      console.log("[v0] Sending all cart items to API:", allItems)
 
       const response = await fetch("/api/inventory/check-availability", {
         method: "POST",
@@ -205,32 +219,31 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          items: [{ productId, quantity }],
+          items: allItems,
         }),
       })
 
-      if (!response.ok) {
-        console.error("Stock check failed:", response.statusText)
-        return true
-      }
+      console.log("[v0] API response status:", response.status)
 
-      const result = await response.json()
+      const data = await response.json()
+      console.log("[v0] API response data:", data)
 
-      return result.available
+      return data.available
     } catch (error) {
-      console.error("Error checking stock:", error)
+      console.error("[v0] Error checking stock availability:", error)
       return true
-    } finally {
-      setIsCheckingStock(false)
     }
   }
 
   const addToCart = async (product: Omit<CartItem, "quantity">, quantity = 1): Promise<boolean> => {
+    console.log("[v0] addToCart called - product:", product.name, "id:", product.id, "quantity:", quantity)
+    console.log("[v0] Current cart items:", state.items)
+
     const currentWeight = calculateTotalWeight()
     const productWeight = typeof product.weight_kg === "number" ? product.weight_kg : 0
     const weightCheck = checkWeightLimit(productWeight, quantity)
 
-    if (weightCheck.isOverLimit && !weightWarningShown) {
+    if (weightCheck.isOverLimit && !weightWarningShown && state.deliveryMethod === "delivery") {
       alert(
         `⚠️ Hinweis: Gewichtslimit überschritten\n\n` +
           `Das Hinzufügen von ${quantity}x ${product.name} erhöht das Gesamtgewicht auf ${weightCheck.totalWeight.toFixed(1)}kg.\n\n` +
@@ -242,14 +255,27 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
 
     const isSeasonalProduct = product.category === "Südfrüchte"
+    console.log("[v0] isSeasonalProduct:", isSeasonalProduct, "category:", product.category)
 
     if (!isSeasonalProduct) {
       const existingItem = state.items.find((item) => item.id === product.id)
       const totalQuantity = (existingItem?.quantity || 0) + quantity
 
-      const isAvailable = await checkStockAvailability(product.id, totalQuantity)
+      console.log(
+        "[v0] Stock check - existingItem:",
+        existingItem?.quantity || 0,
+        "new quantity:",
+        quantity,
+        "total:",
+        totalQuantity,
+      )
+
+      const isAvailable = await checkStockAvailability(product.id, quantity)
+
+      console.log("[v0] checkStockAvailability result:", isAvailable)
 
       if (!isAvailable) {
+        console.log("[v0] BLOCKED - Not enough stock available")
         alert(
           `❌ Nicht genügend Lagerbestand\n\n` +
             `Leider ist ${product.name} nicht in der gewünschten Menge verfügbar.\n\n` +
@@ -259,6 +285,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    console.log("[v0] Adding to cart - dispatching", quantity, "times")
     for (let i = 0; i < quantity; i++) {
       dispatch({ type: "ADD_ITEM", payload: product })
     }
@@ -270,7 +297,58 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: "REMOVE_ITEM", payload: id })
   }
 
-  const updateQuantity = (id: number, quantity: number) => {
+  const updateQuantity = async (id: number, quantity: number) => {
+    console.log("[v0] updateQuantity called - id:", id, "new quantity:", quantity)
+
+    // Find the current item
+    const currentItem = state.items.find((item) => item.id === id)
+    if (!currentItem) {
+      console.log("[v0] updateQuantity - item not found")
+      return
+    }
+
+    console.log("[v0] updateQuantity - current quantity:", currentItem.quantity, "requested quantity:", quantity)
+
+    // If decreasing quantity, allow it immediately
+    if (quantity <= currentItem.quantity) {
+      console.log("[v0] updateQuantity - decreasing quantity, no validation needed")
+      dispatch({ type: "UPDATE_QUANTITY", payload: { id, quantity } })
+      return
+    }
+
+    // If increasing quantity, validate stock availability
+    const quantityIncrease = quantity - currentItem.quantity
+    console.log("[v0] updateQuantity - quantity increase:", quantityIncrease)
+
+    // Build product object for validation
+    const product = {
+      id: currentItem.id,
+      name: currentItem.name,
+      category: currentItem.category,
+    }
+
+    // Check if seasonal product (skip validation for Südfrüchte)
+    const isSeasonalProduct = product.category === "Südfrüchte"
+    console.log("[v0] updateQuantity - isSeasonalProduct:", isSeasonalProduct)
+
+    if (!isSeasonalProduct) {
+      // Validate stock availability for the increase
+      const isAvailable = await checkStockAvailability(product.id, quantityIncrease)
+
+      if (!isAvailable) {
+        console.log("[v0] updateQuantity BLOCKED - Not enough stock available")
+        toast({
+          title: "Nicht genügend Vorrat",
+          description: `Es sind nicht genügend ${product.name} verfügbar.`,
+          variant: "destructive",
+        })
+        return
+      }
+
+      console.log("[v0] updateQuantity - stock available, updating quantity")
+    }
+
+    // Update the quantity
     dispatch({ type: "UPDATE_QUANTITY", payload: { id, quantity } })
   }
 

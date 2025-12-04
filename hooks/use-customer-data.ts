@@ -29,6 +29,7 @@ type RpcCustomerRow = {
   customer_status?: "active" | "inactive" | "blocked"
   pickup_location_name?: string | null
   distribution_person_name?: string | null
+  special_requests?: string | null
 }
 
 function mapRpcToCustomer(row: RpcCustomerRow): ExtendedCustomer {
@@ -60,6 +61,7 @@ function mapRpcToCustomer(row: RpcCustomerRow): ExtendedCustomer {
     tags: Array.isArray(row.favorite_categories) ? row.favorite_categories : [],
     pickup_location_name: row.pickup_location_name ?? null,
     distribution_person_name: row.distribution_person_name ?? null,
+    special_requests: row.special_requests ?? null,
   }
 }
 
@@ -163,8 +165,10 @@ export function useCustomerData() {
         account_status: customer.account_status || "no_account",
         customer_status: customer.customer_status || "active",
         favorite_categories: customer.favorite_categories ?? customer.tags ?? [],
+        newsletter_subscribed: customer.newsletter_subscribed ?? false,
         pickup_location_name: customer.pickup_location_name || null,
         distribution_person_name: customer.distribution_person_name || null,
+        special_requests: customer.special_requests || null,
       }
 
       const res = await fetch("/api/crm/customer", {

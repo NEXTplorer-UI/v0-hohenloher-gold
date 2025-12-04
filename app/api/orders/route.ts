@@ -460,6 +460,72 @@ export async function POST(request: NextRequest) {
 
     const customer = customers[0]
 
+    console.log("[/api/orders] Validating stock availability for order items")
+
+    const stockCheckPromises = orderData.items.map(async (item: any) => {
+      const productId = item.id
+      if (!productId) {
+        console.warn(`[/api/orders] No product_id for item ${item.name}, skipping stock check`)
+        return {
+          available: true,
+          productName: item.name,
+          requested: item.quantity,
+          availableStock: Number.POSITIVE_INFINITY,
+        }
+      }
+
+      const { data: availability, error: availError } = await supabase
+        .from("product_availability")
+        .select("piece_stock, gram_stock, product_id")
+        .eq("product_id", productId)
+        .single()
+
+      if (availError || !availability) {
+        console.error(`[/api/orders] Could not check stock for product ${productId}:`, availError)
+        // Assume available if stock check fails to avoid blocking valid orders
+        return {
+          available: true,
+          productName: item.name,
+          requested: item.quantity,
+          availableStock: Number.POSITIVE_INFINITY,
+        }
+      }
+
+      const availableStock = availability.gram_stock > 0 ? availability.gram_stock : availability.piece_stock
+
+      const isAvailable = availableStock >= item.quantity
+
+      console.log(
+        `[/api/orders] Stock check for ${item.name}: available=${availableStock}, requested=${item.quantity}, ok=${isAvailable}`,
+      )
+
+      return {
+        available: isAvailable,
+        productName: item.name,
+        requested: item.quantity,
+        availableStock: availableStock,
+      }
+    })
+
+    const stockCheckResults = await Promise.all(stockCheckPromises)
+    const unavailableItems = stockCheckResults.filter((r) => !r.available)
+
+    if (unavailableItems.length > 0) {
+      const errorMessage = unavailableItems
+        .map((item) => `${item.productName} (verfügbar: ${item.availableStock}, gewünscht: ${item.requested})`)
+        .join(", ")
+
+      console.error("[/api/orders] Order rejected due to insufficient stock:", errorMessage)
+
+      return NextResponse.json(
+        {
+          error: "Nicht genügend Lagerbestand",
+          details: `Folgende Artikel sind nicht in ausreichender Menge verfügbar: ${errorMessage}`,
+        },
+        { status: 400, headers: { "content-type": "application/json" } },
+      )
+    }
+
     const orderTime = orderData.orderTime ? new Date(orderData.orderTime) : new Date()
 
     const subtotal = orderData.items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0)

@@ -127,9 +127,12 @@ export async function POST(request: NextRequest) {
 export async function PUT(req: Request) {
   console.log("[v0] [/api/crm/customer PUT] Request received")
   try {
-    const { id, payload } = await req.json()
+    const payload = await req.json()
+    console.log("[v0] [/api/crm/customer PUT] RAW PAYLOAD RECEIVED:", JSON.stringify(payload))
 
-    if (!id || !payload) {
+    const { id, payload: updatePayload } = payload
+
+    if (!id || !updatePayload) {
       console.error("[v0] [/api/crm/customer PUT] Missing id or payload")
       return NextResponse.json({ error: "Missing id/payload" }, { status: 400 })
     }
@@ -138,17 +141,60 @@ export async function PUT(req: Request) {
 
     const supabase = getAdminClient()
 
-    const updatedPayload = { ...payload }
+    const allowedFields = [
+      "first_name",
+      "last_name",
+      "email",
+      "phone",
+      "street",
+      "house_number",
+      "postal_code",
+      "city",
+      "country",
+      "address",
+      "notes",
+      "newsletter_subscribed",
+      "newsletter_subscribed_at",
+      "newsletter_unsubscribed_at",
+      "marketing_consent",
+      "marketing_consent_at",
+      "marketing_consent_ip",
+      "marketing_consent_ua",
+      "reminder_notifications",
+      "email_notifications",
+      "pickup_reminders",
+      "customer_segment",
+      "customer_status",
+      "account_status",
+      "referral_source",
+      "favorite_categories",
+      "preferred_products",
+      "default_pickup_location_id",
+      "default_distribution_person_id",
+      "special_requests",
+      "distribution_system_benefits",
+    ]
 
-    if ("newsletter_subscribed" in payload) {
-      if (payload.newsletter_subscribed === false) {
+    const updatedPayload: any = {}
+    for (const key of allowedFields) {
+      if (key in updatePayload) {
+        updatedPayload[key] = updatePayload[key]
+      }
+    }
+
+    if ("newsletter_subscribed" in updatePayload) {
+      updatedPayload.newsletter_subscribed = updatePayload.newsletter_subscribed
+
+      if (updatePayload.newsletter_subscribed === false) {
         // User unsubscribed - set timestamp
         updatedPayload.newsletter_unsubscribed_at = new Date().toISOString()
-      } else if (payload.newsletter_subscribed === true) {
+      } else if (updatePayload.newsletter_subscribed === true) {
         // User subscribed - clear timestamp
         updatedPayload.newsletter_unsubscribed_at = null
       }
     }
+
+    console.log("[v0] [/api/crm/customer PUT] Payload being sent to database:", JSON.stringify(updatedPayload))
 
     const { data, error } = await supabase.from("customers").update(updatedPayload).eq("id", id).select().single()
 

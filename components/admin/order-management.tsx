@@ -28,6 +28,7 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  Info,
 } from "lucide-react"
 import { mapDBToUIStatus } from "@/lib/order-status-mapping"
 import type { EmailTemplateId } from "@/lib/email/build"
@@ -71,6 +72,7 @@ interface Order {
   payment_status: string
   notes: string | null
   admin_notes: string | null // Added admin_notes field
+  internal_status?: string | null // For marking orders (incomplete, needs_clarification, priority, ready)
   created_at: string
   pickup_token?: string // Added pickup_token field
   qr_code_url?: string | null // Added qr_code_url field
@@ -80,6 +82,8 @@ interface Order {
     email: string
     phone: string | null
     distribution_person_id?: string // Added distribution_person_id
+    notes?: string | null // Added customer notes field
+    special_requests?: string | null // Added special_requests field
   }
   order_items: OrderItem[]
   hellocash_invoice_id?: string | null // Added hellocash_invoice_id field
@@ -147,7 +151,7 @@ const OrderItem = memo(
   }: {
     order: Order
     onNotify: (orderId: string, templateId?: EmailTemplateId) => void
-    onStatusChange: (orderId: string, status?: string, paymentStatus?: string) => void
+    onStatusChange: (orderId: string, status?: string, paymentStatus?: string, internalStatus?: string | null) => void // Modified to accept internalStatus
     onAdminNotesChange: (orderId: string, adminNotes: string) => void
     onSyncStatus: (orderId: string) => Promise<void> // Added onSyncStatus prop
     onCancelInvoice: (orderId: string) => Promise<void> // Added onCancelInvoice prop type
@@ -328,8 +332,51 @@ const OrderItem = memo(
 
     const uiStatus = mapDBToUIStatus(order.status as any)
 
+    // Define internal status badges
+    const internalStatusBadges = useMemo(() => {
+      const badges = []
+      if (order.internal_status === "incomplete") {
+        badges.push(
+          <Badge key="incomplete" variant="destructive">
+            Unvollständig
+          </Badge>,
+        )
+      } else if (order.internal_status === "needs_clarification") {
+        badges.push(
+          <Badge key="needs_clarification" variant="warning">
+            Klärung nötig
+          </Badge>,
+        )
+      } else if (order.internal_status === "priority") {
+        badges.push(
+          <Badge key="priority" variant="secondary">
+            Priorität
+          </Badge>,
+        )
+      } else if (order.internal_status === "ready") {
+        badges.push(
+          <Badge key="ready" variant="success">
+            Bereit
+          </Badge>,
+        )
+      }
+      return badges
+    }, [order.internal_status])
+
     return (
-      <Card className={`p-4 ${isSelected ? "bg-gold/5 border-gold" : ""}`}>
+      <Card
+        className={`p-4 ${isSelected ? "bg-gold/5 border-gold" : ""} ${
+          order.internal_status === "incomplete"
+            ? "border-l-4 border-l-red-500"
+            : order.internal_status === "needs_clarification"
+              ? "border-l-4 border-l-orange-500"
+              : order.internal_status === "priority"
+                ? "border-l-4 border-l-yellow-500"
+                : order.internal_status === "ready"
+                  ? "border-l-4 border-l-green-500"
+                  : ""
+        }`}
+      >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start gap-3 flex-1">
             <Checkbox
@@ -350,6 +397,7 @@ const OrderItem = memo(
                     Sammelbestellung ({bulkOrderNames.length})
                   </Badge>
                 )}
+                {internalStatusBadges}
               </div>
               <div className="text-sm text-muted-foreground">
                 <div>
@@ -421,6 +469,29 @@ const OrderItem = memo(
                 <div>
                   {getPaymentMethodDisplay(order.payment_method)} • {getPaymentStatusDisplay(order.payment_status)}
                 </div>
+
+                {/* CHANGE: Fixed to use order.notes instead of order.customer.notes */}
+                {(order.notes || order.customer?.special_requests) && (
+                  <div className="mt-3 border-l-4 border-l-gold bg-gold/10 p-3 rounded-r">
+                    <div className="flex items-start gap-2">
+                      <Info className="h-5 w-5 text-gold mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <span className="font-semibold text-gold">KUNDEN-INFO:</span>
+                        {order.notes && (
+                          <p className="text-sm text-foreground/80 mt-1">
+                            <span className="font-medium">Bestellnotizen:</span> {order.notes}
+                          </p>
+                        )}
+                        {order.customer?.special_requests && (
+                          <p className="text-sm text-foreground/80 mt-1">
+                            <span className="font-medium">Kundenhinweise:</span> {order.customer.special_requests}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {isBulkOrder && (
                   <div className="mt-2">
                     <Button
@@ -646,6 +717,23 @@ const OrderItem = memo(
                         <SelectItem value="pending">Ausstehend</SelectItem>
                         <SelectItem value="paid">Bezahlt</SelectItem>
                         <SelectItem value="failed">Fehlgeschlagen</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={order.internal_status || "normal"}
+                      onValueChange={(value) =>
+                        onStatusChange(order.id, undefined, undefined, value === "normal" ? null : value)
+                      }
+                    >
+                      <SelectTrigger className="w-full sm:w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="normal">Normal</SelectItem>
+                        <SelectItem value="incomplete">Unvollständig</SelectItem>
+                        <SelectItem value="needs_clarification">Klärung nötig</SelectItem>
+                        <SelectItem value="priority">Priorität</SelectItem>
+                        <SelectItem value="ready">Bereit</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1262,7 +1350,7 @@ function OrderManagement() {
   )
 
   const handleStatusChange = useCallback(
-    async (orderId: string, status?: string, paymentStatus?: string) => {
+    async (orderId: string, status?: string, paymentStatus?: string, internalStatus?: string | null) => {
       try {
         updateOrdersCache((prevData) => {
           const prevOrders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
@@ -1272,6 +1360,7 @@ function OrderManagement() {
                 ...order,
                 ...(status && { status }),
                 ...(paymentStatus && { payment_status: paymentStatus }),
+                ...(internalStatus !== undefined && { internal_status: internalStatus }), // Update internal_status
               }
             }
             return order
@@ -1288,6 +1377,7 @@ function OrderManagement() {
             orderId,
             status,
             paymentStatus,
+            internalStatus, // Send internalStatus to backend
           }),
         })
 
@@ -1302,6 +1392,7 @@ function OrderManagement() {
                   ...order,
                   status: updatedOrder.status,
                   payment_status: updatedOrder.payment_status,
+                  internal_status: updatedOrder.internal_status, // Update internal_status from backend response
                 }
               }
               return order
