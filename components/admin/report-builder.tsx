@@ -151,6 +151,8 @@ export default function ReportBuilder() {
     paymentMethod: [],
     pickupLocations: [],
     tours: [],
+    months: [],
+    statuses: [],
   })
 
   const [isExporting, setIsExporting] = useState(false)
@@ -250,6 +252,8 @@ export default function ReportBuilder() {
           paymentMethod: [],
           pickupLocations: [],
           tours: [],
+          months: [],
+          statuses: [],
         },
       )
 
@@ -778,6 +782,54 @@ export default function ReportBuilder() {
                   </div>
                 </ScrollArea>
               </div>
+
+              {/* NEW FILTER SECTION START */}
+              <div>
+                <Label className="text-sm mb-2 block">Monat</Label>
+                <ScrollArea className="h-32">
+                  <div className="space-y-2">
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+                      <div key={month} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`filter-month-${month}`}
+                          checked={filters.months?.includes(month.toString().padStart(2, "0"))}
+                          onCheckedChange={() => toggleFilter("months", month.toString().padStart(2, "0"))}
+                        />
+                        <Label htmlFor={`filter-month-${month}`} className="text-sm cursor-pointer">
+                          {new Date(0, month - 1).toLocaleString("de-DE", { month: "long" })}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              <div>
+                <Label className="text-sm mb-2 block">Status</Label>
+                <ScrollArea className="h-32">
+                  <div className="space-y-2">
+                    {[
+                      { value: "pending", label: "Ausstehend" },
+                      { value: "confirmed", label: "Bestätigt" },
+                      { value: "ready", label: "Abholbereit" },
+                      { value: "completed", label: "Abgeschlossen" },
+                      { value: "cancelled", label: "Storniert" },
+                    ].map((status) => (
+                      <div key={status.value} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`filter-status-${status.value}`}
+                          checked={filters.statuses?.includes(status.value)}
+                          onCheckedChange={() => toggleFilter("statuses", status.value)}
+                        />
+                        <Label htmlFor={`filter-status-${status.value}`} className="text-sm cursor-pointer">
+                          {status.label}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+              {/* NEW FILTER SECTION END */}
             </div>
           </div>
 

@@ -99,6 +99,21 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Add month filter logic after tour filter
+    if (config.filters?.months && config.filters.months.length > 0) {
+      filteredOrders = filteredOrders.filter((order: any) => {
+        // Extract month from order_number format: HG-YYYY-MM-NNNN
+        const match = order.order_number?.match(/HG-\d{4}-(\d{2})-\d+/)
+        if (!match) return false
+        const orderMonth = match[1]
+        return config.filters.months.includes(orderMonth)
+      })
+    }
+
+    if (config.filters?.statuses && config.filters.statuses.length > 0) {
+      filteredOrders = filteredOrders.filter((order: any) => config.filters.statuses.includes(order.status))
+    }
+
     if (config.filters?.dateFrom) {
       const fromDate = new Date(config.filters.dateFrom)
       filteredOrders = filteredOrders.filter((order: any) => new Date(order.created_at) >= fromDate)

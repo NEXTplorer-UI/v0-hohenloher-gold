@@ -37,6 +37,10 @@ export function Combobox({
   const inputRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
+    console.log("[v0] Combobox open state changed:", open)
+  }, [open])
+
+  React.useEffect(() => {
     if (open) {
       // Strategy 1: Try immediate focus on ref
       if (inputRef.current) {
@@ -68,6 +72,7 @@ export function Combobox({
     <Popover
       open={open}
       onOpenChange={(newOpen) => {
+        console.log("[v0] Popover onOpenChange called:", newOpen)
         setOpen(newOpen)
       }}
     >
@@ -77,6 +82,9 @@ export function Combobox({
           role="combobox"
           aria-expanded={open}
           className={cn("w-full justify-between", className)}
+          onClick={() => {
+            console.log("[v0] Combobox button clicked, current open state:", open)
+          }}
         >
           {selectedOption ? selectedOption.label : placeholder}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -99,6 +107,7 @@ export function Combobox({
                   key={option.value}
                   value={option.value}
                   onSelect={() => {
+                    console.log("[v0] ComboboxItem selected:", option.value)
                     onValueChange(option.value)
                     setOpen(false)
                   }}

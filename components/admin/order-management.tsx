@@ -98,6 +98,7 @@ interface CustomerDetails {
   country: string | null
   email: string
   phone: string | null
+  id: string // Added ID to CustomerDetails
 }
 
 interface OrderCardProps {
@@ -211,6 +212,7 @@ const OrderItem = memo(
         if (response.ok) {
           const data = await response.json()
           setCustomerDetails({
+            id: data.id, // Ensure ID is set
             street: data.street,
             house_number: data.house_number,
             postal_code: data.postal_code,
@@ -696,7 +698,7 @@ const OrderItem = memo(
                   <div className="flex flex-col sm:flex-row gap-2 w-full">
                     <Select value={uiStatus} onValueChange={(value) => onStatusChange(order.id, value, undefined)}>
                       <SelectTrigger className="w-full sm:w-32">
-                        <SelectValue />
+                        <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="pending">Ausstehend</SelectItem>
@@ -711,7 +713,7 @@ const OrderItem = memo(
                       onValueChange={(value) => onStatusChange(order.id, undefined, value)}
                     >
                       <SelectTrigger className="w-full sm:w-32">
-                        <SelectValue />
+                        <SelectValue placeholder="Zahlungsstatus" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="pending">Ausstehend</SelectItem>
@@ -726,7 +728,7 @@ const OrderItem = memo(
                       }
                     >
                       <SelectTrigger className="w-full sm:w-32">
-                        <SelectValue />
+                        <SelectValue placeholder="Interner Status" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="normal">Normal</SelectItem>
@@ -875,7 +877,7 @@ function OrderManagement() {
     data: ordersResponse,
     isLoading,
     error: errorData,
-    updateCache: updateOrdersCache, // Fixed: useAdminCache returns 'updateCache', not 'mutate'
+    mutate: updateOrdersCache, // Fixed: useAdminCache returns 'updateCache', not 'mutate'
   } = useAdminCache<Order[] | { orders: Order[]; total: number }>(apiUrl, {
     revalidateOnMount: true,
   })
@@ -901,11 +903,13 @@ function OrderManagement() {
   const [customers, setCustomers] = useState<CustomerDetails[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [pickupLocations, setPickupLocations] = useState<{ id: string; name: string }[]>([])
+  const [distributionPersons, setDistributionPersons] = useState<{ id: string; name: string }[]>([])
   const [manualOrderForm, setManualOrderForm] = useState({
     customerId: "",
     customerEmail: "",
     deliveryMethod: "pickup",
     pickupLocationId: "",
+    distributionPersonId: "",
     paymentMethod: "invoice",
     paymentStatus: "pending",
     status: "confirmed",
@@ -980,10 +984,11 @@ function OrderManagement() {
 
   const fetchFormData = useCallback(async () => {
     try {
-      const [customersRes, productsRes, locationsRes] = await Promise.all([
+      const [customersRes, productsRes, locationsRes, distributionPersonsRes] = await Promise.all([
         fetch("/api/crm/customers"),
         fetch("/api/products"),
         fetch("/api/admin/pickup-locations"),
+        fetch("/api/admin/distribution-persons"),
       ])
 
       if (customersRes.ok) {
@@ -999,22 +1004,17 @@ function OrderManagement() {
 
       if (productsRes.ok) {
         const productsData = await productsRes.json()
-        setProducts(productsData)
+        setProducts(productsData.products || productsData || [])
       }
 
       if (locationsRes.ok) {
         const locationsData = await locationsRes.json()
-        const locations = locationsData.locations || locationsData
-        if (Array.isArray(locations)) {
-          setPickupLocations(
-            locations.map((loc: any) => ({
-              id: loc.id,
-              name: loc.name,
-            })),
-          )
-        } else {
-          console.error("[v0] Pickup locations data is not an array:", locations)
-        }
+        setPickupLocations(locationsData.locations || [])
+      }
+
+      if (distributionPersonsRes.ok) {
+        const distributionPersonsData = await distributionPersonsRes.json()
+        setDistributionPersons(distributionPersonsData.persons || [])
       }
     } catch (error) {
       console.error("[v0] Error fetching form data:", error)
@@ -1101,6 +1101,7 @@ function OrderManagement() {
           deliveryMethod: manualOrderForm.deliveryMethod,
           pickupLocation: pickupLocation?.name || null,
           pickupLocationId: manualOrderForm.pickupLocationId || null,
+          distributionPersonId: manualOrderForm.distributionPersonId || null,
           paymentMethod: manualOrderForm.paymentMethod,
           notes: manualOrderForm.notes || null,
           items: orderItems,
@@ -1141,6 +1142,7 @@ function OrderManagement() {
         customerEmail: "",
         deliveryMethod: "pickup",
         pickupLocationId: "",
+        distributionPersonId: "",
         paymentMethod: "invoice",
         paymentStatus: "pending",
         status: "confirmed",
@@ -1913,6 +1915,7 @@ function OrderManagement() {
                           <Combobox
                             value={manualOrderForm.customerId}
                             onValueChange={(value) => {
+                              console.log("[v0] Combobox onValueChange called with value:", value)
                               const customer =
                                 customers.find((c) => c.id === value) ||
                                 customerSearchResults.find((c) => c.id === value)
@@ -1922,7 +1925,10 @@ function OrderManagement() {
                                 customerEmail: customer?.email || "",
                               }))
                             }}
-                            onSearchChange={setCustomerSearchQuery}
+                            onSearchChange={(search) => {
+                              console.log("[v0] Combobox onSearchChange called with search:", search)
+                              setCustomerSearchQuery(search)
+                            }}
                             searchValue={customerSearchQuery}
                             placeholder="Kunde suchen..."
                             emptyText={isSearchingCustomers ? "Suche läuft..." : "Keine Kunden gefunden"}
@@ -1952,7 +1958,7 @@ function OrderManagement() {
                         onValueChange={(value) => setManualOrderForm((prev) => ({ ...prev, deliveryMethod: value }))}
                       >
                         <SelectTrigger id="deliveryMethod">
-                          <SelectValue />
+                          <SelectValue placeholder="Methode auswählen..." />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pickup">Abholung</SelectItem>
@@ -1990,6 +1996,29 @@ function OrderManagement() {
                       </div>
                     )}
 
+                    <div className="space-y-2">
+                      <Label htmlFor="distributionPerson">Verteilperson (optional)</Label>
+                      <Select
+                        value={manualOrderForm.distributionPersonId}
+                        onValueChange={(value) =>
+                          setManualOrderForm((prev) => ({ ...prev, distributionPersonId: value }))
+                        }
+                      >
+                        <SelectTrigger id="distributionPerson">
+                          <SelectValue placeholder="Verteilperson auswählen..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {distributionPersons
+                            .filter((person) => person.name)
+                            .map((person) => (
+                              <SelectItem key={person.id} value={person.id}>
+                                {person.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
                     {/* Payment Method */}
                     <div className="space-y-2">
                       <Label htmlFor="paymentMethod">Zahlungsmethode *</Label>
@@ -1998,7 +2027,7 @@ function OrderManagement() {
                         onValueChange={(value) => setManualOrderForm((prev) => ({ ...prev, paymentMethod: value }))}
                       >
                         <SelectTrigger id="paymentMethod">
-                          <SelectValue />
+                          <SelectValue placeholder="Methode auswählen..." />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="invoice">Rechnung</SelectItem>
@@ -2017,7 +2046,7 @@ function OrderManagement() {
                         onValueChange={(value) => setManualOrderForm((prev) => ({ ...prev, paymentStatus: value }))}
                       >
                         <SelectTrigger id="paymentStatus">
-                          <SelectValue />
+                          <SelectValue placeholder="Status auswählen..." />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pending">Ausstehend</SelectItem>
@@ -2035,7 +2064,7 @@ function OrderManagement() {
                         onValueChange={(value) => setManualOrderForm((prev) => ({ ...prev, status: value }))}
                       >
                         <SelectTrigger id="orderStatus">
-                          <SelectValue />
+                          <SelectValue placeholder="Status auswählen..." />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pending">Ausstehend</SelectItem>
@@ -2129,6 +2158,7 @@ function OrderManagement() {
                           customerEmail: "",
                           deliveryMethod: "pickup",
                           pickupLocationId: "",
+                          distributionPersonId: "",
                           paymentMethod: "invoice",
                           paymentStatus: "pending",
                           status: "confirmed",
@@ -2202,7 +2232,7 @@ function OrderManagement() {
                       <Label className="text-sm font-medium">Status</Label>
                       <Select value={statusFilter} onValueChange={setStatusFilter}>
                         <SelectTrigger className="w-full">
-                          <SelectValue />
+                          <SelectValue placeholder="Alle Status" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Alle Status</SelectItem>
@@ -2221,7 +2251,7 @@ function OrderManagement() {
                       <Label className="text-sm font-medium">Abholort</Label>
                       <Select value={pickupLocationFilter} onValueChange={setPickupLocationFilter}>
                         <SelectTrigger className="w-full">
-                          <SelectValue />
+                          <SelectValue placeholder="Alle Abholorte" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Alle Abholorte</SelectItem>
@@ -2240,7 +2270,7 @@ function OrderManagement() {
                       <Label className="text-sm font-medium">Liefermethode</Label>
                       <Select value={deliveryMethodFilter} onValueChange={setDeliveryMethodFilter}>
                         <SelectTrigger className="w-full">
-                          <SelectValue />
+                          <SelectValue placeholder="Alle Methoden" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Alle Methoden</SelectItem>
@@ -2256,7 +2286,7 @@ function OrderManagement() {
                       <Label className="text-sm font-medium">Kommentare</Label>
                       <Select value={commentFilter} onValueChange={setCommentFilter}>
                         <SelectTrigger className="w-full">
-                          <SelectValue />
+                          <SelectValue placeholder="Alle Kommentare" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">Alle Kommentare</SelectItem>
@@ -2403,7 +2433,7 @@ function OrderManagement() {
                 <Label htmlFor="paymentMethodSelect">Zahlungsart *</Label>
                 <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
                   <SelectTrigger id="paymentMethodSelect">
-                    <SelectValue />
+                    <SelectValue placeholder="Zahlungsart auswählen..." />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="cash">Bar</SelectItem>
