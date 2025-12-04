@@ -57,6 +57,27 @@ export function plzToNumber(plz: string | number): number {
 }
 
 /**
+ * Count matching prefix digits between two postal codes
+ */
+function countMatchingPrefixDigits(plz1: string, plz2: string): number {
+  const p1 = normalizePlz(plz1)
+  const p2 = normalizePlz(plz2)
+
+  let count = 0
+  const minLength = Math.min(p1.length, p2.length)
+
+  for (let i = 0; i < minLength; i++) {
+    if (p1[i] === p2[i]) {
+      count++
+    } else {
+      break
+    }
+  }
+
+  return count
+}
+
+/**
  * Calculate PLZ prefix match score
  * Higher score = better match (same first 2-3 digits)
  */
@@ -108,7 +129,7 @@ export function rankLocations(
     useGeo?: boolean
   } = {},
 ): RankedLocation[] {
-  const { userLat, userLon, radiusKm = 30, maxPlzDelta = 300, take = 5, useGeo = true } = options
+  const { userLat, userLon, radiusKm = 30, maxPlzDelta = 10000, take = 5, useGeo = true } = options
 
   const hasUserGeo = typeof userLat === "number" && typeof userLon === "number"
 
@@ -130,14 +151,18 @@ export function rankLocations(
         })
       }
     } else {
-      // Fallback to PLZ approximation
       const delta = plzDistanceScore(userPlz, loc.postal_code)
-      const prefixBonus = plzPrefixMatchScore(userPlz, loc.postal_code)
+      const matchingDigits = countMatchingPrefixDigits(userPlz, loc.postal_code)
+
+      // Weight each matching digit heavily: 10000 points per matching digit
+      // This ensures that "35xxx" matches "34xxx" (1 digit = 10000 bonus)
+      // much better than "83xxx" (0 digits = 0 bonus)
+      const prefixBonus = matchingDigits * 10000
 
       ranked.push({
         ...loc,
         approxPlzDelta: delta,
-        score: delta - prefixBonus * 50, // Bonus reduces score (better ranking)
+        score: delta - prefixBonus, // Lower score = better match
         reason: "plz",
       })
     }

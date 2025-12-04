@@ -1031,7 +1031,7 @@ export default function CheckoutPage() {
   const StepIndicator = () => {
     const steps: Array<{ id: CheckoutStep; label: string; number: number }> = [
       { id: "cart", label: "Warenkorb", number: 1 },
-      { id: "delivery", label: "Lieferung", number: 2 },
+      { id: "delivery", label: "Bestellart", number: 2 },
       { id: "customer", label: "Ihre Daten", number: 3 },
       { id: "payment", label: "Zahlung", number: 4 },
     ]
@@ -1354,7 +1354,7 @@ export default function CheckoutPage() {
               </div>
 
               <Button onClick={goToNextStep} className="w-full" size="lg" disabled={!isCartStepValid()}>
-                Weiter zur Lieferung
+                Weiter zu Bestellart
               </Button>
             </CardContent>
           </Card>
@@ -1422,9 +1422,7 @@ export default function CheckoutPage() {
                       Gesamtgewicht: {totalWeight.toFixed(1)} kg - Überschreitet Versandlimit von 10 kg
                     </span>
                   </div>
-                  <p className="text-sm text-amber-600 mt-1">
-                    Bitte reduzieren Sie die Menge oder wählen Sie Abholung.
-                  </p>
+                  <p className="text-sm text-amber-600 mt-1">Es wurde automatisch Abholung ausgewählt.</p>
                 </div>
               )}
 
