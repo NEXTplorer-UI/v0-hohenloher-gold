@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useCallback, useEffect, useMemo } from "react"
 import { useCart } from "@/contexts/cart-context"
 import { usePricing } from "@/components/pricing-context"
@@ -109,46 +107,6 @@ export default function CheckoutPage() {
 
   const [bulkOrderNames, setBulkOrderNames] = useState<string[]>([])
   const [isBulkOrderExpanded, setIsBulkOrderExpanded] = useState(false)
-
-  const [touchStart, setTouchStart] = useState<number | null>(null)
-  const [touchEnd, setTouchEnd] = useState<number | null>(null)
-
-  // Minimum swipe distance (in px)
-  const minSwipeDistance = 50
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null)
-    setTouchStart(e.targetTouches[0].clientX)
-  }
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX)
-  }
-
-  const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) return
-
-    const distance = touchStart - touchEnd
-    const isLeftSwipe = distance > minSwipeDistance
-    const isRightSwipe = distance < -minSwipeDistance
-
-    const stepOrder: CheckoutStep[] = ["cart", "delivery", "customer", "payment"]
-    const currentIndex = stepOrder.indexOf(currentStep)
-
-    if (isLeftSwipe && currentIndex < stepOrder.length - 1) {
-      // Swipe left = next step (if current step is completed)
-      const nextStep = stepOrder[currentIndex + 1]
-      if (completedSteps.includes(currentStep)) {
-        goToStep(nextStep)
-      }
-    }
-
-    if (isRightSwipe && currentIndex > 0) {
-      // Swipe right = previous step
-      const prevStep = stepOrder[currentIndex - 1]
-      goToStep(prevStep)
-    }
-  }
 
   const {
     locations: nearestLocations,
@@ -439,12 +397,36 @@ export default function CheckoutPage() {
       const currentIndex = stepOrder.indexOf(currentStep)
       const targetIndex = stepOrder.indexOf(step)
 
+      if (targetIndex > currentIndex && !completedSteps.includes(currentStep)) {
+        let isValid = false
+        switch (currentStep) {
+          case "cart":
+            isValid = isCartStepValid()
+            break
+          case "delivery":
+            isValid = isDeliveryStepValid()
+            break
+          case "customer":
+            // Note: customer validation is async but we skip it here for navigation
+            // The step will be validated when user clicks "Weiter"
+            isValid = true
+            break
+          case "payment":
+            isValid = isPaymentStepValid()
+            break
+        }
+
+        if (isValid) {
+          setCompletedSteps([...completedSteps, currentStep])
+        }
+      }
+
       if (targetIndex <= currentIndex || completedSteps.includes(step)) {
         setCurrentStep(step)
         window.scrollTo({ top: 0, behavior: "smooth" })
       }
     },
-    [currentStep, completedSteps],
+    [currentStep, completedSteps, isCartStepValid, isDeliveryStepValid, isPaymentStepValid],
   )
 
   const goToNextStep = useCallback(async () => {
@@ -1039,7 +1021,8 @@ export default function CheckoutPage() {
     // Mobile Progress with sticky positioning and swipe indicators
     const currentIndex = steps.findIndex((s) => s.id === currentStep)
     const canGoBack = currentIndex > 0
-    const canGoForward = currentIndex < steps.length - 1 && completedSteps.includes(currentStep)
+    const nextStep = steps[currentIndex + 1]
+    const canGoForward = currentIndex < steps.length - 1 && (!nextStep || completedSteps.includes(nextStep.id))
 
     return (
       <>
@@ -1095,14 +1078,16 @@ export default function CheckoutPage() {
         {/* Mobile Progress Bar with sticky positioning and swipe indicators */}
         <div className="lg:hidden sticky top-0 z-10 bg-gradient-to-br from-orange-50 to-yellow-50 pb-4 pt-2">
           <div className="text-center mb-1">
-            <span className="text-xs text-muted-foreground">← Wischen zum Wechseln </span>
+            <span className="text-xs text-muted-foreground"> Drücken zum Wechseln </span>
           </div>
 
           <div className="flex items-center justify-center gap-3 mb-3">
             <button
               onClick={() => canGoBack && goToStep(steps[currentIndex - 1].id)}
-              className={`p-1 rounded-full transition-all ${
-                canGoBack ? "opacity-100 hover:bg-white/50 active:scale-95" : "opacity-30 cursor-not-allowed"
+              className={`p-2 rounded-full transition-all shadow-sm ${
+                canGoBack
+                  ? "opacity-100 hover:bg-white/80 hover:shadow-md active:scale-95 cursor-pointer"
+                  : "opacity-30 cursor-not-allowed"
               }`}
               disabled={!canGoBack}
               aria-label="Vorheriger Schritt"
@@ -1116,8 +1101,10 @@ export default function CheckoutPage() {
 
             <button
               onClick={() => canGoForward && goToStep(steps[currentIndex + 1].id)}
-              className={`p-1 rounded-full transition-all ${
-                canGoForward ? "opacity-100 hover:bg-white/50 active:scale-95" : "opacity-30 cursor-not-allowed"
+              className={`p-2 rounded-full transition-all shadow-sm ${
+                canGoForward
+                  ? "opacity-100 hover:bg-white/80 hover:shadow-md active:scale-95 cursor-pointer"
+                  : "opacity-30 cursor-not-allowed"
               }`}
               disabled={!canGoForward}
               aria-label="Nächster Schritt"
@@ -1216,12 +1203,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div
-      className="min-h-screen bg-gradient-to-br from-orange-50 to-yellow-50 py-8"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-yellow-50 py-8">
       <div className="container mx-auto px-4 max-w-6xl">
         <div className="mb-6">
           <CustomArrangementNotice />
