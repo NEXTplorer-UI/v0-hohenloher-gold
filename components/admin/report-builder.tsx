@@ -129,6 +129,109 @@ interface ExcelExportOptions {
   showBorders: boolean
   borderStyle: "thin" | "medium" | "thick"
 }
+function parseAndAccumulateProducts(row: any, totals: Record<string, number>) {
+  const text = row.products
+  if (!text || typeof text !== "string") return
+
+  // Aktuell trennst du in der UI ja mit Kommas -> wiederverwenden
+  const parts = text.split(",").map((p) => p.trim()).filter(Boolean)
+
+  for (const part of parts) {
+    // Versuche: "3x Orange", "3× Orange", "3 Orange"
+    const match = part.match(/^(\d+)\s*[x×]?\s*(.+)$/i)
+    let qty = 1
+    let name = part
+
+    if (match) {
+      qty = Number.parseInt(match[1], 10) || 1
+      name = match[2].trim()
+    }
+
+    if (!name) continue
+    totals[name] = (totals[name] ?? 0) + qty
+  }
+}
+
+function addProductTotalsPerGroup(
+  rows: any[],
+  groupBy: string[],
+  enabled: boolean,
+): any[] {
+  // Wenn nicht gruppiert oder ausgeschaltet: Originaldaten zurückgeben
+  if (!enabled || !rows || !rows.length || groupBy.length === 0) {
+    return rows || []
+  }
+
+  const result: any[] = []
+
+  let currentTotals: Record<string, number> = {}
+  let currentGroupHeader: any | null = null
+  let inGroup = false
+
+  const flushTotals = () => {
+    if (!inGroup) return
+    const entries = Object.entries(currentTotals)
+    if (entries.length === 0) return
+
+    const productCount = entries.reduce((sum, [, qty]) => sum + (qty as number), 0)
+    const productsText = entries
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, qty]) => `${qty}× ${name}`)
+      .join(", ")
+
+    const summaryRow: any = {
+      _isProductTotal: true,
+      products: productsText,
+      product_count: productCount,
+    }
+
+    // Gruppen-Felder vom Header übernehmen, damit es "zu" der Gruppe gehört
+    if (currentGroupHeader) {
+      for (const key of groupBy) {
+        if (currentGroupHeader[key] !== undefined) {
+          summaryRow[key] = currentGroupHeader[key]
+        }
+      }
+    }
+
+    result.push(summaryRow)
+
+    currentTotals = {}
+    currentGroupHeader = null
+    inGroup = false
+  }
+
+  for (const row of rows) {
+    if (row._isGroup) {
+      // Neue Gruppe beginnt -> vorherige Gruppe abschließen
+      flushTotals()
+      currentGroupHeader = row
+      inGroup = true
+      result.push(row)
+      continue
+    }
+
+    if (row._isAggregation) {
+      // Bevor die Aggregationszeile kommt, erst unsere Produkt-Summen ausgeben
+      flushTotals()
+      result.push(row)
+      continue
+    }
+
+    // Normale Datenzeilen: Produkte sammeln
+    if (inGroup) {
+      parseAndAccumulateProducts(row, currentTotals)
+    }
+
+    result.push(row)
+  }
+
+  // letzte Gruppe flushen
+  flushTotals()
+
+  return result
+}
+
 
 export default function ReportBuilder() {
   const [selectedPreset, setSelectedPreset] = useState<string>("")
@@ -353,7 +456,7 @@ export default function ReportBuilder() {
   const exportToCSV = async () => {
     setIsExporting(true)
     try {
-      const rows = reportData?.data || []
+      const rows = dataWithProductTotals || []
       const headers = selectedColumns.map((colId) => AVAILABLE_COLUMNS.find((c) => c.id === colId)?.label || colId)
 
       const csvContent = [
@@ -387,7 +490,7 @@ export default function ReportBuilder() {
       const workbook = new ExcelJS.Workbook()
       const worksheet = workbook.addWorksheet("Report")
 
-      const rows = reportData?.data || []
+      const rows = dataWithProductTotals || []
       const headers = selectedColumns.map((colId) => AVAILABLE_COLUMNS.find((c) => c.id === colId)?.label || colId)
 
       // Header Row mit Formatierung aus Options
@@ -525,6 +628,11 @@ export default function ReportBuilder() {
     error: reportError,
     isLoading,
   } = useSWR(swrKey, async (url) => {
+    const dataWithProductTotals = useMemo(() => {
+    const base = reportData?.data || []
+    return addProductTotalsPerGroup(base, groupBy, showAggregations)
+  }, [reportData?.data, groupBy, showAggregations])
+
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -601,7 +709,7 @@ export default function ReportBuilder() {
   }, [selectedColumns, columnWidths, wrapText, groupBy])
 
   const table = useReactTable({
-    data: reportData?.data || [],
+    data: dataWithProductTotals,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -610,6 +718,7 @@ export default function ReportBuilder() {
       sorting,
     },
   })
+
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return
