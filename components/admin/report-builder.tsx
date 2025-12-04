@@ -628,17 +628,15 @@ export default function ReportBuilder() {
     error: reportError,
     isLoading,
   } = useSWR(swrKey, async (url) => {
-    const dataWithProductTotals = useMemo(() => {
-    const base = reportData?.data || []
-    return addProductTotalsPerGroup(base, groupBy, showAggregations)
-  }, [reportData?.data, groupBy, showAggregations])
-
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(reportConfig),
     })
-
+  const dataWithProductTotals = useMemo(() => {
+    const base = reportData?.data || []
+    return addProductTotalsPerGroup(base, groupBy, showAggregations)
+  }, [reportData?.data, groupBy, showAggregations])
     if (!response.ok) {
       throw new Error("Failed to fetch report")
     }
