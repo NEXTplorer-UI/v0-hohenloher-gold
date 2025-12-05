@@ -58,6 +58,10 @@ const AVAILABLE_COLUMNS = [
   { id: "admin_notes", label: "Admin-Notizen", type: "string" }, // Added admin_notes
   { id: "special_requests", label: "Sonderwünsche", type: "string" }, // Added special_requests
   { id: "product_category", label: "Warengruppe", type: "string" },
+  // NEW COLUMNS FOR MONTH AND DELIVERY METHOD
+  { id: "pickup_month", label: "Abholmonat", type: "string" },
+  { id: "order_month", label: "Bestellmonat", type: "string" },
+  { id: "delivery_method", label: "Lieferart", type: "string" },
 ]
 
 // const TEMPLATES = [
@@ -243,6 +247,7 @@ export default function ReportBuilder() {
     tours: [],
     months: [],
     statuses: [],
+    dateRange: { start: null, end: null }, // Date range filter
   })
 
   const [isExporting, setIsExporting] = useState(false)
@@ -341,6 +346,7 @@ export default function ReportBuilder() {
           tours: [],
           months: [],
           statuses: [],
+          dateRange: { start: null, end: null },
         },
       )
 
@@ -648,13 +654,15 @@ export default function ReportBuilder() {
     return {
       columns: selectedColumns,
       groupBy,
-      aggregations,
       filters,
+      aggregations,
+      showAggregations,
     }
-  }, [selectedColumns, groupBy, aggregations, filters])
+  }, [selectedColumns, groupBy, filters, aggregations, showAggregations])
 
-  const swrKey =
-    reportConfig.columns.length > 0 ? `/api/admin/reports/dynamic?config=${JSON.stringify(reportConfig)}` : null
+  const swrKey = useMemo(() => {
+    return ["/api/admin/reports/dynamic", JSON.stringify(reportConfig)]
+  }, [reportConfig])
 
   const {
     data: reportData,
@@ -727,6 +735,22 @@ export default function ReportBuilder() {
               return <span className="text-muted-foreground italic">{value || "-"}</span>
             }
 
+            // Display values for new columns
+            if (col.id === "pickup_month" || col.id === "order_month") {
+              return value ? new Date(value).toLocaleDateString("de-DE", { month: "long" }) : ""
+            }
+
+            if (col.id === "delivery_method") {
+              switch (value) {
+                case "pickup":
+                  return "Abholung"
+                case "shipping":
+                  return "Lieferung"
+                default:
+                  return value || "-"
+              }
+            }
+
             // Default display for string types
             return value || ""
           },
@@ -761,6 +785,15 @@ export default function ReportBuilder() {
   if (!selectedColumns || selectedColumns.length === 0) {
     return <div className="p-8">Lade Report Builder...</div>
   }
+
+  const GROUP_BY_OPTIONS = [
+    { value: "pickup_location_normalized", label: "Abholort" },
+    { value: "distribution_person", label: "Verteilperson" },
+    { value: "product_category", label: "Warengruppe" },
+    { value: "pickup_month", label: "Abholmonat" },
+    { value: "order_month", label: "Bestellmonat" },
+    { value: "delivery_method", label: "Lieferart (Abholung/Lieferung)" },
+  ]
 
   return (
     <div className="space-y-6">
@@ -815,32 +848,87 @@ export default function ReportBuilder() {
             </div>
           </div>
 
-          <div>
-            <Label className="text-base font-semibold mb-3 block">Filter</Label>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <Label className="text-sm mb-2 block">Lieferart</Label>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="filter-pickup"
-                      checked={filters.deliveryType?.includes("pickup")}
-                      onCheckedChange={() => toggleFilter("deliveryType", "pickup")}
-                    />
-                    <Label htmlFor="filter-pickup" className="text-sm cursor-pointer">
-                      Abholung
+          <Card>
+            <CardHeader>
+              <CardTitle>Filter</CardTitle>
+              <CardDescription>Wählen Sie die gewünschten Filter für den Report</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Datumsbereich (Abholdatum)</Label>
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <Label htmlFor="date-start" className="text-xs text-muted-foreground">
+                      Von
                     </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="filter-delivery"
-                      checked={filters.deliveryType?.includes("delivery")}
-                      onCheckedChange={() => toggleFilter("deliveryType", "delivery")}
+                    <Input
+                      id="date-start"
+                      type="date"
+                      value={filters.dateRange.start || ""}
+                      onChange={(e) =>
+                        setFilters((prev: any) => ({
+                          ...prev,
+                          dateRange: { ...prev.dateRange, start: e.target.value || null },
+                        }))
+                      }
                     />
-                    <Label htmlFor="filter-delivery" className="text-sm cursor-pointer">
-                      Versand
-                    </Label>
                   </div>
+                  <div className="flex-1">
+                    <Label htmlFor="date-end" className="text-xs text-muted-foreground">
+                      Bis
+                    </Label>
+                    <Input
+                      id="date-end"
+                      type="date"
+                      value={filters.dateRange.end || ""}
+                      onChange={(e) =>
+                        setFilters((prev: any) => ({
+                          ...prev,
+                          dateRange: { ...prev.dateRange, end: e.target.value || null },
+                        }))
+                      }
+                    />
+                  </div>
+                  {(filters.dateRange.start || filters.dateRange.end) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        setFilters((prev: any) => ({
+                          ...prev,
+                          dateRange: { start: null, end: null },
+                        }))
+                      }
+                      className="mt-5"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Lieferart</Label>
+                <div className="space-y-1">
+                  {["pickup", "shipping"].map((type) => (
+                    <div key={type} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`delivery-${type}`}
+                        checked={filters.deliveryType.includes(type)}
+                        onCheckedChange={(checked) => {
+                          setFilters((prev: any) => ({
+                            ...prev,
+                            deliveryType: checked
+                              ? [...prev.deliveryType, type]
+                              : prev.deliveryType.filter((t: string) => t !== type),
+                          }))
+                        }}
+                      />
+                      <Label htmlFor={`delivery-${type}`} className="font-normal">
+                        {type === "pickup" ? "Abholung" : "Lieferung"}
+                      </Label>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -920,7 +1008,6 @@ export default function ReportBuilder() {
                 </ScrollArea>
               </div>
 
-              {/* NEW FILTER SECTION START */}
               <div>
                 <Label className="text-sm mb-2 block">Monat</Label>
                 <ScrollArea className="h-32">
@@ -966,9 +1053,8 @@ export default function ReportBuilder() {
                   </div>
                 </ScrollArea>
               </div>
-              {/* NEW FILTER SECTION END */}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
           <div>
             <Label className="text-base font-semibold mb-3 block">Spaltenauswahl</Label>
@@ -993,37 +1079,18 @@ export default function ReportBuilder() {
           <div>
             <Label className="text-base font-semibold mb-3 block">Gruppierung</Label>
             <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="group-location"
-                  checked={groupBy.includes("pickup_location_normalized")}
-                  onCheckedChange={() => toggleGroupBy("pickup_location_normalized")}
-                />
-                <Label htmlFor="group-location" className="cursor-pointer">
-                  Nach Abholort gruppieren
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="group-person"
-                  checked={groupBy.includes("distribution_person")}
-                  onCheckedChange={() => toggleGroupBy("distribution_person")}
-                />
-                <Label htmlFor="group-person" className="cursor-pointer">
-                  Nach Verteilperson gruppieren
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="group-category"
-                  checked={groupBy.includes("product_category")}
-                  onCheckedChange={() => toggleGroupBy("product_category")}
-                />
-                <Label htmlFor="group-category" className="cursor-pointer">
-                  Nach Warengruppe gruppieren
-                </Label>
-              </div>
-              {/* Add options for new grouping columns if applicable */}
+              {GROUP_BY_OPTIONS.map((option) => (
+                <div key={option.value} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`group-${option.value}`}
+                    checked={groupBy.includes(option.value)}
+                    onCheckedChange={() => toggleGroupBy(option.value)}
+                  />
+                  <Label htmlFor={`group-${option.value}`} className="cursor-pointer">
+                    Nach {option.label} gruppieren
+                  </Label>
+                </div>
+              ))}
             </div>
           </div>
 

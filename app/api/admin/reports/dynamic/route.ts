@@ -31,6 +31,9 @@ const AVAILABLE_COLUMNS_DEFS: Record<string, { type: string }> = {
   notes: { type: "string" },
   admin_notes: { type: "string" },
   special_requests: { type: "string" },
+  pickup_month: { type: "string" },
+  order_month: { type: "string" },
+  delivery_method: { type: "string" },
 }
 
 export async function POST(request: NextRequest) {
@@ -58,6 +61,22 @@ export async function POST(request: NextRequest) {
 
     // Apply filters
     let filteredOrders = orders || []
+
+    if (config.filters?.dateRange?.start) {
+      filteredOrders = filteredOrders.filter((order: any) => {
+        const pickupDate = order.pickup_date ? new Date(order.pickup_date) : null
+        const startDate = new Date(config.filters.dateRange.start)
+        return pickupDate && pickupDate >= startDate
+      })
+    }
+
+    if (config.filters?.dateRange?.end) {
+      filteredOrders = filteredOrders.filter((order: any) => {
+        const pickupDate = order.pickup_date ? new Date(order.pickup_date) : null
+        const endDate = new Date(config.filters.dateRange.end)
+        return pickupDate && pickupDate <= endDate
+      })
+    }
 
     if (config.filters?.deliveryType && config.filters.deliveryType.length > 0) {
       filteredOrders = filteredOrders.filter((order: any) => {
@@ -302,6 +321,75 @@ function getFieldValue(order: any, field: string): any {
       return order.admin_notes
     case "special_requests":
       return order.customer?.special_requests
+    case "pickup_month":
+      // Primary: Extract from pickup_date, Fallback: Extract from order_number
+      if (order.pickup_date) {
+        const date = new Date(order.pickup_date)
+        const monthNames = [
+          "Januar",
+          "Februar",
+          "März",
+          "April",
+          "Mai",
+          "Juni",
+          "Juli",
+          "August",
+          "September",
+          "Oktober",
+          "November",
+          "Dezember",
+        ]
+        return `${monthNames[date.getMonth()]} ${date.getFullYear()}`
+      }
+      // Fallback: Extract from order_number (HG-YYYY-MM-NNNN)
+      const pickupMatch = order.order_number?.match(/HG-(\d{4})-(\d{2})-\d+/)
+      if (pickupMatch) {
+        const year = pickupMatch[1]
+        const month = Number.parseInt(pickupMatch[2], 10) - 1
+        const monthNames = [
+          "Januar",
+          "Februar",
+          "März",
+          "April",
+          "Mai",
+          "Juni",
+          "Juli",
+          "August",
+          "September",
+          "Oktober",
+          "November",
+          "Dezember",
+        ]
+        return `${monthNames[month]} ${year}`
+      }
+      return "Unbekannt"
+
+    case "order_month":
+      // Extract month from order_number (HG-YYYY-MM-NNNN)
+      const orderMatch = order.order_number?.match(/HG-(\d{4})-(\d{2})-\d+/)
+      if (orderMatch) {
+        const year = orderMatch[1]
+        const month = Number.parseInt(orderMatch[2], 10) - 1
+        const monthNames = [
+          "Januar",
+          "Februar",
+          "März",
+          "April",
+          "Mai",
+          "Juni",
+          "Juli",
+          "August",
+          "September",
+          "Oktober",
+          "November",
+          "Dezember",
+        ]
+        return `${monthNames[month]} ${year}`
+      }
+      return "Unbekannt"
+
+    case "delivery_method":
+      return order.is_pickup ? "Abholung" : "Lieferung"
     default:
       return order[field]
   }
