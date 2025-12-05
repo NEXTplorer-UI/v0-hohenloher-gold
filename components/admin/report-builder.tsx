@@ -11,13 +11,13 @@ import { Slider } from "@/components/ui/slider"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import useSWR from "swr"
 import {
-  type ColumnDef,
   flexRender,
   getCoreRowModel,
   useReactTable,
   getSortedRowModel,
   type SortingState,
   type ColumnOrderState,
+  createColumnHelper,
 } from "@tanstack/react-table"
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd"
 import {
@@ -28,7 +28,7 @@ import {
   DialogTrigger,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { Download, GripVertical, Settings, ArrowUpDown, FileSpreadsheet, Plus, Trash2 } from "lucide-react"
+import { Download, GripVertical, Settings, FileSpreadsheet, Plus, Trash2 } from "lucide-react"
 import ExcelJS from "exceljs"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
@@ -48,12 +48,15 @@ const AVAILABLE_COLUMNS = [
   { id: "pickup_location_normalized", label: "Abholort", type: "string" },
   { id: "distribution_person", label: "Verteilperson", type: "string" },
   { id: "status", label: "Status", type: "string" },
+  { id: "internal_status", label: "Interner Status", type: "string" }, // Added internal_status
   { id: "payment_method", label: "Zahlungsart", type: "string" },
   { id: "products", label: "Produkte", type: "string" },
   { id: "product_count", label: "Produktanzahl", type: "number" },
   { id: "total", label: "Gesamtbetrag", type: "number" },
   { id: "created_at", label: "Datum", type: "date" },
   { id: "notes", label: "Notizen", type: "string" },
+  { id: "admin_notes", label: "Admin-Notizen", type: "string" }, // Added admin_notes
+  { id: "special_requests", label: "Sonderwünsche", type: "string" }, // Added special_requests
   { id: "product_category", label: "Warengruppe", type: "string" },
 ]
 
@@ -215,6 +218,8 @@ function calculateGrandTotal(rows: any[]): Record<string, number> {
   return totals
 }
 
+const columnHelper = createColumnHelper<any>() // Added for typed columns
+
 export default function ReportBuilder() {
   const [selectedPreset, setSelectedPreset] = useState<string>("")
   const [showSavePresetDialog, setShowSavePresetDialog] = useState(false)
@@ -244,12 +249,8 @@ export default function ReportBuilder() {
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [isColumnSettingsOpen, setIsColumnSettingsOpen] = useState(false)
   const [sorting, setSorting] = useState<SortingState>([])
-  const [columnOrderState, setColumnOrderState] = useState<ColumnOrderState>([
-    "order_number",
-    "customer_name",
-    "pickup_location_normalized",
-    "total",
-  ])
+  // Initialize columnOrderState with ALL available column IDs
+  const [columnOrderState, setColumnOrderState] = useState<ColumnOrderState>(AVAILABLE_COLUMNS.map((col) => col.id))
   const [showAggregations, setShowAggregations] = useState(true)
   const [wrapText, setWrapText] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
@@ -326,7 +327,7 @@ export default function ReportBuilder() {
     if (preset) {
       setSelectedPreset(presetId)
       setSelectedColumns(preset.columns || [])
-      setColumnOrderState(preset.column_order || preset.columns || [])
+      setColumnOrderState(preset.column_order || preset.columns || AVAILABLE_COLUMNS.map((col) => col.id)) // Fallback to all columns
       setColumnWidths(preset.column_widths || {})
       setGroupBy(preset.group_by || [])
       setAggregations(preset.aggregations || [])
@@ -507,6 +508,11 @@ export default function ReportBuilder() {
           if (row._isAggregation && colId === "products" && row.product_summary) {
             return row.product_summary
           }
+          // Handle new columns
+          if (row._isGroup && (colId === "admin_notes" || colId === "special_requests")) return ""
+          if (row._isAggregation && (colId === "admin_notes" || colId === "special_requests")) return ""
+          if (row._isGroup && colId === "internal_status") return ""
+
           const value = row[colId]
           return value ?? ""
         })
@@ -678,57 +684,58 @@ export default function ReportBuilder() {
     return calculateGrandTotal(reportData.data)
   }, [showGrandTotal, reportData?.data])
 
-  const columns: ColumnDef<any>[] = useMemo(() => {
-    return columnOrderState
-      .filter((col) => selectedColumns.includes(col))
-      .map((colId) => {
-        const colDef = AVAILABLE_COLUMNS.find((c) => c.id === colId)
-        if (!colDef) return null
+  // Updated columns useMemo to properly filter by selectedColumns and use columnHelper
+  const columns = useMemo(() => {
+    if (!reportData?.data) return []
 
-        return {
-          id: colId,
-          accessorKey: colId,
-          header: ({ column }) => {
-            return (
-              <Button
-                variant="ghost"
-                onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                className="hover:bg-transparent"
-              >
-                {colDef.label}
-                <ArrowUpDown className="ml-2 h-4 w-4" />
-              </Button>
-            )
-          },
-          cell: ({ row }) => {
-            const value = row.original[colId]
+    const baseColumns = AVAILABLE_COLUMNS.filter((col) => selectedColumns.includes(col.id))
+      .filter((col) => columnOrderState.includes(col.id)) // Ensure column is in order state
+      .sort((a, b) => columnOrderState.indexOf(a.id) - columnOrderState.indexOf(b.id)) // Sort based on columnOrderState
+      .map((col) =>
+        columnHelper.accessor(col.id, {
+          header: col.label,
+          cell: (info) => {
+            const row = info.row.original
+            const value = row[col.id]
 
-            if (row.original._isGroup) {
-              return colId === groupBy[0] ? <span className="font-bold">{value}</span> : null
+            // Handle special rows (group, aggregation)
+            if (row._isGroup) {
+              // Display group value only for the first grouping column
+              return col.id === groupBy[0] ? <span className="font-bold">{value}</span> : null
             }
 
-            if (row.original._isAggregation) {
-              if (colId === "products" && row.original.product_summary) {
-                return <span className="text-blue-600 italic pl-4">{row.original.product_summary}</span>
+            if (row._isAggregation) {
+              // Display product summary for aggregation rows
+              if (col.id === "products" && row.product_summary) {
+                return <span className="text-blue-600 italic pl-4">{row.product_summary}</span>
               }
+              // Display aggregated values
               return <span className="font-semibold">{value}</span>
             }
 
-            if (colDef.type === "number") {
-              return typeof value === "number" ? value.toFixed(2) : value
+            // Handle specific column types for display
+            if (col.type === "number") {
+              return typeof value === "number" ? value.toFixed(2) : ""
             }
 
-            if (colDef.type === "date") {
+            if (col.type === "date") {
               return value ? new Date(value).toLocaleDateString("de-DE") : ""
             }
 
-            return value
+            // Handle new columns with specific display logic if needed
+            if (col.id === "admin_notes" || col.id === "special_requests") {
+              return <span className="text-muted-foreground italic">{value || "-"}</span>
+            }
+
+            // Default display for string types
+            return value || ""
           },
-          size: columnWidths[colId] || 150,
-        }
-      })
-      .filter(Boolean) as ColumnDef<any>[]
-  }, [columnOrderState, selectedColumns, columnWidths, groupBy])
+          size: columnWidths[col.id] || 150, // Use size from columnWidths state
+        }),
+      )
+
+    return baseColumns
+  }, [reportData?.data, selectedColumns, columnOrderState, columnWidths, groupBy, columnHelper]) // Added columnHelper to dependency array
 
   const table = useReactTable({
     data: dataWithProductTotals,
@@ -1016,6 +1023,7 @@ export default function ReportBuilder() {
                   Nach Warengruppe gruppieren
                 </Label>
               </div>
+              {/* Add options for new grouping columns if applicable */}
             </div>
           </div>
 
@@ -1068,7 +1076,7 @@ export default function ReportBuilder() {
                       {(provided) => (
                         <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2 mt-2">
                           {columnOrderState
-                            .filter((col) => selectedColumns.includes(col))
+                            .filter((col) => selectedColumns.includes(col)) // Only show selected columns in order
                             .map((col, index) => {
                               const colDef = AVAILABLE_COLUMNS.find((c) => c.id === col)
                               return (

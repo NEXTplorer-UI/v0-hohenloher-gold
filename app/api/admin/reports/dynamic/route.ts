@@ -22,12 +22,15 @@ const AVAILABLE_COLUMNS_DEFS: Record<string, { type: string }> = {
   pickup_location_normalized: { type: "string" },
   distribution_person: { type: "string" },
   status: { type: "string" },
+  internal_status: { type: "string" },
   payment_method: { type: "string" },
   products: { type: "string" },
   product_count: { type: "number" },
   total: { type: "number" },
   created_at: { type: "date" },
   notes: { type: "string" },
+  admin_notes: { type: "string" },
+  special_requests: { type: "string" },
 }
 
 export async function POST(request: NextRequest) {
@@ -265,8 +268,6 @@ function getFieldValue(order: any, field: string): any {
       return order.customer?.phone
     case "customer_postal_code":
       return order.customer?.postal_code
-    case "customer_address":
-      return order.customer?.address
     case "customer_street":
       return order.customer?.street
     case "customer_city":
@@ -275,6 +276,8 @@ function getFieldValue(order: any, field: string): any {
       return order.customer?.country
     case "status":
       return order.status
+    case "internal_status":
+      return order.internal_status
     case "payment_method":
       return order.payment_method
     case "payment_status":
@@ -295,6 +298,10 @@ function getFieldValue(order: any, field: string): any {
       return order.order_items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0
     case "notes":
       return order.notes
+    case "admin_notes":
+      return order.admin_notes
+    case "special_requests":
+      return order.customer?.special_requests
     default:
       return order[field]
   }
