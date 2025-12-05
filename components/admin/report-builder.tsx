@@ -668,7 +668,7 @@ export default function ReportBuilder() {
     data: reportData,
     error: reportError,
     isLoading,
-  } = useSWR(swrKey, async (url) => {
+  } = useSWR(swrKey, async ([url, configStr]) => {
     console.log("[v0] FRONTEND: Starting report fetch with config:", reportConfig)
 
     try {
