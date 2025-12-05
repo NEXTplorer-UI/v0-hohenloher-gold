@@ -669,22 +669,56 @@ export default function ReportBuilder() {
     error: reportError,
     isLoading,
   } = useSWR(swrKey, async (url) => {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(reportConfig),
-    })
+    console.log("[v0] FRONTEND: Starting report fetch with config:", reportConfig)
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch report")
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reportConfig),
+      })
+
+      console.log("[v0] FRONTEND: Fetch response status:", response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("[v0] FRONTEND: Fetch failed with text:", errorText)
+        throw new Error("Failed to fetch report")
+      }
+
+      const data = await response.json()
+      console.log("[v0] FRONTEND: Successfully received data, row count:", data?.data?.length || 0)
+      return data
+    } catch (error) {
+      console.error("[v0] FRONTEND: Error in fetch:", error)
+      throw error
     }
-
-    return await response.json()
   })
 
+  if (reportError) {
+    console.error("[v0] FRONTEND: reportError detected:", reportError)
+  }
+
   const dataWithProductTotals = useMemo(() => {
-    const base = reportData?.data || []
-    return addProductTotalsPerGroup(base, groupBy, showAggregations)
+    console.log(
+      "[v0] FRONTEND: Processing dataWithProductTotals, groupBy:",
+      groupBy,
+      "showAggregations:",
+      showAggregations,
+    )
+
+    try {
+      const base = reportData?.data || []
+      console.log("[v0] FRONTEND: Base data rows:", base.length)
+
+      const result = addProductTotalsPerGroup(base, groupBy, showAggregations)
+      console.log("[v0] FRONTEND: Processed data rows:", result.length)
+
+      return result
+    } catch (error) {
+      console.error("[v0] FRONTEND: Error in dataWithProductTotals processing:", error)
+      throw error
+    }
   }, [reportData?.data, groupBy, showAggregations])
 
   const grandTotal = useMemo(() => {

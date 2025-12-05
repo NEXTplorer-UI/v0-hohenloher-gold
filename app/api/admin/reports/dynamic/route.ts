@@ -38,11 +38,19 @@ const AVAILABLE_COLUMNS_DEFS: Record<string, { type: string }> = {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("[v0] API: ========== REPORT DYNAMIC ROUTE CALLED ==========")
+
     const supabase = getAdminClient()
     const config = await request.json()
 
-    console.log("[v0] DEBUG config.filters:", JSON.stringify(config.filters))
-    console.log("[v0] DEBUG config.groupBy:", config.groupBy)
+    console.log("[v0] API: Config received:", {
+      hasFilters: !!config.filters,
+      hasGroupBy: !!config.groupBy,
+      groupByLength: config.groupBy?.length || 0,
+      filtersKeys: config.filters ? Object.keys(config.filters) : [],
+    })
+    console.log("[v0] API: config.filters structure:", JSON.stringify(config.filters, null, 2))
+    console.log("[v0] API: config.groupBy:", config.groupBy)
 
     const { data: orders, error } = await supabase
       .from("orders")
@@ -58,29 +66,35 @@ export async function POST(request: NextRequest) {
       .limit(1000)
 
     if (error) {
-      console.error("[v0] Error fetching orders:", error)
+      console.error("[v0] API ERROR: Fetching orders failed:", error)
       throw error
     }
+
+    console.log("[v0] API: Fetched orders count:", orders?.length || 0)
 
     // Apply filters
     let filteredOrders = orders || []
 
     if (config.filters?.dateRange?.start) {
-      console.log("[v0] DEBUG: Filtering by start date:", config.filters.dateRange.start)
+      console.log("[v0] API: Applying start date filter:", config.filters.dateRange.start)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
         const pickupDate = order.pickup_date ? new Date(order.pickup_date) : null
         const startDate = new Date(config.filters.dateRange.start)
         return pickupDate && pickupDate >= startDate
       })
+      console.log("[v0] API: After start date filter:", beforeCount, "→", filteredOrders.length)
     }
 
     if (config.filters?.dateRange?.end) {
-      console.log("[v0] DEBUG: Filtering by end date:", config.filters.dateRange.end)
+      console.log("[v0] API: Applying end date filter:", config.filters.dateRange.end)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
         const pickupDate = order.pickup_date ? new Date(order.pickup_date) : null
         const endDate = new Date(config.filters.dateRange.end)
         return pickupDate && pickupDate <= endDate
       })
+      console.log("[v0] API: After end date filter:", beforeCount, "→", filteredOrders.length)
     }
 
     if (
@@ -88,12 +102,14 @@ export async function POST(request: NextRequest) {
       Array.isArray(config.filters.deliveryType) &&
       config.filters.deliveryType.length > 0
     ) {
-      console.log("[v0] DEBUG: Filtering by deliveryType:", config.filters.deliveryType)
+      console.log("[v0] API: Applying deliveryType filter:", config.filters.deliveryType)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
         if (config.filters.deliveryType.includes("pickup") && order.is_pickup) return true
         if (config.filters.deliveryType.includes("shipping") && !order.is_pickup) return true
         return false
       })
+      console.log("[v0] API: After deliveryType filter:", beforeCount, "→", filteredOrders.length)
     }
 
     if (
@@ -101,10 +117,12 @@ export async function POST(request: NextRequest) {
       Array.isArray(config.filters.paymentMethod) &&
       config.filters.paymentMethod.length > 0
     ) {
-      console.log("[v0] DEBUG: Filtering by paymentMethod:", config.filters.paymentMethod)
+      console.log("[v0] API: Applying paymentMethod filter:", config.filters.paymentMethod)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) =>
         config.filters.paymentMethod.includes(order.payment_method?.toLowerCase()),
       )
+      console.log("[v0] API: After paymentMethod filter:", beforeCount, "→", filteredOrders.length)
     }
 
     if (
@@ -112,22 +130,24 @@ export async function POST(request: NextRequest) {
       Array.isArray(config.filters.pickupLocations) &&
       config.filters.pickupLocations.length > 0
     ) {
-      console.log("[v0] DEBUG: Filtering by pickupLocations:", config.filters.pickupLocations)
+      console.log("[v0] API: Applying pickupLocations filter:", config.filters.pickupLocations)
       const { data: selectedLocations } = await supabase
         .from("pickup_locations")
         .select("name")
         .in("id", config.filters.pickupLocations)
 
       const normalizedLocationNames = selectedLocations?.map((loc: any) => normalizeLocationName(loc.name)) || []
+      const beforeCount = filteredOrders.length
 
       filteredOrders = filteredOrders.filter((order: any) => {
         const orderLocation = normalizeLocationName(order.pickup_location_normalized)
         return normalizedLocationNames.includes(orderLocation)
       })
+      console.log("[v0] API: After pickupLocations filter:", beforeCount, "→", filteredOrders.length)
     }
 
     if (config.filters?.tours && Array.isArray(config.filters.tours) && config.filters.tours.length > 0) {
-      console.log("[v0] DEBUG: Filtering by tours:", config.filters.tours)
+      console.log("[v0] API: Applying tours filter:", config.filters.tours)
       const { data: routeLocations } = await supabase
         .from("route_locations")
         .select("pickup_location_id, pickup_locations!inner(name)")
@@ -135,46 +155,65 @@ export async function POST(request: NextRequest) {
 
       const normalizedTourLocationNames =
         routeLocations?.map((rl: any) => normalizeLocationName(rl.pickup_locations.name)) || []
+      const beforeCount = filteredOrders.length
 
       filteredOrders = filteredOrders.filter((order: any) => {
         const orderLocation = normalizeLocationName(order.pickup_location_normalized)
         return normalizedTourLocationNames.includes(orderLocation)
       })
+      console.log("[v0] API: After tours filter:", beforeCount, "→", filteredOrders.length)
     }
 
     if (config.filters?.months && Array.isArray(config.filters.months) && config.filters.months.length > 0) {
-      console.log("[v0] DEBUG: Filtering by months:", config.filters.months)
+      console.log("[v0] API: Applying months filter:", config.filters.months)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
         const match = order.order_number?.match(/HG-\d{4}-(\d{2})-\d+/)
         if (!match) return false
         const orderMonth = match[1]
         return config.filters.months.includes(orderMonth)
       })
+      console.log("[v0] API: After months filter:", beforeCount, "→", filteredOrders.length)
     }
 
     if (config.filters?.statuses && Array.isArray(config.filters.statuses) && config.filters.statuses.length > 0) {
-      console.log("[v0] DEBUG: Filtering by statuses:", config.filters.statuses)
+      console.log("[v0] API: Applying statuses filter:", config.filters.statuses)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => config.filters.statuses.includes(order.status))
+      console.log("[v0] API: After statuses filter:", beforeCount, "→", filteredOrders.length)
     }
 
     if (config.filters?.dateFrom) {
       const fromDate = new Date(config.filters.dateFrom)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => new Date(order.created_at) >= fromDate)
+      console.log("[v0] API: After dateFrom filter:", beforeCount, "→", filteredOrders.length)
     }
 
     if (config.filters?.dateTo) {
       const toDate = new Date(config.filters.dateTo)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => new Date(order.created_at) <= toDate)
+      console.log("[v0] API: After dateTo filter:", beforeCount, "→", filteredOrders.length)
     }
 
     // Process data based on grouping
-    console.log("[v0] DEBUG: About to process with groupBy:", config.groupBy)
+    console.log("[v0] API: Starting processOrderData with:", {
+      orderCount: filteredOrders.length,
+      groupBy: config.groupBy,
+      hasColumns: !!config.columns,
+    })
+
     const processedData = processOrderData(filteredOrders, config)
+
+    console.log("[v0] API: Processed data rows:", processedData.length)
+    console.log("[v0] API: ========== RETURNING RESPONSE ==========")
 
     return NextResponse.json({ data: processedData })
   } catch (error) {
-    console.error("[v0] Error generating dynamic report:", error)
-    console.error("[v0] Error stack:", error instanceof Error ? error.stack : "No stack trace")
+    console.error("[v0] API ERROR: Exception caught:", error)
+    console.error("[v0] API ERROR: Stack trace:", error instanceof Error ? error.stack : "No stack trace")
+    console.error("[v0] API ERROR: Error message:", error instanceof Error ? error.message : String(error))
     return NextResponse.json(
       { error: "Failed to generate report", message: error instanceof Error ? error.message : String(error) },
       { status: 500 },
@@ -183,26 +222,44 @@ export async function POST(request: NextRequest) {
 }
 
 function processOrderData(orders: any[], config: any) {
+  console.log("[v0] API processOrderData: Starting with", orders.length, "orders")
+  console.log("[v0] API processOrderData: groupBy:", config.groupBy)
+
   const { groupBy, columns, aggregations, showAggregations } = config
 
   if (!groupBy || groupBy.length === 0) {
     // No grouping - return flat data
+    console.log("[v0] API processOrderData: No grouping, returning flat data")
     return orders.map((order) => flattenOrder(order, columns))
   }
 
   // Group data
   const grouped = new Map<string, any[]>()
 
-  orders.forEach((order) => {
-    const groupKey = groupBy.map((field: string) => getFieldValue(order, field)).join("|||")
+  console.log("[v0] API processOrderData: Grouping by fields:", groupBy)
 
-    if (!grouped.has(groupKey)) {
-      grouped.set(groupKey, [])
+  orders.forEach((order, index) => {
+    try {
+      const groupKey = groupBy
+        .map((field: string) => {
+          const value = getFieldValue(order, field)
+          console.log(`[v0] API processOrderData: Order ${index}, field "${field}" = "${value}"`)
+          return value
+        })
+        .join("|||")
+
+      if (!grouped.has(groupKey)) {
+        grouped.set(groupKey, [])
+      }
+      grouped.get(groupKey)!.push(order)
+    } catch (error) {
+      console.error(`[v0] API processOrderData ERROR: Failed processing order ${index}:`, error)
+      throw error
     }
-    grouped.get(groupKey)!.push(order)
   })
 
-  // Create result rows
+  console.log("[v0] API processOrderData: Created", grouped.size, "groups")
+
   const result: any[] = []
   const globalProductTotals: Record<string, number> = {}
 
