@@ -34,6 +34,7 @@ const AVAILABLE_COLUMNS_DEFS: Record<string, { type: string }> = {
   pickup_month: { type: "string" },
   order_month: { type: "string" },
   delivery_method: { type: "string" },
+  product_category: { type: "string" },
 }
 
 export async function POST(request: NextRequest) {
@@ -233,7 +234,7 @@ function processOrderData(orders: any[], config: any) {
   console.log("[v0] API processOrderData: Starting with", orders.length, "orders")
   console.log("[v0] API processOrderData: groupBy:", config.groupBy)
 
-  const { groupBy, columns, aggregations, showAggregations } = config
+  const { groupBy, columns, aggregations, showAggregations, showProductDetails } = config
 
   if (!groupBy || groupBy.length === 0) {
     // No grouping - return flat data
@@ -275,9 +276,17 @@ function processOrderData(orders: any[], config: any) {
     const groupValues = groupKey.split("|||")
 
     const headerRow: any = { _isGroup: true }
+
+    // Create readable label for the group
+    const groupLabels: string[] = []
     groupBy.forEach((field: string, index: number) => {
+      const fieldLabel = AVAILABLE_COLUMNS_DEFS[field] ? getFieldLabel(field) : field
+      const fieldValue = groupValues[index]
+      groupLabels.push(`${fieldLabel}: ${fieldValue}`)
       headerRow[field] = groupValues[index]
     })
+
+    headerRow._groupLabel = groupLabels.join(" | ")
 
     result.push(headerRow)
 
@@ -301,10 +310,6 @@ function processOrderData(orders: any[], config: any) {
       }
     })
 
-    if (hasAggregations) {
-      result.push(aggRow)
-    }
-
     if (showAggregations) {
       const productTotals: Record<string, number> = {}
 
@@ -318,18 +323,30 @@ function processOrderData(orders: any[], config: any) {
         }
       })
 
+      // Add product summary to aggregation row
       if (Object.keys(productTotals).length > 0) {
+        const entries = Object.entries(productTotals).sort(([a], [b]) => a.localeCompare(b))
+        const productsText = entries.map(([name, qty]) => `${qty}× ${name}`).join(", ")
+        aggRow.product_summary = productsText
+      }
+
+      if (hasAggregations) {
+        result.push(aggRow)
+      }
+
+      if (showProductDetails && Object.keys(productTotals).length > 0) {
         Object.entries(productTotals)
           .sort(([a], [b]) => a.localeCompare(b))
           .forEach(([product, quantity]) => {
             result.push({
               _isAggregation: true,
-              _isProductTotal: true,
-              products: product,
-              product_count: quantity,
+              _isProductDetail: true,
+              products: `${quantity}× ${product}`, // Format: "5× Orangen"
             })
           })
       }
+    } else if (hasAggregations) {
+      result.push(aggRow)
     }
   })
 
@@ -337,23 +354,37 @@ function processOrderData(orders: any[], config: any) {
     result.push({
       _isGroup: true,
       _isGlobalTotal: true,
+      _groupLabel: "═══ GESAMTSUMME ALLER PRODUKTE ═══",
       [groupBy[0]]: "═══ GESAMTSUMME ═══",
     })
 
-    Object.entries(globalProductTotals)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .forEach(([product, quantity]) => {
-        result.push({
-          _isAggregation: true,
-          _isProductTotal: true,
-          _isGlobalTotal: true,
-          products: product,
-          product_count: quantity,
+    if (showProductDetails) {
+      Object.entries(globalProductTotals)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([product, quantity]) => {
+          result.push({
+            _isAggregation: true,
+            _isProductDetail: true,
+            _isGlobalTotal: true,
+            products: `${quantity}× ${product}`, // Format: "5× Orangen"
+          })
         })
-      })
+    }
   }
 
   return result
+}
+
+function getFieldLabel(field: string): string {
+  const labels: Record<string, string> = {
+    pickup_location_normalized: "Abholort",
+    distribution_person: "Verteilperson",
+    product_category: "Warengruppe",
+    pickup_month: "Abholmonat",
+    order_month: "Bestellmonat",
+    delivery_method: "Lieferart",
+  }
+  return labels[field] || field
 }
 
 function flattenOrder(order: any, columns: string[]) {

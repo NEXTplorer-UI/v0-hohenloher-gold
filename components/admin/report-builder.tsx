@@ -260,6 +260,7 @@ export default function ReportBuilder() {
   const [wrapText, setWrapText] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showGrandTotal, setShowGrandTotal] = useState(false)
+  const [showProductDetails, setShowProductDetails] = useState(false)
 
   const [showExcelOptionsDialog, setShowExcelOptionsDialog] = useState(false)
   const [excelOptions, setExcelOptions] = useState<ExcelExportOptions>({
@@ -657,8 +658,9 @@ export default function ReportBuilder() {
       filters,
       aggregations,
       showAggregations,
+      showProductDetails,
     }
-  }, [selectedColumns, groupBy, filters, aggregations, showAggregations])
+  }, [selectedColumns, groupBy, filters, aggregations, showAggregations, showProductDetails])
 
   const swrKey = useMemo(() => {
     return ["/api/admin/reports/dynamic", JSON.stringify(reportConfig)]
@@ -740,14 +742,28 @@ export default function ReportBuilder() {
             const row = info.row.original
             const value = row[col.id]
 
-            // Handle special rows (group, aggregation)
             if (row._isGroup) {
               // Display group value only for the first grouping column
-              return col.id === groupBy[0] ? <span className="font-bold">{value}</span> : null
+              if (col.id === groupBy[0] && row._groupLabel) {
+                return <span className="font-bold text-lg">{row._groupLabel}</span>
+              }
+              return null
+            }
+
+            if (row._isProductDetail) {
+              if (col.id === "products") {
+                return (
+                  <span className="text-blue-600 italic pl-8 block">
+                    {row._isGlobalTotal ? "📦 " : ""}
+                    {value}
+                  </span>
+                )
+              }
+              return null
             }
 
             if (row._isAggregation) {
-              // Display product summary for aggregation rows
+              // Display product summary for aggregation rows (when NOT showing details)
               if (col.id === "products" && row.product_summary) {
                 return <span className="text-blue-600 italic pl-4">{row.product_summary}</span>
               }
@@ -1128,29 +1144,41 @@ export default function ReportBuilder() {
             </div>
           </div>
 
-          <div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="show-aggregations"
-                checked={showAggregations}
-                onCheckedChange={(checked) => setShowAggregations(!!checked)}
-              />
-              <Label htmlFor="show-aggregations" className="cursor-pointer">
-                Gesamtsummen anzeigen (Produktmengen pro Gruppe)
-              </Label>
-            </div>
-          </div>
+          <div className="space-y-4">
+            <Label className="text-base font-semibold">Anzeigeoptionen</Label>
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-aggregations"
+                  checked={showAggregations}
+                  onCheckedChange={(checked) => setShowAggregations(!!checked)}
+                />
+                <Label htmlFor="show-aggregations" className="text-sm cursor-pointer">
+                  Gesamtsummen anzeigen
+                </Label>
+              </div>
 
-          <div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="show-grand-total"
-                checked={showGrandTotal}
-                onCheckedChange={(checked) => setShowGrandTotal(!!checked)}
-              />
-              <Label htmlFor="show-grand-total" className="cursor-pointer">
-                Gesamtsumme aller Produkte anzeigen (unabhängig von Gruppierung, z.B. für Tourenplanung)
-              </Label>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-product-details"
+                  checked={showProductDetails}
+                  onCheckedChange={(checked) => setShowProductDetails(!!checked)}
+                />
+                <Label htmlFor="show-product-details" className="text-sm cursor-pointer">
+                  Produktsummen detailliert anzeigen (separate Zeilen pro Produkt)
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-grand-total"
+                  checked={showGrandTotal}
+                  onCheckedChange={(checked) => setShowGrandTotal(!!checked)}
+                />
+                <Label htmlFor="show-grand-total" className="text-sm cursor-pointer">
+                  Gesamtsumme aller Produkte anzeigen (für Tourenplanung)
+                </Label>
+              </div>
             </div>
           </div>
         </CardContent>
