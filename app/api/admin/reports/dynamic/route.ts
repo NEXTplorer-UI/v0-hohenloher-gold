@@ -79,9 +79,13 @@ export async function POST(request: NextRequest) {
       console.log("[v0] API: Applying start date filter:", config.filters.dateRange.start)
       const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
-        const orderDate = order.created_at ? new Date(order.created_at) : null
+        if (!order.created_at) return false
+        const orderDate = new Date(order.created_at)
         const startDate = new Date(config.filters.dateRange.start)
-        return orderDate && orderDate >= startDate
+        // Set both to start of day for proper date-only comparison
+        orderDate.setHours(0, 0, 0, 0)
+        startDate.setHours(0, 0, 0, 0)
+        return orderDate >= startDate
       })
       console.log("[v0] API: After start date filter:", beforeCount, "→", filteredOrders.length)
     }
@@ -90,9 +94,13 @@ export async function POST(request: NextRequest) {
       console.log("[v0] API: Applying end date filter:", config.filters.dateRange.end)
       const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
-        const orderDate = order.created_at ? new Date(order.created_at) : null
+        if (!order.created_at) return false
+        const orderDate = new Date(order.created_at)
         const endDate = new Date(config.filters.dateRange.end)
-        return orderDate && orderDate <= endDate
+        // Set both to end of day for proper date-only comparison
+        orderDate.setHours(0, 0, 0, 0)
+        endDate.setHours(23, 59, 59, 999)
+        return orderDate <= endDate
       })
       console.log("[v0] API: After end date filter:", beforeCount, "→", filteredOrders.length)
     }
