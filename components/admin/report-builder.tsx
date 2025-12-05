@@ -162,58 +162,33 @@ function addProductTotalsPerGroup(rows: any[], groupBy: string[], enabled: boole
   }
 
   const result: any[] = []
-
   let currentTotals: Record<string, number> = {}
-  let currentGroupHeader: any | null = null
   let inGroup = false
-
-  const flushTotals = () => {
-    if (!inGroup) return
-    const entries = Object.entries(currentTotals)
-    if (entries.length === 0) return
-
-    const productCount = entries.reduce((sum, [, qty]) => sum + (qty as number), 0)
-    const productsText = entries
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([name, qty]) => `${qty}× ${name}`)
-      .join(", ")
-
-    const summaryRow: any = {
-      _isProductTotal: true,
-      products: productsText,
-      product_count: productCount,
-    }
-
-    // Gruppen-Felder vom Header übernehmen, damit es "zu" der Gruppe gehört
-    if (currentGroupHeader) {
-      for (const key of groupBy) {
-        if (currentGroupHeader[key] !== undefined) {
-          summaryRow[key] = currentGroupHeader[key]
-        }
-      }
-    }
-
-    result.push(summaryRow)
-
-    currentTotals = {}
-    currentGroupHeader = null
-    inGroup = false
-  }
 
   for (const row of rows) {
     if (row._isGroup) {
-      // Neue Gruppe beginnt -> vorherige Gruppe abschließen
-      flushTotals()
-      currentGroupHeader = row
+      // Neue Gruppe beginnt -> vorherige Gruppe zurücksetzen
+      currentTotals = {}
       inGroup = true
       result.push(row)
       continue
     }
 
     if (row._isAggregation) {
-      // Bevor die Aggregationszeile kommt, erst unsere Produkt-Summen ausgeben
-      flushTotals()
+      // Aggregationszeile: Produktsummen hinzufügen
+      const entries = Object.entries(currentTotals)
+      if (entries.length > 0) {
+        const productsText = entries
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([name, qty]) => `${qty}× ${name}`)
+          .join(", ")
+
+        row.product_summary = productsText
+      }
+
       result.push(row)
+      currentTotals = {}
+      inGroup = false
       continue
     }
 
@@ -225,10 +200,19 @@ function addProductTotalsPerGroup(rows: any[], groupBy: string[], enabled: boole
     result.push(row)
   }
 
-  // letzte Gruppe flushen
-  flushTotals()
-
   return result
+}
+
+function calculateGrandTotal(rows: any[]): Record<string, number> {
+  const totals: Record<string, number> = {}
+
+  for (const row of rows) {
+    // Skip special rows, only process actual order data
+    if (row._isGroup || row._isAggregation) continue
+    parseAndAccumulateProducts(row, totals)
+  }
+
+  return totals
 }
 
 export default function ReportBuilder() {
@@ -269,6 +253,7 @@ export default function ReportBuilder() {
   const [showAggregations, setShowAggregations] = useState(true)
   const [wrapText, setWrapText] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+  const [showGrandTotal, setShowGrandTotal] = useState(false)
 
   const [showExcelOptionsDialog, setShowExcelOptionsDialog] = useState(false)
   const [excelOptions, setExcelOptions] = useState<ExcelExportOptions>({
@@ -519,6 +504,9 @@ export default function ReportBuilder() {
       // Datenzeilen mit Formatierung
       rows.forEach((row: any, idx: number) => {
         const rowData = selectedColumns.map((colId) => {
+          if (row._isAggregation && colId === "products" && row.product_summary) {
+            return row.product_summary
+          }
           const value = row[colId]
           return value ?? ""
         })
@@ -537,9 +525,7 @@ export default function ReportBuilder() {
             fgColor: { argb: "FF" + excelOptions.groupBackground.replace("#", "") },
           }
           excelRow.font = { bold: true, size: excelOptions.fontSize, name: excelOptions.fontFamily }
-        }
-        // Aggregations-Styling
-        else if (row._isAggregation && excelOptions.includeAggregations) {
+        } else if (row._isAggregation && excelOptions.includeAggregations) {
           excelRow.fill = {
             type: "pattern",
             pattern: "solid",
@@ -573,6 +559,49 @@ export default function ReportBuilder() {
           excelRow.alignment = { wrapText: true, vertical: "top" }
         }
       })
+
+      if (grandTotal && Object.keys(grandTotal).length > 0) {
+        // Empty row for separation
+        worksheet.addRow([])
+
+        // Grand total header row
+        const grandTotalHeaderRow = worksheet.addRow(["GESAMTSUMME ALLER PRODUKTE"])
+        grandTotalHeaderRow.font = {
+          bold: true,
+          size: excelOptions.fontSize + 2,
+          name: excelOptions.fontFamily,
+        }
+        grandTotalHeaderRow.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFFDE047" }, // Yellow background
+        }
+
+        // Merge cells for header
+        worksheet.mergeCells(grandTotalHeaderRow.number, 1, grandTotalHeaderRow.number, selectedColumns.length)
+
+        // Grand total products row
+        const entries = Object.entries(grandTotal)
+        const grandTotalText = entries
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([name, qty]) => `${qty}× ${name}`)
+          .join(", ")
+
+        const grandTotalRow = worksheet.addRow([grandTotalText])
+        grandTotalRow.font = {
+          size: excelOptions.fontSize,
+          name: excelOptions.fontFamily,
+        }
+        grandTotalRow.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFFEF3C7" }, // Light yellow background
+        }
+
+        // Merge cells for products
+        worksheet.mergeCells(grandTotalRow.number, 1, grandTotalRow.number, selectedColumns.length)
+        grandTotalRow.alignment = { wrapText: true, vertical: "top" }
+      }
 
       // Spaltenbreiten
       if (excelOptions.autoWidth) {
@@ -644,67 +673,62 @@ export default function ReportBuilder() {
     return addProductTotalsPerGroup(base, groupBy, showAggregations)
   }, [reportData?.data, groupBy, showAggregations])
 
-  const columns = useMemo<ColumnDef<any>[]>(() => {
-    return selectedColumns.map((col) => ({
-      accessorKey: col,
-      header: ({ column }) => {
-        return (
-          <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-            {AVAILABLE_COLUMNS.find((c) => c.id === col)?.label || col}
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        )
-      },
-      cell: ({ row }) => {
-        if (row.original._isGroup) {
-          if (groupBy.includes(col)) {
-            const value = row.original[col]
-            if (value && value !== "") {
-              return <div className="text-lg font-bold text-primary py-2 px-4 bg-slate-100 rounded">{value}</div>
-            }
-          }
-          return null
-        }
+  const grandTotal = useMemo(() => {
+    if (!showGrandTotal || !reportData?.data) return null
+    return calculateGrandTotal(reportData.data)
+  }, [showGrandTotal, reportData?.data])
 
-        if (row.original._isProductTotal) {
-          if (col === "products") {
-            return <div className="pl-8 text-blue-600 font-semibold">→ {row.original[col]}</div>
-          }
-          if (col === "product_count") {
-            return <div className="text-blue-600 font-semibold">{row.original[col]}x</div>
-          }
-          return null
-        }
+  const columns: ColumnDef<any>[] = useMemo(() => {
+    return columnOrderState
+      .filter((col) => selectedColumns.includes(col))
+      .map((colId) => {
+        const colDef = AVAILABLE_COLUMNS.find((c) => c.id === colId)
+        if (!colDef) return null
 
-        if (row.original._isAggregation) {
-          const value = row.original[col]
-          if (value !== undefined && value !== null && value !== "") {
-            return <div className="font-semibold">Σ {value}</div>
-          }
-          return null
-        }
-
-        if (col === "products" && wrapText) {
-          const productsText = row.original[col]
-          if (productsText) {
-            const products = productsText.split(",").map((p: string) => p.trim())
+        return {
+          id: colId,
+          accessorKey: colId,
+          header: ({ column }) => {
             return (
-              <div className="whitespace-pre-line">
-                {products.map((product: string, idx: number) => (
-                  <div key={idx}>{product}</div>
-                ))}
-              </div>
+              <Button
+                variant="ghost"
+                onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                className="hover:bg-transparent"
+              >
+                {colDef.label}
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
             )
-          }
-        }
+          },
+          cell: ({ row }) => {
+            const value = row.original[colId]
 
-        return <div>{row.original[col]}</div>
-      },
-      size: columnWidths[col] || 150,
-      minSize: 100,
-      maxSize: 500,
-    }))
-  }, [selectedColumns, columnWidths, wrapText, groupBy])
+            if (row.original._isGroup) {
+              return colId === groupBy[0] ? <span className="font-bold">{value}</span> : null
+            }
+
+            if (row.original._isAggregation) {
+              if (colId === "products" && row.original.product_summary) {
+                return <span className="text-blue-600 italic pl-4">{row.original.product_summary}</span>
+              }
+              return <span className="font-semibold">{value}</span>
+            }
+
+            if (colDef.type === "number") {
+              return typeof value === "number" ? value.toFixed(2) : value
+            }
+
+            if (colDef.type === "date") {
+              return value ? new Date(value).toLocaleDateString("de-DE") : ""
+            }
+
+            return value
+          },
+          size: columnWidths[colId] || 150,
+        }
+      })
+      .filter(Boolean) as ColumnDef<any>[]
+  }, [columnOrderState, selectedColumns, columnWidths, groupBy])
 
   const table = useReactTable({
     data: dataWithProductTotals,
@@ -1007,6 +1031,19 @@ export default function ReportBuilder() {
               </Label>
             </div>
           </div>
+
+          <div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="show-grand-total"
+                checked={showGrandTotal}
+                onCheckedChange={(checked) => setShowGrandTotal(!!checked)}
+              />
+              <Label htmlFor="show-grand-total" className="cursor-pointer">
+                Gesamtsumme aller Produkte anzeigen (unabhängig von Gruppierung, z.B. für Tourenplanung)
+              </Label>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -1199,34 +1236,57 @@ export default function ReportBuilder() {
                 </TableHeader>
                 <TableBody>
                   {table.getRowModel().rows?.length ? (
-                    table.getRowModel().rows.map((row) => (
-                      <TableRow
-                        key={row.id}
-                        data-state={row.getIsSelected() && "selected"}
-                        className={
-                          row.original._isGroup
-                            ? "bg-slate-200 font-bold"
-                            : row.original._isProductTotal
-                              ? "bg-blue-50"
+                    <>
+                      {table.getRowModel().rows.map((row) => (
+                        <TableRow
+                          key={row.id}
+                          data-state={row.getIsSelected() && "selected"}
+                          className={
+                            row.original._isGroup
+                              ? "bg-slate-200 font-bold"
                               : row.original._isAggregation
                                 ? "bg-primary/5 font-semibold"
                                 : ""
-                        }
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell
-                            key={cell.id}
-                            style={{
-                              width: cell.column.getSize(),
-                              whiteSpace: wrapText ? "normal" : "nowrap",
-                              wordBreak: wrapText ? "break-word" : "normal",
-                            }}
-                          >
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
+                          }
+                        >
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell
+                              key={cell.id}
+                              style={{
+                                width: cell.column.getSize(),
+                                whiteSpace: wrapText ? "normal" : "nowrap",
+                                wordBreak: wrapText ? "break-word" : "normal",
+                              }}
+                            >
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+
+                      {grandTotal && Object.keys(grandTotal).length > 0 && (
+                        <>
+                          <TableRow>
+                            <TableCell colSpan={columns.length} className="h-4 border-t-2 border-slate-300" />
+                          </TableRow>
+                          <TableRow className="bg-yellow-50">
+                            <TableCell colSpan={columns.length} className="font-bold text-lg py-3">
+                              GESAMTSUMME ALLER PRODUKTE
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="bg-yellow-50/50">
+                            <TableCell colSpan={columns.length} className="py-3">
+                              <div className="text-base">
+                                {Object.entries(grandTotal)
+                                  .sort(([a], [b]) => a.localeCompare(b))
+                                  .map(([name, qty]) => `${qty}× ${name}`)
+                                  .join(", ")}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                    </>
                   ) : (
                     <TableRow>
                       <TableCell colSpan={columns.length} className="h-24 text-center">
