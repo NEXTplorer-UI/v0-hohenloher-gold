@@ -877,7 +877,7 @@ function OrderManagement() {
     data: ordersResponse,
     isLoading,
     error: errorData,
-    mutate: updateOrdersCache, // Fixed: useAdminCache returns 'updateCache', not 'mutate'
+    updateCache: updateOrdersCache,
   } = useAdminCache<Order[] | { orders: Order[]; total: number }>(apiUrl, {
     revalidateOnMount: true,
   })
