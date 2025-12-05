@@ -41,6 +41,9 @@ export async function POST(request: NextRequest) {
     const supabase = getAdminClient()
     const config = await request.json()
 
+    console.log("[v0] DEBUG config.filters:", JSON.stringify(config.filters))
+    console.log("[v0] DEBUG config.groupBy:", config.groupBy)
+
     const { data: orders, error } = await supabase
       .from("orders")
       .select(`
@@ -63,6 +66,7 @@ export async function POST(request: NextRequest) {
     let filteredOrders = orders || []
 
     if (config.filters?.dateRange?.start) {
+      console.log("[v0] DEBUG: Filtering by start date:", config.filters.dateRange.start)
       filteredOrders = filteredOrders.filter((order: any) => {
         const pickupDate = order.pickup_date ? new Date(order.pickup_date) : null
         const startDate = new Date(config.filters.dateRange.start)
@@ -71,6 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (config.filters?.dateRange?.end) {
+      console.log("[v0] DEBUG: Filtering by end date:", config.filters.dateRange.end)
       filteredOrders = filteredOrders.filter((order: any) => {
         const pickupDate = order.pickup_date ? new Date(order.pickup_date) : null
         const endDate = new Date(config.filters.dateRange.end)
@@ -83,6 +88,7 @@ export async function POST(request: NextRequest) {
       Array.isArray(config.filters.deliveryType) &&
       config.filters.deliveryType.length > 0
     ) {
+      console.log("[v0] DEBUG: Filtering by deliveryType:", config.filters.deliveryType)
       filteredOrders = filteredOrders.filter((order: any) => {
         if (config.filters.deliveryType.includes("pickup") && order.is_pickup) return true
         if (config.filters.deliveryType.includes("shipping") && !order.is_pickup) return true
@@ -95,6 +101,7 @@ export async function POST(request: NextRequest) {
       Array.isArray(config.filters.paymentMethod) &&
       config.filters.paymentMethod.length > 0
     ) {
+      console.log("[v0] DEBUG: Filtering by paymentMethod:", config.filters.paymentMethod)
       filteredOrders = filteredOrders.filter((order: any) =>
         config.filters.paymentMethod.includes(order.payment_method?.toLowerCase()),
       )
@@ -105,6 +112,7 @@ export async function POST(request: NextRequest) {
       Array.isArray(config.filters.pickupLocations) &&
       config.filters.pickupLocations.length > 0
     ) {
+      console.log("[v0] DEBUG: Filtering by pickupLocations:", config.filters.pickupLocations)
       const { data: selectedLocations } = await supabase
         .from("pickup_locations")
         .select("name")
@@ -119,6 +127,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (config.filters?.tours && Array.isArray(config.filters.tours) && config.filters.tours.length > 0) {
+      console.log("[v0] DEBUG: Filtering by tours:", config.filters.tours)
       const { data: routeLocations } = await supabase
         .from("route_locations")
         .select("pickup_location_id, pickup_locations!inner(name)")
@@ -134,6 +143,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (config.filters?.months && Array.isArray(config.filters.months) && config.filters.months.length > 0) {
+      console.log("[v0] DEBUG: Filtering by months:", config.filters.months)
       filteredOrders = filteredOrders.filter((order: any) => {
         const match = order.order_number?.match(/HG-\d{4}-(\d{2})-\d+/)
         if (!match) return false
@@ -143,6 +153,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (config.filters?.statuses && Array.isArray(config.filters.statuses) && config.filters.statuses.length > 0) {
+      console.log("[v0] DEBUG: Filtering by statuses:", config.filters.statuses)
       filteredOrders = filteredOrders.filter((order: any) => config.filters.statuses.includes(order.status))
     }
 
@@ -157,12 +168,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Process data based on grouping
+    console.log("[v0] DEBUG: About to process with groupBy:", config.groupBy)
     const processedData = processOrderData(filteredOrders, config)
 
     return NextResponse.json({ data: processedData })
   } catch (error) {
     console.error("[v0] Error generating dynamic report:", error)
-    return NextResponse.json({ error: "Failed to generate report" }, { status: 500 })
+    console.error("[v0] Error stack:", error instanceof Error ? error.stack : "No stack trace")
+    return NextResponse.json(
+      { error: "Failed to generate report", message: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    )
   }
 }
 
