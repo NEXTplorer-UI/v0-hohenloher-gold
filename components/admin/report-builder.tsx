@@ -18,6 +18,7 @@ import {
   type SortingState,
   type ColumnOrderState,
   createColumnHelper,
+  type ColumnDef, // Import ColumnDef
 } from "@tanstack/react-table"
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd"
 import {
@@ -257,6 +258,7 @@ export default function ReportBuilder() {
   // Initialize columnOrderState with ALL available column IDs
   const [columnOrderState, setColumnOrderState] = useState<ColumnOrderState>(AVAILABLE_COLUMNS.map((col) => col.id))
   const [showAggregations, setShowAggregations] = useState(true)
+  const [showProductSummary, setShowProductSummary] = useState(true)
   const [wrapText, setWrapText] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showGrandTotal, setShowGrandTotal] = useState(false)
@@ -658,9 +660,10 @@ export default function ReportBuilder() {
       filters,
       aggregations,
       showAggregations,
+      showProductSummary,
       showProductDetails,
     }
-  }, [selectedColumns, groupBy, filters, aggregations, showAggregations, showProductDetails])
+  }, [selectedColumns, groupBy, aggregations, filters, showAggregations, showProductSummary, showProductDetails])
 
   const swrKey = useMemo(() => {
     return ["/api/admin/reports/dynamic", JSON.stringify(reportConfig)]
@@ -729,87 +732,90 @@ export default function ReportBuilder() {
   }, [showGrandTotal, reportData?.data])
 
   // Updated columns useMemo to properly filter by selectedColumns and use columnHelper
-  const columns = useMemo(() => {
+  const columns = useMemo<ColumnDef<any, any>[]>(() => {
     if (!reportData?.data) return []
 
-    const baseColumns = AVAILABLE_COLUMNS.filter((col) => selectedColumns.includes(col.id))
-      .filter((col) => columnOrderState.includes(col.id)) // Ensure column is in order state
-      .sort((a, b) => columnOrderState.indexOf(a.id) - columnOrderState.indexOf(b.id)) // Sort based on columnOrderState
-      .map((col) =>
-        columnHelper.accessor(col.id, {
-          header: col.label,
-          cell: (info) => {
-            const row = info.row.original
-            const value = row[col.id]
+    // Filter AVAILABLE_COLUMNS to only include those that are selected AND present in columnOrderState
+    const filteredAvailableColumns = AVAILABLE_COLUMNS.filter((col) => selectedColumns.includes(col.id))
 
-            if (row._isGroup) {
-              // Display group value only for the first grouping column
-              if (col.id === groupBy[0] && row._groupLabel) {
-                return <span className="font-bold text-lg">{row._groupLabel}</span>
-              }
-              return null
+    // Sort these filtered columns based on their order in columnOrderState
+    filteredAvailableColumns.sort((a, b) => columnOrderState.indexOf(a.id) - columnOrderState.indexOf(b.id))
+
+    return filteredAvailableColumns.map((col) =>
+      columnHelper.accessor(col.id, {
+        id: col.id,
+        header: col.label,
+        cell: (info) => {
+          const row = info.row.original
+          const value = row[col.id]
+
+          if (row._isGroup) {
+            if (col.id === groupBy[0] && row._groupLabel) {
+              return <span className="font-bold text-lg">{row._groupLabel}</span>
             }
+            return null
+          }
 
-            if (row._isProductDetail) {
-              if (col.id === "products") {
-                return (
-                  <span className="text-blue-600 italic pl-8 block">
-                    {row._isGlobalTotal ? "📦 " : ""}
-                    {value}
-                  </span>
-                )
-              }
-              return null
+          if (row._isProductDetail) {
+            if (col.id === "products") {
+              return (
+                <span className="text-blue-600 italic pl-8 block">
+                  {row._isGlobalTotal ? "📦 " : ""}
+                  {value}
+                </span>
+              )
             }
+            return null
+          }
 
-            if (row._isAggregation) {
-              // Display product summary for aggregation rows (when NOT showing details)
-              if (col.id === "products" && row.product_summary) {
-                return <span className="text-blue-600 italic pl-4">{row.product_summary}</span>
-              }
-              // Display aggregated values
-              return <span className="font-semibold">{value}</span>
+          if (row._isAggregation) {
+            if (col.id === "products" && row.product_summary) {
+              return <span className="text-blue-600 italic pl-4">{row.product_summary}</span>
             }
+            // Display aggregated values
+            return <span className="font-semibold">{value}</span>
+          }
 
-            // Handle specific column types for display
-            if (col.type === "number") {
-              return typeof value === "number" ? value.toFixed(2) : ""
+          // Handle specific column types for display
+          if (col.type === "number") {
+            return typeof value === "number" ? value.toFixed(2) : ""
+          }
+
+          if (col.type === "date") {
+            return value ? new Date(value).toLocaleDateString("de-DE") : ""
+          }
+
+          // Handle new columns with specific display logic if needed
+          if (col.id === "admin_notes" || col.id === "special_requests") {
+            return <span className="text-muted-foreground italic">{value || "-"}</span>
+          }
+
+          // Display values for new columns
+          if (col.id === "pickup_month" || col.id === "order_month") {
+            return value ? new Date(value).toLocaleDateString("de-DE", { month: "long" }) : ""
+          }
+
+          if (col.id === "delivery_method") {
+            switch (value) {
+              case "pickup":
+                return "Abholung"
+              case "shipping":
+                return "Lieferung"
+              default:
+                return value || "-"
             }
+          }
 
-            if (col.type === "date") {
-              return value ? new Date(value).toLocaleDateString("de-DE") : ""
-            }
-
-            // Handle new columns with specific display logic if needed
-            if (col.id === "admin_notes" || col.id === "special_requests") {
-              return <span className="text-muted-foreground italic">{value || "-"}</span>
-            }
-
-            // Display values for new columns
-            if (col.id === "pickup_month" || col.id === "order_month") {
-              return value ? new Date(value).toLocaleDateString("de-DE", { month: "long" }) : ""
-            }
-
-            if (col.id === "delivery_method") {
-              switch (value) {
-                case "pickup":
-                  return "Abholung"
-                case "shipping":
-                  return "Lieferung"
-                default:
-                  return value || "-"
-              }
-            }
-
-            // Default display for string types
-            return value || ""
-          },
-          size: columnWidths[col.id] || 150, // Use size from columnWidths state
-        }),
-      )
-
-    return baseColumns
-  }, [reportData?.data, selectedColumns, columnOrderState, columnWidths, groupBy, columnHelper]) // Added columnHelper to dependency array
+          // Default display for string types
+          return value || ""
+        },
+        size: columnWidths[col.id] || col.width || 150, // Use size from columnWidths state, fallback to col.width, then 150
+        minSize: 50, // Minimum column width
+        maxSize: 500, // Maximum column width
+        enableResizing: true, // Enable column resizing
+      }),
+    )
+  }, [reportData?.data, selectedColumns, columnWidths, columnOrderState, groupBy]) // Added columnHelper to dependency array
 
   const table = useReactTable({
     data: dataWithProductTotals,
@@ -1154,7 +1160,18 @@ export default function ReportBuilder() {
                   onCheckedChange={(checked) => setShowAggregations(!!checked)}
                 />
                 <Label htmlFor="show-aggregations" className="text-sm cursor-pointer">
-                  Gesamtsummen anzeigen
+                  Gesamtsummen anzeigen (numerische Summen)
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-product-summary"
+                  checked={showProductSummary}
+                  onCheckedChange={(checked) => setShowProductSummary(!!checked)}
+                />
+                <Label htmlFor="show-product-summary" className="text-sm cursor-pointer">
+                  Produktsummen anzeigen
                 </Label>
               </div>
 

@@ -234,7 +234,7 @@ function processOrderData(orders: any[], config: any) {
   console.log("[v0] API processOrderData: Starting with", orders.length, "orders")
   console.log("[v0] API processOrderData: groupBy:", config.groupBy)
 
-  const { groupBy, columns, aggregations, showAggregations, showProductDetails } = config
+  const { groupBy, columns, aggregations, showAggregations, showProductSummary, showProductDetails } = config
 
   if (!groupBy || groupBy.length === 0) {
     // No grouping - return flat data
@@ -310,47 +310,42 @@ function processOrderData(orders: any[], config: any) {
       }
     })
 
-    if (showAggregations) {
-      const productTotals: Record<string, number> = {}
+    const productTotals: Record<string, number> = {}
 
-      groupOrders.forEach((order) => {
-        if (order.order_items && Array.isArray(order.order_items)) {
-          order.order_items.forEach((item: any) => {
-            const productName = item.product_name || "Unbekanntes Produkt"
-            productTotals[productName] = (productTotals[productName] || 0) + (item.quantity || 0)
-            globalProductTotals[productName] = (globalProductTotals[productName] || 0) + (item.quantity || 0)
-          })
-        }
-      })
-
-      // Add product summary to aggregation row
-      if (Object.keys(productTotals).length > 0) {
-        const entries = Object.entries(productTotals).sort(([a], [b]) => a.localeCompare(b))
-        const productsText = entries.map(([name, qty]) => `${qty}× ${name}`).join(", ")
-        aggRow.product_summary = productsText
+    groupOrders.forEach((order) => {
+      if (order.order_items && Array.isArray(order.order_items)) {
+        order.order_items.forEach((item: any) => {
+          const productName = item.product_name || "Unbekanntes Produkt"
+          productTotals[productName] = (productTotals[productName] || 0) + (item.quantity || 0)
+          globalProductTotals[productName] = (globalProductTotals[productName] || 0) + (item.quantity || 0)
+        })
       }
+    })
 
-      if (hasAggregations) {
-        result.push(aggRow)
-      }
+    if (showProductSummary && Object.keys(productTotals).length > 0) {
+      const entries = Object.entries(productTotals).sort(([a], [b]) => a.localeCompare(b))
+      const productsText = entries.map(([name, qty]) => `${qty}× ${name}`).join(", ")
+      aggRow.product_summary = productsText
+    }
 
-      if (showProductDetails && Object.keys(productTotals).length > 0) {
-        Object.entries(productTotals)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .forEach(([product, quantity]) => {
-            result.push({
-              _isAggregation: true,
-              _isProductDetail: true,
-              products: `${quantity}× ${product}`, // Format: "5× Orangen"
-            })
-          })
-      }
-    } else if (hasAggregations) {
+    if (showAggregations && hasAggregations) {
       result.push(aggRow)
+    }
+
+    if (showProductDetails && Object.keys(productTotals).length > 0) {
+      Object.entries(productTotals)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([product, quantity]) => {
+          result.push({
+            _isAggregation: true,
+            _isProductDetail: true,
+            products: `${quantity}× ${product}`,
+          })
+        })
     }
   })
 
-  if (showAggregations && Object.keys(globalProductTotals).length > 0) {
+  if ((showProductSummary || showProductDetails) && Object.keys(globalProductTotals).length > 0) {
     result.push({
       _isGroup: true,
       _isGlobalTotal: true,
@@ -366,9 +361,16 @@ function processOrderData(orders: any[], config: any) {
             _isAggregation: true,
             _isProductDetail: true,
             _isGlobalTotal: true,
-            products: `${quantity}× ${product}`, // Format: "5× Orangen"
+            products: `${quantity}× ${product}`,
           })
         })
+    } else if (showProductSummary) {
+      const entries = Object.entries(globalProductTotals).sort(([a], [b]) => a.localeCompare(b))
+      const productsText = entries.map(([name, qty]) => `${qty}× ${name}`).join(", ")
+      result.push({
+        _isAggregation: true,
+        product_summary: productsText,
+      })
     }
   }
 
@@ -444,7 +446,6 @@ function getFieldValue(order: any, field: string): any {
     case "special_requests":
       return order.customer?.special_requests
     case "pickup_month":
-      // Primary: Extract from pickup_date, Fallback: Extract from order_number
       if (order.pickup_date) {
         const date = new Date(order.pickup_date)
         const monthNames = [
@@ -463,7 +464,6 @@ function getFieldValue(order: any, field: string): any {
         ]
         return `${monthNames[date.getMonth()]} ${date.getFullYear()}`
       }
-      // Fallback: Extract from order_number (HG-YYYY-MM-NNNN)
       const pickupMatch = order.order_number?.match(/HG-(\d{4})-(\d{2})-\d+/)
       if (pickupMatch) {
         const year = pickupMatch[1]
@@ -487,7 +487,6 @@ function getFieldValue(order: any, field: string): any {
       return "Unbekannt"
 
     case "order_month":
-      // Extract month from order_number (HG-YYYY-MM-NNNN)
       const orderMatch = order.order_number?.match(/HG-(\d{4})-(\d{2})-\d+/)
       if (orderMatch) {
         const year = orderMatch[1]
