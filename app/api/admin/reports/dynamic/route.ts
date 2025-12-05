@@ -78,7 +78,11 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    if (config.filters?.deliveryType && config.filters.deliveryType.length > 0) {
+    if (
+      config.filters?.deliveryType &&
+      Array.isArray(config.filters.deliveryType) &&
+      config.filters.deliveryType.length > 0
+    ) {
       filteredOrders = filteredOrders.filter((order: any) => {
         if (config.filters.deliveryType.includes("pickup") && order.is_pickup) return true
         if (config.filters.deliveryType.includes("shipping") && !order.is_pickup) return true
@@ -86,13 +90,21 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    if (config.filters?.paymentMethod && config.filters.paymentMethod.length > 0) {
+    if (
+      config.filters?.paymentMethod &&
+      Array.isArray(config.filters.paymentMethod) &&
+      config.filters.paymentMethod.length > 0
+    ) {
       filteredOrders = filteredOrders.filter((order: any) =>
         config.filters.paymentMethod.includes(order.payment_method?.toLowerCase()),
       )
     }
 
-    if (config.filters?.pickupLocations && config.filters.pickupLocations.length > 0) {
+    if (
+      config.filters?.pickupLocations &&
+      Array.isArray(config.filters.pickupLocations) &&
+      config.filters.pickupLocations.length > 0
+    ) {
       const { data: selectedLocations } = await supabase
         .from("pickup_locations")
         .select("name")
@@ -106,7 +118,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    if (config.filters?.tours && config.filters.tours.length > 0) {
+    if (config.filters?.tours && Array.isArray(config.filters.tours) && config.filters.tours.length > 0) {
       const { data: routeLocations } = await supabase
         .from("route_locations")
         .select("pickup_location_id, pickup_locations!inner(name)")
@@ -121,10 +133,8 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Add month filter logic after tour filter
-    if (config.filters?.months && config.filters.months.length > 0) {
+    if (config.filters?.months && Array.isArray(config.filters.months) && config.filters.months.length > 0) {
       filteredOrders = filteredOrders.filter((order: any) => {
-        // Extract month from order_number format: HG-YYYY-MM-NNNN
         const match = order.order_number?.match(/HG-\d{4}-(\d{2})-\d+/)
         if (!match) return false
         const orderMonth = match[1]
@@ -132,7 +142,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    if (config.filters?.statuses && config.filters.statuses.length > 0) {
+    if (config.filters?.statuses && Array.isArray(config.filters.statuses) && config.filters.statuses.length > 0) {
       filteredOrders = filteredOrders.filter((order: any) => config.filters.statuses.includes(order.status))
     }
 
