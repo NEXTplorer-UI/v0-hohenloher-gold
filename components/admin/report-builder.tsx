@@ -435,7 +435,7 @@ export default function ReportBuilder() {
 
   const toggleFilter = (filterType: string, value: string) => {
     setFilters((prev: any) => {
-      const current = prev[filterType] || []
+      const current = Array.isArray(prev[filterType]) ? prev[filterType] : []
       return {
         ...prev,
         [filterType]: current.includes(value) ? current.filter((v: string) => v !== value) : [...current, value],
@@ -907,151 +907,151 @@ export default function ReportBuilder() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Lieferart</Label>
-                <div className="space-y-1">
-                  {["pickup", "shipping"].map((type) => (
-                    <div key={type} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`delivery-${type}`}
-                        checked={filters.deliveryType.includes(type)}
-                        onCheckedChange={(checked) => {
-                          setFilters((prev: any) => ({
-                            ...prev,
-                            deliveryType: checked
-                              ? [...prev.deliveryType, type]
-                              : prev.deliveryType.filter((t: string) => t !== type),
-                          }))
-                        }}
-                      />
-                      <Label htmlFor={`delivery-${type}`} className="font-normal">
-                        {type === "pickup" ? "Abholung" : "Lieferung"}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-sm mb-2 block">Zahlungsart</Label>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="filter-cash"
-                      checked={filters.paymentMethod?.includes("cash")}
-                      onCheckedChange={() => toggleFilter("paymentMethod", "cash")}
-                    />
-                    <Label htmlFor="filter-cash" className="text-sm cursor-pointer">
-                      Bar
-                    </Label>
+                  <Label>Lieferart</Label>
+                  <div className="space-y-1">
+                    {["pickup", "shipping"].map((type) => (
+                      <div key={type} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`delivery-${type}`}
+                          checked={Array.isArray(filters.deliveryType) && filters.deliveryType.includes(type)}
+                          onCheckedChange={(checked) => {
+                            setFilters((prev: any) => {
+                              const current = Array.isArray(prev.deliveryType) ? prev.deliveryType : []
+                              return {
+                                ...prev,
+                                deliveryType: checked ? [...current, type] : current.filter((t: string) => t !== type),
+                              }
+                            })
+                          }}
+                        />
+                        <Label htmlFor={`delivery-${type}`} className="font-normal text-sm">
+                          {type === "pickup" ? "Abholung" : "Lieferung"}
+                        </Label>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="filter-bank"
-                      checked={filters.paymentMethod?.includes("bank_transfer")}
-                      onCheckedChange={() => toggleFilter("paymentMethod", "bank_transfer")}
-                    />
-                    <Label htmlFor="filter-bank" className="text-sm cursor-pointer">
-                      Überweisung
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="filter-card"
-                      checked={filters.paymentMethod?.includes("card")}
-                      onCheckedChange={() => toggleFilter("paymentMethod", "card")}
-                    />
-                    <Label htmlFor="filter-card" className="text-sm cursor-pointer">
-                      Karte
-                    </Label>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">Zahlungsart</Label>
+                  <div className="space-y-1">
+                    {[
+                      { value: "cash", label: "Bar" },
+                      { value: "bank_transfer", label: "Überweisung" },
+                      { value: "card", label: "Karte" },
+                    ].map((payment) => (
+                      <div key={payment.value} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`filter-${payment.value}`}
+                          checked={
+                            Array.isArray(filters.paymentMethod) && filters.paymentMethod.includes(payment.value)
+                          }
+                          onCheckedChange={() => toggleFilter("paymentMethod", payment.value)}
+                        />
+                        <Label htmlFor={`filter-${payment.value}`} className="text-sm cursor-pointer">
+                          {payment.label}
+                        </Label>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
 
-              <div>
-                <Label className="text-sm mb-2 block">Abholort</Label>
-                <ScrollArea className="h-32">
-                  <div className="space-y-2">
-                    {pickupLocations.map((location) => (
-                      <div key={location.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`filter-location-${location.id}`}
-                          checked={filters.pickupLocations?.includes(location.id)}
-                          onCheckedChange={() => toggleFilter("pickupLocations", location.id)}
-                        />
-                        <Label htmlFor={`filter-location-${location.id}`} className="text-sm cursor-pointer">
-                          {location.name}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm mb-2 block">Abholort</Label>
+                  <ScrollArea className="h-32 border rounded-md p-2">
+                    <div className="space-y-1">
+                      {pickupLocations.map((location) => (
+                        <div key={location.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`filter-location-${location.id}`}
+                            checked={
+                              Array.isArray(filters.pickupLocations) && filters.pickupLocations.includes(location.id)
+                            }
+                            onCheckedChange={() => toggleFilter("pickupLocations", location.id)}
+                          />
+                          <Label htmlFor={`filter-location-${location.id}`} className="text-sm cursor-pointer">
+                            {location.name}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+
+                <div>
+                  <Label className="text-sm mb-2 block">Tour</Label>
+                  <ScrollArea className="h-32 border rounded-md p-2">
+                    <div className="space-y-1">
+                      {tours.map((tour) => (
+                        <div key={tour.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`filter-tour-${tour.id}`}
+                            checked={Array.isArray(filters.tours) && filters.tours.includes(tour.id)}
+                            onCheckedChange={() => toggleFilter("tours", tour.id)}
+                          />
+                          <Label htmlFor={`filter-tour-${tour.id}`} className="text-sm cursor-pointer">
+                            {tour.name}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
               </div>
 
-              <div>
-                <Label className="text-sm mb-2 block">Tour</Label>
-                <ScrollArea className="h-32">
-                  <div className="space-y-2">
-                    {tours.map((tour) => (
-                      <div key={tour.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`filter-tour-${tour.id}`}
-                          checked={filters.tours?.includes(tour.id)}
-                          onCheckedChange={() => toggleFilter("tours", tour.id)}
-                        />
-                        <Label htmlFor={`filter-tour-${tour.id}`} className="text-sm cursor-pointer">
-                          {tour.name}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm mb-2 block">Monat</Label>
+                  <ScrollArea className="h-32 border rounded-md p-2">
+                    <div className="space-y-1">
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+                        <div key={month} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`filter-month-${month}`}
+                            checked={
+                              Array.isArray(filters.months) &&
+                              filters.months.includes(month.toString().padStart(2, "0"))
+                            }
+                            onCheckedChange={() => toggleFilter("months", month.toString().padStart(2, "0"))}
+                          />
+                          <Label htmlFor={`filter-month-${month}`} className="text-sm cursor-pointer">
+                            {new Date(0, month - 1).toLocaleString("de-DE", { month: "long" })}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
 
-              <div>
-                <Label className="text-sm mb-2 block">Monat</Label>
-                <ScrollArea className="h-32">
-                  <div className="space-y-2">
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
-                      <div key={month} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`filter-month-${month}`}
-                          checked={filters.months?.includes(month.toString().padStart(2, "0"))}
-                          onCheckedChange={() => toggleFilter("months", month.toString().padStart(2, "0"))}
-                        />
-                        <Label htmlFor={`filter-month-${month}`} className="text-sm cursor-pointer">
-                          {new Date(0, month - 1).toLocaleString("de-DE", { month: "long" })}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-
-              <div>
-                <Label className="text-sm mb-2 block">Status</Label>
-                <ScrollArea className="h-32">
-                  <div className="space-y-2">
-                    {[
-                      { value: "pending", label: "Ausstehend" },
-                      { value: "confirmed", label: "Bestätigt" },
-                      { value: "ready", label: "Abholbereit" },
-                      { value: "completed", label: "Abgeschlossen" },
-                      { value: "cancelled", label: "Storniert" },
-                    ].map((status) => (
-                      <div key={status.value} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`filter-status-${status.value}`}
-                          checked={filters.statuses?.includes(status.value)}
-                          onCheckedChange={() => toggleFilter("statuses", status.value)}
-                        />
-                        <Label htmlFor={`filter-status-${status.value}`} className="text-sm cursor-pointer">
-                          {status.label}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
+                <div>
+                  <Label className="text-sm mb-2 block">Status</Label>
+                  <ScrollArea className="h-32 border rounded-md p-2">
+                    <div className="space-y-1">
+                      {[
+                        { value: "pending", label: "Ausstehend" },
+                        { value: "confirmed", label: "Bestätigt" },
+                        { value: "ready", label: "Abholbereit" },
+                        { value: "completed", label: "Abgeschlossen" },
+                        { value: "cancelled", label: "Storniert" },
+                      ].map((status) => (
+                        <div key={status.value} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`filter-status-${status.value}`}
+                            checked={Array.isArray(filters.statuses) && filters.statuses.includes(status.value)}
+                            onCheckedChange={() => toggleFilter("statuses", status.value)}
+                          />
+                          <Label htmlFor={`filter-status-${status.value}`} className="text-sm cursor-pointer">
+                            {status.label}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
               </div>
             </CardContent>
           </Card>
