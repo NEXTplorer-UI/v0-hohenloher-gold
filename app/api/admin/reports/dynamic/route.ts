@@ -79,9 +79,9 @@ export async function POST(request: NextRequest) {
       console.log("[v0] API: Applying start date filter:", config.filters.dateRange.start)
       const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
-        const pickupDate = order.pickup_date ? new Date(order.pickup_date) : null
+        const orderDate = order.created_at ? new Date(order.created_at) : null
         const startDate = new Date(config.filters.dateRange.start)
-        return pickupDate && pickupDate >= startDate
+        return orderDate && orderDate >= startDate
       })
       console.log("[v0] API: After start date filter:", beforeCount, "→", filteredOrders.length)
     }
@@ -90,9 +90,9 @@ export async function POST(request: NextRequest) {
       console.log("[v0] API: Applying end date filter:", config.filters.dateRange.end)
       const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
-        const pickupDate = order.pickup_date ? new Date(order.pickup_date) : null
+        const orderDate = order.created_at ? new Date(order.created_at) : null
         const endDate = new Date(config.filters.dateRange.end)
-        return pickupDate && pickupDate <= endDate
+        return orderDate && orderDate <= endDate
       })
       console.log("[v0] API: After end date filter:", beforeCount, "→", filteredOrders.length)
     }
