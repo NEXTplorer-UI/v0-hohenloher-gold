@@ -205,7 +205,7 @@ function extractSize(productName: string): string | null {
   return match ? match[1].trim() : null
 }
 
-type SortOption = "name-asc" | "name-desc" | "price-asc" | "price-desc" | "newest"
+type SortOption = "category" | "name-asc" | "name-desc" | "price-asc" | "price-desc" | "newest"
 
 export default function ShopPage() {
   const searchParams = useSearchParams()
@@ -215,7 +215,7 @@ export default function ShopPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>(categoryFromUrl || "alle")
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [selectedSizes, setSelectedSizes] = useState<Map<string, number>>(new Map())
-  const [sortBy, setSortBy] = useState<SortOption>("name-asc")
+  const [sortBy, setSortBy] = useState<SortOption>("category")
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false)
   const [showLeftIndicator, setShowLeftIndicator] = useState(false)
   const [showRightIndicator, setShowRightIndicator] = useState(false)
@@ -281,6 +281,18 @@ export default function ShopPage() {
     const sorted = [...filteredProducts]
 
     switch (sortBy) {
+      case "category":
+        sorted.sort((a, b) => {
+          // First sort by category display_order
+          const orderA = (a as any).category_display_order ?? 999
+          const orderB = (b as any).category_display_order ?? 999
+          if (orderA !== orderB) {
+            return orderA - orderB
+          }
+          // Then sort by name within category
+          return a.name.localeCompare(b.name)
+        })
+        break
       case "name-asc":
         sorted.sort((a, b) => a.name.localeCompare(b.name))
         break
@@ -818,6 +830,7 @@ export default function ShopPage() {
                   <SelectValue placeholder="Sortieren nach..." />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="category">Nach Kategorie</SelectItem>
                   <SelectItem value="name-asc">Name (A-Z)</SelectItem>
                   <SelectItem value="name-desc">Name (Z-A)</SelectItem>
                   <SelectItem value="price-asc">Preis (niedrig-hoch)</SelectItem>
