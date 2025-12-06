@@ -55,7 +55,7 @@ export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions
   const unsubscribeLink = unsubscribeEmail
     ? `<p style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #4a5568;">
          <a href="${siteUrl}/newsletter/unsubscribe?email=${encodeURIComponent(unsubscribeEmail)}" style="color: ${headerColor};">
-           Newsletter abbestellen
+           E-Mail abbestellen
          </a>
        </p>`
     : ""
