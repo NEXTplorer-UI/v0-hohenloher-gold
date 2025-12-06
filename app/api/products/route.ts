@@ -242,7 +242,8 @@ export async function GET() {
 
     return NextResponse.json(enrichedProducts, {
       headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Cache-Control": "public, max-age=60, must-revalidate",
+        "CDN-Cache-Control": "public, max-age=60",
       },
     })
   } catch (error) {
