@@ -75,7 +75,7 @@ export function buildEmail(
 
     case "newsletter":
       subject = `${vars.subject} - Südfrüchte Hohenlohe Newsletter`
-      headerTitle = "Newsletter"
+      headerTitle = ""
       contentHtml = newsletterContent(vars, customCopy)
       unsubscribeEmail = vars.recipientEmail as string | undefined
       break

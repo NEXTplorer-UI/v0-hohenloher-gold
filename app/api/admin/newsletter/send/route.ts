@@ -269,7 +269,7 @@ export async function POST(request: Request) {
         })
 
         await resend.emails.send({
-          from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
+          from: "Südfrüchte Hohenlohe <kontakt@suedfruechte-hohenlohe.de>",
           to: recipient.email,
           subject: personalizedSubject.replace(/\{\{customerName\}\}/g, customerName),
           html,
