@@ -22,18 +22,36 @@ const AVAILABLE_COLUMNS_DEFS: Record<string, { type: string }> = {
   pickup_location_normalized: { type: "string" },
   distribution_person: { type: "string" },
   status: { type: "string" },
+  internal_status: { type: "string" },
   payment_method: { type: "string" },
   products: { type: "string" },
   product_count: { type: "number" },
   total: { type: "number" },
   created_at: { type: "date" },
   notes: { type: "string" },
+  admin_notes: { type: "string" },
+  special_requests: { type: "string" },
+  pickup_month: { type: "string" },
+  order_month: { type: "string" },
+  delivery_method: { type: "string" },
+  product_category: { type: "string" },
 }
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("[v0] API: ========== REPORT DYNAMIC ROUTE CALLED ==========")
+
     const supabase = getAdminClient()
     const config = await request.json()
+
+    console.log("[v0] API: Config received:", {
+      hasFilters: !!config.filters,
+      hasGroupBy: !!config.groupBy,
+      groupByLength: config.groupBy?.length || 0,
+      filtersKeys: config.filters ? Object.keys(config.filters) : [],
+    })
+    console.log("[v0] API: config.filters structure:", JSON.stringify(config.filters, null, 2))
+    console.log("[v0] API: config.groupBy:", config.groupBy)
 
     const { data: orders, error } = await supabase
       .from("orders")
@@ -49,42 +67,96 @@ export async function POST(request: NextRequest) {
       .limit(1000)
 
     if (error) {
-      console.error("[v0] Error fetching orders:", error)
+      console.error("[v0] API ERROR: Fetching orders failed:", error)
       throw error
     }
+
+    console.log("[v0] API: Fetched orders count:", orders?.length || 0)
 
     // Apply filters
     let filteredOrders = orders || []
 
-    if (config.filters?.deliveryType && config.filters.deliveryType.length > 0) {
+    if (config.filters?.dateRange?.start) {
+      console.log("[v0] API: Applying start date filter:", config.filters.dateRange.start)
+      const beforeCount = filteredOrders.length
+      filteredOrders = filteredOrders.filter((order: any) => {
+        if (!order.created_at) return false
+        const orderDate = new Date(order.created_at)
+        const startDate = new Date(config.filters.dateRange.start)
+        // Set both to start of day for proper date-only comparison
+        orderDate.setHours(0, 0, 0, 0)
+        startDate.setHours(0, 0, 0, 0)
+        return orderDate >= startDate
+      })
+      console.log("[v0] API: After start date filter:", beforeCount, "→", filteredOrders.length)
+    }
+
+    if (config.filters?.dateRange?.end) {
+      console.log("[v0] API: Applying end date filter:", config.filters.dateRange.end)
+      const beforeCount = filteredOrders.length
+      filteredOrders = filteredOrders.filter((order: any) => {
+        if (!order.created_at) return false
+        const orderDate = new Date(order.created_at)
+        const endDate = new Date(config.filters.dateRange.end)
+        // Set both to end of day for proper date-only comparison
+        orderDate.setHours(0, 0, 0, 0)
+        endDate.setHours(23, 59, 59, 999)
+        return orderDate <= endDate
+      })
+      console.log("[v0] API: After end date filter:", beforeCount, "→", filteredOrders.length)
+    }
+
+    if (
+      config.filters?.deliveryType &&
+      Array.isArray(config.filters.deliveryType) &&
+      config.filters.deliveryType.length > 0
+    ) {
+      console.log("[v0] API: Applying deliveryType filter:", config.filters.deliveryType)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
         if (config.filters.deliveryType.includes("pickup") && order.is_pickup) return true
         if (config.filters.deliveryType.includes("shipping") && !order.is_pickup) return true
         return false
       })
+      console.log("[v0] API: After deliveryType filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    if (config.filters?.paymentMethod && config.filters.paymentMethod.length > 0) {
+    if (
+      config.filters?.paymentMethod &&
+      Array.isArray(config.filters.paymentMethod) &&
+      config.filters.paymentMethod.length > 0
+    ) {
+      console.log("[v0] API: Applying paymentMethod filter:", config.filters.paymentMethod)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) =>
         config.filters.paymentMethod.includes(order.payment_method?.toLowerCase()),
       )
+      console.log("[v0] API: After paymentMethod filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    if (config.filters?.pickupLocations && config.filters.pickupLocations.length > 0) {
+    if (
+      config.filters?.pickupLocations &&
+      Array.isArray(config.filters.pickupLocations) &&
+      config.filters.pickupLocations.length > 0
+    ) {
+      console.log("[v0] API: Applying pickupLocations filter:", config.filters.pickupLocations)
       const { data: selectedLocations } = await supabase
         .from("pickup_locations")
         .select("name")
         .in("id", config.filters.pickupLocations)
 
       const normalizedLocationNames = selectedLocations?.map((loc: any) => normalizeLocationName(loc.name)) || []
+      const beforeCount = filteredOrders.length
 
       filteredOrders = filteredOrders.filter((order: any) => {
         const orderLocation = normalizeLocationName(order.pickup_location_normalized)
         return normalizedLocationNames.includes(orderLocation)
       })
+      console.log("[v0] API: After pickupLocations filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    if (config.filters?.tours && config.filters.tours.length > 0) {
+    if (config.filters?.tours && Array.isArray(config.filters.tours) && config.filters.tours.length > 0) {
+      console.log("[v0] API: Applying tours filter:", config.filters.tours)
       const { data: routeLocations } = await supabase
         .from("route_locations")
         .select("pickup_location_id, pickup_locations!inner(name)")
@@ -92,69 +164,111 @@ export async function POST(request: NextRequest) {
 
       const normalizedTourLocationNames =
         routeLocations?.map((rl: any) => normalizeLocationName(rl.pickup_locations.name)) || []
+      const beforeCount = filteredOrders.length
 
       filteredOrders = filteredOrders.filter((order: any) => {
         const orderLocation = normalizeLocationName(order.pickup_location_normalized)
         return normalizedTourLocationNames.includes(orderLocation)
       })
+      console.log("[v0] API: After tours filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    // Add month filter logic after tour filter
-    if (config.filters?.months && config.filters.months.length > 0) {
+    if (config.filters?.months && Array.isArray(config.filters.months) && config.filters.months.length > 0) {
+      console.log("[v0] API: Applying months filter:", config.filters.months)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
-        // Extract month from order_number format: HG-YYYY-MM-NNNN
         const match = order.order_number?.match(/HG-\d{4}-(\d{2})-\d+/)
         if (!match) return false
         const orderMonth = match[1]
         return config.filters.months.includes(orderMonth)
       })
+      console.log("[v0] API: After months filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    if (config.filters?.statuses && config.filters.statuses.length > 0) {
+    if (config.filters?.statuses && Array.isArray(config.filters.statuses) && config.filters.statuses.length > 0) {
+      console.log("[v0] API: Applying statuses filter:", config.filters.statuses)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => config.filters.statuses.includes(order.status))
+      console.log("[v0] API: After statuses filter:", beforeCount, "→", filteredOrders.length)
     }
 
     if (config.filters?.dateFrom) {
       const fromDate = new Date(config.filters.dateFrom)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => new Date(order.created_at) >= fromDate)
+      console.log("[v0] API: After dateFrom filter:", beforeCount, "→", filteredOrders.length)
     }
 
     if (config.filters?.dateTo) {
       const toDate = new Date(config.filters.dateTo)
+      const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => new Date(order.created_at) <= toDate)
+      console.log("[v0] API: After dateTo filter:", beforeCount, "→", filteredOrders.length)
     }
 
     // Process data based on grouping
+    console.log("[v0] API: Starting processOrderData with:", {
+      orderCount: filteredOrders.length,
+      groupBy: config.groupBy,
+      hasColumns: !!config.columns,
+    })
+
     const processedData = processOrderData(filteredOrders, config)
+
+    console.log("[v0] API: Processed data rows:", processedData.length)
+    console.log("[v0] API: ========== RETURNING RESPONSE ==========")
 
     return NextResponse.json({ data: processedData })
   } catch (error) {
-    console.error("[v0] Error generating dynamic report:", error)
-    return NextResponse.json({ error: "Failed to generate report" }, { status: 500 })
+    console.error("[v0] API ERROR: Exception caught:", error)
+    console.error("[v0] API ERROR: Stack trace:", error instanceof Error ? error.stack : "No stack trace")
+    console.error("[v0] API ERROR: Error message:", error instanceof Error ? error.message : String(error))
+    return NextResponse.json(
+      { error: "Failed to generate report", message: error instanceof Error ? error.message : String(error) },
+      { status: 500 },
+    )
   }
 }
 
 function processOrderData(orders: any[], config: any) {
-  const { groupBy, columns, aggregations, showAggregations } = config
+  console.log("[v0] API processOrderData: Starting with", orders.length, "orders")
+  console.log("[v0] API processOrderData: groupBy:", config.groupBy)
+
+  const { groupBy, columns, aggregations, showAggregations, showProductSummary, showProductDetails } = config
 
   if (!groupBy || groupBy.length === 0) {
     // No grouping - return flat data
+    console.log("[v0] API processOrderData: No grouping, returning flat data")
     return orders.map((order) => flattenOrder(order, columns))
   }
 
   // Group data
   const grouped = new Map<string, any[]>()
 
-  orders.forEach((order) => {
-    const groupKey = groupBy.map((field: string) => getFieldValue(order, field)).join("|||")
+  console.log("[v0] API processOrderData: Grouping by fields:", groupBy)
 
-    if (!grouped.has(groupKey)) {
-      grouped.set(groupKey, [])
+  orders.forEach((order, index) => {
+    try {
+      const groupKey = groupBy
+        .map((field: string) => {
+          const value = getFieldValue(order, field)
+          console.log(`[v0] API processOrderData: Order ${index}, field "${field}" = "${value}"`)
+          return value
+        })
+        .join("|||")
+
+      if (!grouped.has(groupKey)) {
+        grouped.set(groupKey, [])
+      }
+      grouped.get(groupKey)!.push(order)
+    } catch (error) {
+      console.error(`[v0] API processOrderData ERROR: Failed processing order ${index}:`, error)
+      throw error
     }
-    grouped.get(groupKey)!.push(order)
   })
 
-  // Create result rows
+  console.log("[v0] API processOrderData: Created", grouped.size, "groups")
+
   const result: any[] = []
   const globalProductTotals: Record<string, number> = {}
 
@@ -162,9 +276,17 @@ function processOrderData(orders: any[], config: any) {
     const groupValues = groupKey.split("|||")
 
     const headerRow: any = { _isGroup: true }
+
+    // Create readable label for the group
+    const groupLabels: string[] = []
     groupBy.forEach((field: string, index: number) => {
+      const fieldLabel = AVAILABLE_COLUMNS_DEFS[field] ? getFieldLabel(field) : field
+      const fieldValue = groupValues[index]
+      groupLabels.push(`${fieldLabel}: ${fieldValue}`)
       headerRow[field] = groupValues[index]
     })
+
+    headerRow._groupLabel = groupLabels.join(" | ")
 
     result.push(headerRow)
 
@@ -188,59 +310,83 @@ function processOrderData(orders: any[], config: any) {
       }
     })
 
-    if (hasAggregations) {
+    const productTotals: Record<string, number> = {}
+
+    groupOrders.forEach((order) => {
+      if (order.order_items && Array.isArray(order.order_items)) {
+        order.order_items.forEach((item: any) => {
+          const productName = item.product_name || "Unbekanntes Produkt"
+          productTotals[productName] = (productTotals[productName] || 0) + (item.quantity || 0)
+          globalProductTotals[productName] = (globalProductTotals[productName] || 0) + (item.quantity || 0)
+        })
+      }
+    })
+
+    if (showProductSummary && Object.keys(productTotals).length > 0) {
+      const entries = Object.entries(productTotals).sort(([a], [b]) => a.localeCompare(b))
+      const productsText = entries.map(([name, qty]) => `${qty}× ${name}`).join(", ")
+      aggRow.product_summary = productsText
+    }
+
+    if (showAggregations && hasAggregations) {
       result.push(aggRow)
     }
 
-    if (showAggregations) {
-      const productTotals: Record<string, number> = {}
-
-      groupOrders.forEach((order) => {
-        if (order.order_items && Array.isArray(order.order_items)) {
-          order.order_items.forEach((item: any) => {
-            const productName = item.product_name || "Unbekanntes Produkt"
-            productTotals[productName] = (productTotals[productName] || 0) + (item.quantity || 0)
-            globalProductTotals[productName] = (globalProductTotals[productName] || 0) + (item.quantity || 0)
+    if (showProductDetails && Object.keys(productTotals).length > 0) {
+      Object.entries(productTotals)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([product, quantity]) => {
+          result.push({
+            _isAggregation: true,
+            _isProductDetail: true,
+            products: `${quantity}× ${product}`,
           })
-        }
-      })
-
-      if (Object.keys(productTotals).length > 0) {
-        Object.entries(productTotals)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .forEach(([product, quantity]) => {
-            result.push({
-              _isAggregation: true,
-              _isProductTotal: true,
-              products: product,
-              product_count: quantity,
-            })
-          })
-      }
+        })
     }
   })
 
-  if (showAggregations && Object.keys(globalProductTotals).length > 0) {
+  if ((showProductSummary || showProductDetails) && Object.keys(globalProductTotals).length > 0) {
     result.push({
       _isGroup: true,
       _isGlobalTotal: true,
+      _groupLabel: "═══ GESAMTSUMME ALLER PRODUKTE ═══",
       [groupBy[0]]: "═══ GESAMTSUMME ═══",
     })
 
-    Object.entries(globalProductTotals)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .forEach(([product, quantity]) => {
-        result.push({
-          _isAggregation: true,
-          _isProductTotal: true,
-          _isGlobalTotal: true,
-          products: product,
-          product_count: quantity,
+    if (showProductDetails) {
+      Object.entries(globalProductTotals)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([product, quantity]) => {
+          result.push({
+            _isAggregation: true,
+            _isProductDetail: true,
+            _isGlobalTotal: true,
+            products: `${quantity}× ${product}`,
+          })
         })
+    } else if (showProductSummary) {
+      const entries = Object.entries(globalProductTotals).sort(([a], [b]) => a.localeCompare(b))
+      const productsText = entries.map(([name, qty]) => `${qty}× ${name}`).join(", ")
+      result.push({
+        _isAggregation: true,
+        product_summary: productsText,
       })
+    }
   }
 
   return result
+}
+
+function getFieldLabel(field: string): string {
+  const labels: Record<string, string> = {
+    pickup_location_normalized: "Abholort",
+    distribution_person: "Verteilperson",
+    product_category: "Warengruppe",
+    pickup_month: "Abholmonat",
+    order_month: "Bestellmonat",
+    delivery_method: "Lieferart",
+  }
+  return labels[field] || field
 }
 
 function flattenOrder(order: any, columns: string[]) {
@@ -265,8 +411,6 @@ function getFieldValue(order: any, field: string): any {
       return order.customer?.phone
     case "customer_postal_code":
       return order.customer?.postal_code
-    case "customer_address":
-      return order.customer?.address
     case "customer_street":
       return order.customer?.street
     case "customer_city":
@@ -275,6 +419,8 @@ function getFieldValue(order: any, field: string): any {
       return order.customer?.country
     case "status":
       return order.status
+    case "internal_status":
+      return order.internal_status
     case "payment_method":
       return order.payment_method
     case "payment_status":
@@ -295,6 +441,76 @@ function getFieldValue(order: any, field: string): any {
       return order.order_items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0
     case "notes":
       return order.notes
+    case "admin_notes":
+      return order.admin_notes
+    case "special_requests":
+      return order.customer?.special_requests
+    case "pickup_month":
+      if (order.pickup_date) {
+        const date = new Date(order.pickup_date)
+        const monthNames = [
+          "Januar",
+          "Februar",
+          "März",
+          "April",
+          "Mai",
+          "Juni",
+          "Juli",
+          "August",
+          "September",
+          "Oktober",
+          "November",
+          "Dezember",
+        ]
+        return `${monthNames[date.getMonth()]} ${date.getFullYear()}`
+      }
+      const pickupMatch = order.order_number?.match(/HG-(\d{4})-(\d{2})-\d+/)
+      if (pickupMatch) {
+        const year = pickupMatch[1]
+        const month = Number.parseInt(pickupMatch[2], 10) - 1
+        const monthNames = [
+          "Januar",
+          "Februar",
+          "März",
+          "April",
+          "Mai",
+          "Juni",
+          "Juli",
+          "August",
+          "September",
+          "Oktober",
+          "November",
+          "Dezember",
+        ]
+        return `${monthNames[month]} ${year}`
+      }
+      return "Unbekannt"
+
+    case "order_month":
+      const orderMatch = order.order_number?.match(/HG-(\d{4})-(\d{2})-\d+/)
+      if (orderMatch) {
+        const year = orderMatch[1]
+        const month = Number.parseInt(orderMatch[2], 10) - 1
+        const monthNames = [
+          "Januar",
+          "Februar",
+          "März",
+          "April",
+          "Mai",
+          "Juni",
+          "Juli",
+          "August",
+          "September",
+          "Oktober",
+          "November",
+          "Dezember",
+        ]
+        return `${monthNames[month]} ${year}`
+      }
+      return "Unbekannt"
+
+    case "delivery_method":
+      return order.is_pickup ? "Abholung" : "Lieferung"
     default:
       return order[field]
   }

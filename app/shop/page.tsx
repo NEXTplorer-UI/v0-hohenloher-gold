@@ -205,7 +205,7 @@ function extractSize(productName: string): string | null {
   return match ? match[1].trim() : null
 }
 
-type SortOption = "name-asc" | "name-desc" | "price-asc" | "price-desc" | "newest"
+type SortOption = "category" | "name-asc" | "name-desc" | "price-asc" | "price-desc" | "newest"
 
 export default function ShopPage() {
   const searchParams = useSearchParams()
@@ -215,7 +215,7 @@ export default function ShopPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>(categoryFromUrl || "alle")
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [selectedSizes, setSelectedSizes] = useState<Map<string, number>>(new Map())
-  const [sortBy, setSortBy] = useState<SortOption>("name-asc")
+  const [sortBy, setSortBy] = useState<SortOption>("category")
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(false)
   const [showLeftIndicator, setShowLeftIndicator] = useState(false)
   const [showRightIndicator, setShowRightIndicator] = useState(false)
@@ -233,8 +233,8 @@ export default function ShopPage() {
   } = useSWR("/api/products", fetcher, {
     revalidateOnFocus: true, // Revalidate when user returns to tab
     revalidateOnReconnect: false,
-    dedupingInterval: 5000, // Prevent duplicate requests within 5 seconds
-    refreshInterval: 300000, // Auto-refresh every 5 minutes
+    dedupingInterval: 2000, // Prevent duplicate requests within 2 seconds
+    refreshInterval: 60000, // Auto-refresh every 1 minute (was 5 minutes)
   })
 
   const {
@@ -244,8 +244,8 @@ export default function ShopPage() {
   } = useSWR("/api/categories", fetcher, {
     revalidateOnFocus: true,
     revalidateOnReconnect: false,
-    dedupingInterval: 5000,
-    refreshInterval: 300000,
+    dedupingInterval: 2000,
+    refreshInterval: 60000, // Auto-refresh every 1 minute
   })
 
   const {
@@ -281,6 +281,18 @@ export default function ShopPage() {
     const sorted = [...filteredProducts]
 
     switch (sortBy) {
+      case "category":
+        sorted.sort((a, b) => {
+          // First sort by category display_order
+          const orderA = (a as any).category_display_order ?? 999
+          const orderB = (b as any).category_display_order ?? 999
+          if (orderA !== orderB) {
+            return orderA - orderB
+          }
+          // Then sort by name within category
+          return a.name.localeCompare(b.name)
+        })
+        break
       case "name-asc":
         sorted.sort((a, b) => a.name.localeCompare(b.name))
         break
@@ -818,6 +830,7 @@ export default function ShopPage() {
                   <SelectValue placeholder="Sortieren nach..." />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="category">Nach Kategorie</SelectItem>
                   <SelectItem value="name-asc">Name (A-Z)</SelectItem>
                   <SelectItem value="name-desc">Name (Z-A)</SelectItem>
                   <SelectItem value="price-asc">Preis (niedrig-hoch)</SelectItem>
@@ -870,7 +883,12 @@ export default function ShopPage() {
                 <div className="flex items-start justify-center md:justify-start">
                   <div className="w-full max-w-[400px] md:max-w-none aspect-square rounded-lg overflow-hidden bg-secondary">
                     <img
-                      src={selectedProduct.image_url || selectedProduct.images?.[0] || "/placeholder.svg"}
+                      src={
+                        getCacheBustedImageUrl(
+                          selectedProduct.image_url || selectedProduct.images?.[0],
+                          selectedProduct.id,
+                        ) || "/placeholder.svg"
+                      }
                       alt={selectedProduct.name}
                       className="w-full h-full object-cover"
                     />
@@ -968,6 +986,22 @@ export default function ShopPage() {
   )
 }
 
+const getCacheBustedImageUrl = (imageUrl: string | undefined, productId: number): string => {
+  if (!imageUrl || imageUrl === "/placeholder.svg") {
+    return imageUrl || "/placeholder.svg"
+  }
+
+  // For Supabase URLs, add timestamp query parameter to bust cache
+  if (imageUrl.startsWith("http")) {
+    const separator = imageUrl.includes("?") ? "&" : "?"
+    // Use product ID + current hour as cache key (updates every hour)
+    const cacheKey = `${productId}-${Math.floor(Date.now() / 3600000)}`
+    return `${imageUrl}${separator}v=${cacheKey}`
+  }
+
+  return imageUrl
+}
+
 function ProductCard({
   product,
   variants,
@@ -997,13 +1031,17 @@ function ProductCard({
 
   const canAddToCart = product.in_stock && availability.status !== "out-of-stock"
 
+  // Removed redundant getCacheBustedImageUrl from here, as it's now declared outside.
+
   const imageUrl = product.image_url || product.images?.[0] || "/images/banana-chips-placeholder.jpg"
+
+  const cacheBustedImageUrl = getCacheBustedImageUrl(imageUrl, product.id)
 
   // Log products without images to help debug
   if (!product.image_url && (!product.images || product.images.length === 0)) {
     console.log("[v0] Product without image:", {
       name: product.name,
-      src: imageUrl,
+      src: cacheBustedImageUrl,
       error: null,
     })
   }
@@ -1021,14 +1059,14 @@ function ProductCard({
           onClick={() => onSelect(product)}
         >
           <img
-            src={imageUrl || "/placeholder.svg"}
+            src={cacheBustedImageUrl || "/placeholder.svg"}
             alt={product.name}
             className="w-full h-full object-cover hover:scale-105 transition-transform"
             loading="lazy"
             onError={(e) => {
               console.log("[v0] Image failed to load:", {
                 name: product.name,
-                src: imageUrl,
+                src: cacheBustedImageUrl,
                 error: e,
               })
             }}

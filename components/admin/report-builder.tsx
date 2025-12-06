@@ -11,13 +11,14 @@ import { Slider } from "@/components/ui/slider"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import useSWR from "swr"
 import {
-  type ColumnDef,
   flexRender,
   getCoreRowModel,
   useReactTable,
   getSortedRowModel,
   type SortingState,
   type ColumnOrderState,
+  createColumnHelper,
+  type ColumnDef, // Import ColumnDef
 } from "@tanstack/react-table"
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd"
 import {
@@ -28,7 +29,7 @@ import {
   DialogTrigger,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { Download, GripVertical, Settings, ArrowUpDown, FileSpreadsheet, Plus, Trash2 } from "lucide-react"
+import { Download, GripVertical, Settings, FileSpreadsheet, Plus, Trash2 } from "lucide-react"
 import ExcelJS from "exceljs"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
@@ -48,13 +49,20 @@ const AVAILABLE_COLUMNS = [
   { id: "pickup_location_normalized", label: "Abholort", type: "string" },
   { id: "distribution_person", label: "Verteilperson", type: "string" },
   { id: "status", label: "Status", type: "string" },
+  { id: "internal_status", label: "Interner Status", type: "string" }, // Added internal_status
   { id: "payment_method", label: "Zahlungsart", type: "string" },
   { id: "products", label: "Produkte", type: "string" },
   { id: "product_count", label: "Produktanzahl", type: "number" },
   { id: "total", label: "Gesamtbetrag", type: "number" },
   { id: "created_at", label: "Datum", type: "date" },
   { id: "notes", label: "Notizen", type: "string" },
+  { id: "admin_notes", label: "Admin-Notizen", type: "string" }, // Added admin_notes
+  { id: "special_requests", label: "Sonderwünsche", type: "string" }, // Added special_requests
   { id: "product_category", label: "Warengruppe", type: "string" },
+  // NEW COLUMNS FOR MONTH AND DELIVERY METHOD
+  { id: "pickup_month", label: "Abholmonat", type: "string" },
+  { id: "order_month", label: "Bestellmonat", type: "string" },
+  { id: "delivery_method", label: "Lieferart", type: "string" },
 ]
 
 // const TEMPLATES = [
@@ -129,6 +137,93 @@ interface ExcelExportOptions {
   showBorders: boolean
   borderStyle: "thin" | "medium" | "thick"
 }
+function parseAndAccumulateProducts(row: any, totals: Record<string, number>) {
+  const text = row.products
+  if (!text || typeof text !== "string") return
+
+  // Aktuell trennst du in der UI ja mit Kommas -> wiederverwenden
+  const parts = text
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean)
+
+  for (const part of parts) {
+    // Versuche: "3x Orange", "3× Orange", "3 Orange"
+    const match = part.match(/^(\d+)\s*[x×]?\s*(.+)$/i)
+    let qty = 1
+    let name = part
+
+    if (match) {
+      qty = Number.parseInt(match[1], 10) || 1
+      name = match[2].trim()
+    }
+
+    if (!name) continue
+    totals[name] = (totals[name] ?? 0) + qty
+  }
+}
+
+function addProductTotalsPerGroup(rows: any[], groupBy: string[], enabled: boolean): any[] {
+  // Wenn nicht gruppiert oder ausgeschaltet: Originaldaten zurückgeben
+  if (!enabled || !rows || !rows.length || groupBy.length === 0) {
+    return rows || []
+  }
+
+  const result: any[] = []
+  let currentTotals: Record<string, number> = {}
+  let inGroup = false
+
+  for (const row of rows) {
+    if (row._isGroup) {
+      // Neue Gruppe beginnt -> vorherige Gruppe zurücksetzen
+      currentTotals = {}
+      inGroup = true
+      result.push(row)
+      continue
+    }
+
+    if (row._isAggregation) {
+      // Aggregationszeile: Produktsummen hinzufügen
+      const entries = Object.entries(currentTotals)
+      if (entries.length > 0) {
+        const productsText = entries
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([name, qty]) => `${qty}× ${name}`)
+          .join(", ")
+
+        row.product_summary = productsText
+      }
+
+      result.push(row)
+      currentTotals = {}
+      inGroup = false
+      continue
+    }
+
+    // Normale Datenzeilen: Produkte sammeln
+    if (inGroup) {
+      parseAndAccumulateProducts(row, currentTotals)
+    }
+
+    result.push(row)
+  }
+
+  return result
+}
+
+function calculateGrandTotal(rows: any[]): Record<string, number> {
+  const totals: Record<string, number> = {}
+
+  for (const row of rows) {
+    // Skip special rows, only process actual order data
+    if (row._isGroup || row._isAggregation) continue
+    parseAndAccumulateProducts(row, totals)
+  }
+
+  return totals
+}
+
+const columnHelper = createColumnHelper<any>() // Added for typed columns
 
 export default function ReportBuilder() {
   const [selectedPreset, setSelectedPreset] = useState<string>("")
@@ -153,21 +248,21 @@ export default function ReportBuilder() {
     tours: [],
     months: [],
     statuses: [],
+    dateRange: { start: null, end: null }, // Date range filter
   })
 
   const [isExporting, setIsExporting] = useState(false)
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [isColumnSettingsOpen, setIsColumnSettingsOpen] = useState(false)
   const [sorting, setSorting] = useState<SortingState>([])
-  const [columnOrderState, setColumnOrderState] = useState<ColumnOrderState>([
-    "order_number",
-    "customer_name",
-    "pickup_location_normalized",
-    "total",
-  ])
+  // Initialize columnOrderState with ALL available column IDs
+  const [columnOrderState, setColumnOrderState] = useState<ColumnOrderState>(AVAILABLE_COLUMNS.map((col) => col.id))
   const [showAggregations, setShowAggregations] = useState(true)
+  const [showProductSummary, setShowProductSummary] = useState(true)
   const [wrapText, setWrapText] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+  const [showGrandTotal, setShowGrandTotal] = useState(false)
+  const [showProductDetails, setShowProductDetails] = useState(false)
 
   const [showExcelOptionsDialog, setShowExcelOptionsDialog] = useState(false)
   const [excelOptions, setExcelOptions] = useState<ExcelExportOptions>({
@@ -240,7 +335,7 @@ export default function ReportBuilder() {
     if (preset) {
       setSelectedPreset(presetId)
       setSelectedColumns(preset.columns || [])
-      setColumnOrderState(preset.column_order || preset.columns || [])
+      setColumnOrderState(preset.column_order || preset.columns || AVAILABLE_COLUMNS.map((col) => col.id)) // Fallback to all columns
       setColumnWidths(preset.column_widths || {})
       setGroupBy(preset.group_by || [])
       setAggregations(preset.aggregations || [])
@@ -254,6 +349,7 @@ export default function ReportBuilder() {
           tours: [],
           months: [],
           statuses: [],
+          dateRange: { start: null, end: null },
         },
       )
 
@@ -342,7 +438,7 @@ export default function ReportBuilder() {
 
   const toggleFilter = (filterType: string, value: string) => {
     setFilters((prev: any) => {
-      const current = prev[filterType] || []
+      const current = Array.isArray(prev[filterType]) ? prev[filterType] : []
       return {
         ...prev,
         [filterType]: current.includes(value) ? current.filter((v: string) => v !== value) : [...current, value],
@@ -353,7 +449,7 @@ export default function ReportBuilder() {
   const exportToCSV = async () => {
     setIsExporting(true)
     try {
-      const rows = reportData?.data || []
+      const rows = dataWithProductTotals || []
       const headers = selectedColumns.map((colId) => AVAILABLE_COLUMNS.find((c) => c.id === colId)?.label || colId)
 
       const csvContent = [
@@ -387,7 +483,7 @@ export default function ReportBuilder() {
       const workbook = new ExcelJS.Workbook()
       const worksheet = workbook.addWorksheet("Report")
 
-      const rows = reportData?.data || []
+      const rows = dataWithProductTotals || []
       const headers = selectedColumns.map((colId) => AVAILABLE_COLUMNS.find((c) => c.id === colId)?.label || colId)
 
       // Header Row mit Formatierung aus Options
@@ -418,6 +514,14 @@ export default function ReportBuilder() {
       // Datenzeilen mit Formatierung
       rows.forEach((row: any, idx: number) => {
         const rowData = selectedColumns.map((colId) => {
+          if (row._isAggregation && colId === "products" && row.product_summary) {
+            return row.product_summary
+          }
+          // Handle new columns
+          if (row._isGroup && (colId === "admin_notes" || colId === "special_requests")) return ""
+          if (row._isAggregation && (colId === "admin_notes" || colId === "special_requests")) return ""
+          if (row._isGroup && colId === "internal_status") return ""
+
           const value = row[colId]
           return value ?? ""
         })
@@ -436,9 +540,7 @@ export default function ReportBuilder() {
             fgColor: { argb: "FF" + excelOptions.groupBackground.replace("#", "") },
           }
           excelRow.font = { bold: true, size: excelOptions.fontSize, name: excelOptions.fontFamily }
-        }
-        // Aggregations-Styling
-        else if (row._isAggregation && excelOptions.includeAggregations) {
+        } else if (row._isAggregation && excelOptions.includeAggregations) {
           excelRow.fill = {
             type: "pattern",
             pattern: "solid",
@@ -472,6 +574,49 @@ export default function ReportBuilder() {
           excelRow.alignment = { wrapText: true, vertical: "top" }
         }
       })
+
+      if (grandTotal && Object.keys(grandTotal).length > 0) {
+        // Empty row for separation
+        worksheet.addRow([])
+
+        // Grand total header row
+        const grandTotalHeaderRow = worksheet.addRow(["GESAMTSUMME ALLER PRODUKTE"])
+        grandTotalHeaderRow.font = {
+          bold: true,
+          size: excelOptions.fontSize + 2,
+          name: excelOptions.fontFamily,
+        }
+        grandTotalHeaderRow.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFFDE047" }, // Yellow background
+        }
+
+        // Merge cells for header
+        worksheet.mergeCells(grandTotalHeaderRow.number, 1, grandTotalHeaderRow.number, selectedColumns.length)
+
+        // Grand total products row
+        const entries = Object.entries(grandTotal)
+        const grandTotalText = entries
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([name, qty]) => `${qty}× ${name}`)
+          .join(", ")
+
+        const grandTotalRow = worksheet.addRow([grandTotalText])
+        grandTotalRow.font = {
+          size: excelOptions.fontSize,
+          name: excelOptions.fontFamily,
+        }
+        grandTotalRow.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFFEF3C7" }, // Light yellow background
+        }
+
+        // Merge cells for products
+        worksheet.mergeCells(grandTotalRow.number, 1, grandTotalRow.number, selectedColumns.length)
+        grandTotalRow.alignment = { wrapText: true, vertical: "top" }
+      }
 
       // Spaltenbreiten
       if (excelOptions.autoWidth) {
@@ -512,96 +657,168 @@ export default function ReportBuilder() {
     return {
       columns: selectedColumns,
       groupBy,
-      aggregations,
       filters,
+      aggregations,
+      showAggregations,
+      showProductSummary,
+      showProductDetails,
     }
-  }, [selectedColumns, groupBy, aggregations, filters])
+  }, [selectedColumns, groupBy, aggregations, filters, showAggregations, showProductSummary, showProductDetails])
 
-  const swrKey =
-    reportConfig.columns.length > 0 ? `/api/admin/reports/dynamic?config=${JSON.stringify(reportConfig)}` : null
+  const swrKey = useMemo(() => {
+    return ["/api/admin/reports/dynamic", JSON.stringify(reportConfig)]
+  }, [reportConfig])
 
   const {
     data: reportData,
     error: reportError,
     isLoading,
-  } = useSWR(swrKey, async (url) => {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(reportConfig),
-    })
+  } = useSWR(swrKey, async ([url, configStr]) => {
+    console.log("[v0] FRONTEND: Starting report fetch with config:", reportConfig)
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch report")
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reportConfig),
+      })
+
+      console.log("[v0] FRONTEND: Fetch response status:", response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("[v0] FRONTEND: Fetch failed with text:", errorText)
+        throw new Error("Failed to fetch report")
+      }
+
+      const data = await response.json()
+      console.log("[v0] FRONTEND: Successfully received data, row count:", data?.data?.length || 0)
+      return data
+    } catch (error) {
+      console.error("[v0] FRONTEND: Error in fetch:", error)
+      throw error
     }
-
-    return await response.json()
   })
 
-  const columns = useMemo<ColumnDef<any>[]>(() => {
-    return selectedColumns.map((col) => ({
-      accessorKey: col,
-      header: ({ column }) => {
-        return (
-          <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-            {AVAILABLE_COLUMNS.find((c) => c.id === col)?.label || col}
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        )
-      },
-      cell: ({ row }) => {
-        if (row.original._isGroup) {
-          if (groupBy.includes(col)) {
-            const value = row.original[col]
-            if (value && value !== "") {
-              return <div className="text-lg font-bold text-primary py-2 px-4 bg-slate-100 rounded">{value}</div>
+  if (reportError) {
+    console.error("[v0] FRONTEND: reportError detected:", reportError)
+  }
+
+  const dataWithProductTotals = useMemo(() => {
+    console.log(
+      "[v0] FRONTEND: Processing dataWithProductTotals, groupBy:",
+      groupBy,
+      "showAggregations:",
+      showAggregations,
+    )
+
+    try {
+      const base = reportData?.data || []
+      console.log("[v0] FRONTEND: Base data rows:", base.length)
+
+      const result = addProductTotalsPerGroup(base, groupBy, showAggregations)
+      console.log("[v0] FRONTEND: Processed data rows:", result.length)
+
+      return result
+    } catch (error) {
+      console.error("[v0] FRONTEND: Error in dataWithProductTotals processing:", error)
+      throw error
+    }
+  }, [reportData?.data, groupBy, showAggregations])
+
+  const grandTotal = useMemo(() => {
+    if (!showGrandTotal || !reportData?.data) return null
+    return calculateGrandTotal(reportData.data)
+  }, [showGrandTotal, reportData?.data])
+
+  // Updated columns useMemo to properly filter by selectedColumns and use columnHelper
+  const columns = useMemo<ColumnDef<any, any>[]>(() => {
+    if (!reportData?.data) return []
+
+    // Filter AVAILABLE_COLUMNS to only include those that are selected AND present in columnOrderState
+    const filteredAvailableColumns = AVAILABLE_COLUMNS.filter((col) => selectedColumns.includes(col.id))
+
+    // Sort these filtered columns based on their order in columnOrderState
+    filteredAvailableColumns.sort((a, b) => columnOrderState.indexOf(a.id) - columnOrderState.indexOf(b.id))
+
+    return filteredAvailableColumns.map((col) =>
+      columnHelper.accessor(col.id, {
+        id: col.id,
+        header: col.label,
+        cell: (info) => {
+          const row = info.row.original
+          const value = row[col.id]
+
+          if (row._isGroup) {
+            if (col.id === groupBy[0] && row._groupLabel) {
+              return <span className="font-bold text-lg">{row._groupLabel}</span>
+            }
+            return null
+          }
+
+          if (row._isProductDetail) {
+            if (col.id === "products") {
+              return (
+                <span className="text-blue-600 italic pl-8 block">
+                  {row._isGlobalTotal ? "📦 " : ""}
+                  {value}
+                </span>
+              )
+            }
+            return null
+          }
+
+          if (row._isAggregation) {
+            if (col.id === "products" && row.product_summary) {
+              return <span className="text-blue-600 italic pl-4">{row.product_summary}</span>
+            }
+            // Display aggregated values
+            return <span className="font-semibold">{value}</span>
+          }
+
+          // Handle specific column types for display
+          if (col.type === "number") {
+            return typeof value === "number" ? value.toFixed(2) : ""
+          }
+
+          if (col.type === "date") {
+            return value ? new Date(value).toLocaleDateString("de-DE") : ""
+          }
+
+          // Handle new columns with specific display logic if needed
+          if (col.id === "admin_notes" || col.id === "special_requests") {
+            return <span className="text-muted-foreground italic">{value || "-"}</span>
+          }
+
+          // Display values for new columns
+          if (col.id === "pickup_month" || col.id === "order_month") {
+            return value ? new Date(value).toLocaleDateString("de-DE", { month: "long" }) : ""
+          }
+
+          if (col.id === "delivery_method") {
+            switch (value) {
+              case "pickup":
+                return "Abholung"
+              case "shipping":
+                return "Lieferung"
+              default:
+                return value || "-"
             }
           }
-          return null
-        }
 
-        if (row.original._isProductTotal) {
-          if (col === "products") {
-            return <div className="pl-8 text-blue-600 font-semibold">→ {row.original[col]}</div>
-          }
-          if (col === "product_count") {
-            return <div className="text-blue-600 font-semibold">{row.original[col]}x</div>
-          }
-          return null
-        }
-
-        if (row.original._isAggregation) {
-          const value = row.original[col]
-          if (value !== undefined && value !== null && value !== "") {
-            return <div className="font-semibold">Σ {value}</div>
-          }
-          return null
-        }
-
-        if (col === "products" && wrapText) {
-          const productsText = row.original[col]
-          if (productsText) {
-            const products = productsText.split(",").map((p: string) => p.trim())
-            return (
-              <div className="whitespace-pre-line">
-                {products.map((product: string, idx: number) => (
-                  <div key={idx}>{product}</div>
-                ))}
-              </div>
-            )
-          }
-        }
-
-        return <div>{row.original[col]}</div>
-      },
-      size: columnWidths[col] || 150,
-      minSize: 100,
-      maxSize: 500,
-    }))
-  }, [selectedColumns, columnWidths, wrapText, groupBy])
+          // Default display for string types
+          return value || ""
+        },
+        size: columnWidths[col.id] || col.width || 150, // Use size from columnWidths state, fallback to col.width, then 150
+        minSize: 50, // Minimum column width
+        maxSize: 500, // Maximum column width
+        enableResizing: true, // Enable column resizing
+      }),
+    )
+  }, [reportData?.data, selectedColumns, columnWidths, columnOrderState, groupBy]) // Added columnHelper to dependency array
 
   const table = useReactTable({
-    data: reportData?.data || [],
+    data: dataWithProductTotals,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -624,6 +841,15 @@ export default function ReportBuilder() {
   if (!selectedColumns || selectedColumns.length === 0) {
     return <div className="p-8">Lade Report Builder...</div>
   }
+
+  const GROUP_BY_OPTIONS = [
+    { value: "pickup_location_normalized", label: "Abholort" },
+    { value: "distribution_person", label: "Verteilperson" },
+    { value: "product_category", label: "Warengruppe" },
+    { value: "pickup_month", label: "Abholmonat" },
+    { value: "order_month", label: "Bestellmonat" },
+    { value: "delivery_method", label: "Lieferart (Abholung/Lieferung)" },
+  ]
 
   return (
     <div className="space-y-6">
@@ -678,160 +904,213 @@ export default function ReportBuilder() {
             </div>
           </div>
 
-          <div>
-            <Label className="text-base font-semibold mb-3 block">Filter</Label>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <Label className="text-sm mb-2 block">Lieferart</Label>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="filter-pickup"
-                      checked={filters.deliveryType?.includes("pickup")}
-                      onCheckedChange={() => toggleFilter("deliveryType", "pickup")}
-                    />
-                    <Label htmlFor="filter-pickup" className="text-sm cursor-pointer">
-                      Abholung
+          <Card>
+            <CardHeader>
+              <CardTitle>Filter</CardTitle>
+              <CardDescription>Wählen Sie die gewünschten Filter für den Report</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Datumsbereich (Abholdatum)</Label>
+                <div className="flex gap-2 items-center">
+                  <div className="flex-1">
+                    <Label htmlFor="date-start" className="text-xs text-muted-foreground">
+                      Von
                     </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="filter-delivery"
-                      checked={filters.deliveryType?.includes("delivery")}
-                      onCheckedChange={() => toggleFilter("deliveryType", "delivery")}
+                    <Input
+                      id="date-start"
+                      type="date"
+                      value={filters.dateRange.start || ""}
+                      onChange={(e) =>
+                        setFilters((prev: any) => ({
+                          ...prev,
+                          dateRange: { ...prev.dateRange, start: e.target.value || null },
+                        }))
+                      }
                     />
-                    <Label htmlFor="filter-delivery" className="text-sm cursor-pointer">
-                      Versand
-                    </Label>
                   </div>
+                  <div className="flex-1">
+                    <Label htmlFor="date-end" className="text-xs text-muted-foreground">
+                      Bis
+                    </Label>
+                    <Input
+                      id="date-end"
+                      type="date"
+                      value={filters.dateRange.end || ""}
+                      onChange={(e) =>
+                        setFilters((prev: any) => ({
+                          ...prev,
+                          dateRange: { ...prev.dateRange, end: e.target.value || null },
+                        }))
+                      }
+                    />
+                  </div>
+                  {(filters.dateRange.start || filters.dateRange.end) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        setFilters((prev: any) => ({
+                          ...prev,
+                          dateRange: { start: null, end: null },
+                        }))
+                      }
+                      className="mt-5"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
 
-              <div>
-                <Label className="text-sm mb-2 block">Zahlungsart</Label>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="filter-cash"
-                      checked={filters.paymentMethod?.includes("cash")}
-                      onCheckedChange={() => toggleFilter("paymentMethod", "cash")}
-                    />
-                    <Label htmlFor="filter-cash" className="text-sm cursor-pointer">
-                      Bar
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="filter-bank"
-                      checked={filters.paymentMethod?.includes("bank_transfer")}
-                      onCheckedChange={() => toggleFilter("paymentMethod", "bank_transfer")}
-                    />
-                    <Label htmlFor="filter-bank" className="text-sm cursor-pointer">
-                      Überweisung
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="filter-card"
-                      checked={filters.paymentMethod?.includes("card")}
-                      onCheckedChange={() => toggleFilter("paymentMethod", "card")}
-                    />
-                    <Label htmlFor="filter-card" className="text-sm cursor-pointer">
-                      Karte
-                    </Label>
+                  <Label>Lieferart</Label>
+                  <div className="space-y-1">
+                    {["pickup", "shipping"].map((type) => (
+                      <div key={type} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`delivery-${type}`}
+                          checked={Array.isArray(filters.deliveryType) && filters.deliveryType.includes(type)}
+                          onCheckedChange={(checked) => {
+                            setFilters((prev: any) => {
+                              const current = Array.isArray(prev.deliveryType) ? prev.deliveryType : []
+                              return {
+                                ...prev,
+                                deliveryType: checked ? [...current, type] : current.filter((t: string) => t !== type),
+                              }
+                            })
+                          }}
+                        />
+                        <Label htmlFor={`delivery-${type}`} className="font-normal text-sm">
+                          {type === "pickup" ? "Abholung" : "Lieferung"}
+                        </Label>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
 
-              <div>
-                <Label className="text-sm mb-2 block">Abholort</Label>
-                <ScrollArea className="h-32">
-                  <div className="space-y-2">
-                    {pickupLocations.map((location) => (
-                      <div key={location.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`filter-location-${location.id}`}
-                          checked={filters.pickupLocations?.includes(location.id)}
-                          onCheckedChange={() => toggleFilter("pickupLocations", location.id)}
-                        />
-                        <Label htmlFor={`filter-location-${location.id}`} className="text-sm cursor-pointer">
-                          {location.name}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-
-              <div>
-                <Label className="text-sm mb-2 block">Tour</Label>
-                <ScrollArea className="h-32">
-                  <div className="space-y-2">
-                    {tours.map((tour) => (
-                      <div key={tour.id} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`filter-tour-${tour.id}`}
-                          checked={filters.tours?.includes(tour.id)}
-                          onCheckedChange={() => toggleFilter("tours", tour.id)}
-                        />
-                        <Label htmlFor={`filter-tour-${tour.id}`} className="text-sm cursor-pointer">
-                          {tour.name}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-
-              {/* NEW FILTER SECTION START */}
-              <div>
-                <Label className="text-sm mb-2 block">Monat</Label>
-                <ScrollArea className="h-32">
-                  <div className="space-y-2">
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
-                      <div key={month} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`filter-month-${month}`}
-                          checked={filters.months?.includes(month.toString().padStart(2, "0"))}
-                          onCheckedChange={() => toggleFilter("months", month.toString().padStart(2, "0"))}
-                        />
-                        <Label htmlFor={`filter-month-${month}`} className="text-sm cursor-pointer">
-                          {new Date(0, month - 1).toLocaleString("de-DE", { month: "long" })}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-
-              <div>
-                <Label className="text-sm mb-2 block">Status</Label>
-                <ScrollArea className="h-32">
-                  <div className="space-y-2">
+                <div className="space-y-2">
+                  <Label className="text-sm">Zahlungsart</Label>
+                  <div className="space-y-1">
                     {[
-                      { value: "pending", label: "Ausstehend" },
-                      { value: "confirmed", label: "Bestätigt" },
-                      { value: "ready", label: "Abholbereit" },
-                      { value: "completed", label: "Abgeschlossen" },
-                      { value: "cancelled", label: "Storniert" },
-                    ].map((status) => (
-                      <div key={status.value} className="flex items-center space-x-2">
+                      { value: "cash", label: "Bar" },
+                      { value: "bank_transfer", label: "Überweisung" },
+                      { value: "card", label: "Karte" },
+                    ].map((payment) => (
+                      <div key={payment.value} className="flex items-center space-x-2">
                         <Checkbox
-                          id={`filter-status-${status.value}`}
-                          checked={filters.statuses?.includes(status.value)}
-                          onCheckedChange={() => toggleFilter("statuses", status.value)}
+                          id={`filter-${payment.value}`}
+                          checked={
+                            Array.isArray(filters.paymentMethod) && filters.paymentMethod.includes(payment.value)
+                          }
+                          onCheckedChange={() => toggleFilter("paymentMethod", payment.value)}
                         />
-                        <Label htmlFor={`filter-status-${status.value}`} className="text-sm cursor-pointer">
-                          {status.label}
+                        <Label htmlFor={`filter-${payment.value}`} className="text-sm cursor-pointer">
+                          {payment.label}
                         </Label>
                       </div>
                     ))}
                   </div>
-                </ScrollArea>
+                </div>
               </div>
-              {/* NEW FILTER SECTION END */}
-            </div>
-          </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm mb-2 block">Abholort</Label>
+                  <ScrollArea className="h-32 border rounded-md p-2">
+                    <div className="space-y-1">
+                      {pickupLocations.map((location) => (
+                        <div key={location.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`filter-location-${location.id}`}
+                            checked={
+                              Array.isArray(filters.pickupLocations) && filters.pickupLocations.includes(location.id)
+                            }
+                            onCheckedChange={() => toggleFilter("pickupLocations", location.id)}
+                          />
+                          <Label htmlFor={`filter-location-${location.id}`} className="text-sm cursor-pointer">
+                            {location.name}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+
+                <div>
+                  <Label className="text-sm mb-2 block">Tour</Label>
+                  <ScrollArea className="h-32 border rounded-md p-2">
+                    <div className="space-y-1">
+                      {tours.map((tour) => (
+                        <div key={tour.id} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`filter-tour-${tour.id}`}
+                            checked={Array.isArray(filters.tours) && filters.tours.includes(tour.id)}
+                            onCheckedChange={() => toggleFilter("tours", tour.id)}
+                          />
+                          <Label htmlFor={`filter-tour-${tour.id}`} className="text-sm cursor-pointer">
+                            {tour.name}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm mb-2 block">Monat</Label>
+                  <ScrollArea className="h-32 border rounded-md p-2">
+                    <div className="space-y-1">
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
+                        <div key={month} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`filter-month-${month}`}
+                            checked={
+                              Array.isArray(filters.months) &&
+                              filters.months.includes(month.toString().padStart(2, "0"))
+                            }
+                            onCheckedChange={() => toggleFilter("months", month.toString().padStart(2, "0"))}
+                          />
+                          <Label htmlFor={`filter-month-${month}`} className="text-sm cursor-pointer">
+                            {new Date(0, month - 1).toLocaleString("de-DE", { month: "long" })}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+
+                <div>
+                  <Label className="text-sm mb-2 block">Status</Label>
+                  <ScrollArea className="h-32 border rounded-md p-2">
+                    <div className="space-y-1">
+                      {[
+                        { value: "pending", label: "Ausstehend" },
+                        { value: "confirmed", label: "Bestätigt" },
+                        { value: "ready", label: "Abholbereit" },
+                        { value: "completed", label: "Abgeschlossen" },
+                        { value: "cancelled", label: "Storniert" },
+                      ].map((status) => (
+                        <div key={status.value} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`filter-status-${status.value}`}
+                            checked={Array.isArray(filters.statuses) && filters.statuses.includes(status.value)}
+                            onCheckedChange={() => toggleFilter("statuses", status.value)}
+                          />
+                          <Label htmlFor={`filter-status-${status.value}`} className="text-sm cursor-pointer">
+                            {status.label}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           <div>
             <Label className="text-base font-semibold mb-3 block">Spaltenauswahl</Label>
@@ -856,49 +1135,67 @@ export default function ReportBuilder() {
           <div>
             <Label className="text-base font-semibold mb-3 block">Gruppierung</Label>
             <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="group-location"
-                  checked={groupBy.includes("pickup_location_normalized")}
-                  onCheckedChange={() => toggleGroupBy("pickup_location_normalized")}
-                />
-                <Label htmlFor="group-location" className="cursor-pointer">
-                  Nach Abholort gruppieren
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="group-person"
-                  checked={groupBy.includes("distribution_person")}
-                  onCheckedChange={() => toggleGroupBy("distribution_person")}
-                />
-                <Label htmlFor="group-person" className="cursor-pointer">
-                  Nach Verteilperson gruppieren
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="group-category"
-                  checked={groupBy.includes("product_category")}
-                  onCheckedChange={() => toggleGroupBy("product_category")}
-                />
-                <Label htmlFor="group-category" className="cursor-pointer">
-                  Nach Warengruppe gruppieren
-                </Label>
-              </div>
+              {GROUP_BY_OPTIONS.map((option) => (
+                <div key={option.value} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`group-${option.value}`}
+                    checked={groupBy.includes(option.value)}
+                    onCheckedChange={() => toggleGroupBy(option.value)}
+                  />
+                  <Label htmlFor={`group-${option.value}`} className="cursor-pointer">
+                    Nach {option.label} gruppieren
+                  </Label>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="show-aggregations"
-                checked={showAggregations}
-                onCheckedChange={(checked) => setShowAggregations(!!checked)}
-              />
-              <Label htmlFor="show-aggregations" className="cursor-pointer">
-                Gesamtsummen anzeigen (Produktmengen pro Gruppe)
-              </Label>
+          <div className="space-y-4">
+            <Label className="text-base font-semibold">Anzeigeoptionen</Label>
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-aggregations"
+                  checked={showAggregations}
+                  onCheckedChange={(checked) => setShowAggregations(!!checked)}
+                />
+                <Label htmlFor="show-aggregations" className="text-sm cursor-pointer">
+                  Gesamtsummen anzeigen (numerische Summen)
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-product-summary"
+                  checked={showProductSummary}
+                  onCheckedChange={(checked) => setShowProductSummary(!!checked)}
+                />
+                <Label htmlFor="show-product-summary" className="text-sm cursor-pointer">
+                  Produktsummen anzeigen
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-product-details"
+                  checked={showProductDetails}
+                  onCheckedChange={(checked) => setShowProductDetails(!!checked)}
+                />
+                <Label htmlFor="show-product-details" className="text-sm cursor-pointer">
+                  Produktsummen detailliert anzeigen (separate Zeilen pro Produkt)
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-grand-total"
+                  checked={showGrandTotal}
+                  onCheckedChange={(checked) => setShowGrandTotal(!!checked)}
+                />
+                <Label htmlFor="show-grand-total" className="text-sm cursor-pointer">
+                  Gesamtsumme aller Produkte anzeigen (für Tourenplanung)
+                </Label>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -925,7 +1222,7 @@ export default function ReportBuilder() {
                       {(provided) => (
                         <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2 mt-2">
                           {columnOrderState
-                            .filter((col) => selectedColumns.includes(col))
+                            .filter((col) => selectedColumns.includes(col)) // Only show selected columns in order
                             .map((col, index) => {
                               const colDef = AVAILABLE_COLUMNS.find((c) => c.id === col)
                               return (
@@ -1093,34 +1390,57 @@ export default function ReportBuilder() {
                 </TableHeader>
                 <TableBody>
                   {table.getRowModel().rows?.length ? (
-                    table.getRowModel().rows.map((row) => (
-                      <TableRow
-                        key={row.id}
-                        data-state={row.getIsSelected() && "selected"}
-                        className={
-                          row.original._isGroup
-                            ? "bg-slate-200 font-bold"
-                            : row.original._isProductTotal
-                              ? "bg-blue-50"
+                    <>
+                      {table.getRowModel().rows.map((row) => (
+                        <TableRow
+                          key={row.id}
+                          data-state={row.getIsSelected() && "selected"}
+                          className={
+                            row.original._isGroup
+                              ? "bg-slate-200 font-bold"
                               : row.original._isAggregation
                                 ? "bg-primary/5 font-semibold"
                                 : ""
-                        }
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell
-                            key={cell.id}
-                            style={{
-                              width: cell.column.getSize(),
-                              whiteSpace: wrapText ? "normal" : "nowrap",
-                              wordBreak: wrapText ? "break-word" : "normal",
-                            }}
-                          >
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
+                          }
+                        >
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell
+                              key={cell.id}
+                              style={{
+                                width: cell.column.getSize(),
+                                whiteSpace: wrapText ? "normal" : "nowrap",
+                                wordBreak: wrapText ? "break-word" : "normal",
+                              }}
+                            >
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+
+                      {grandTotal && Object.keys(grandTotal).length > 0 && (
+                        <>
+                          <TableRow>
+                            <TableCell colSpan={columns.length} className="h-4 border-t-2 border-slate-300" />
+                          </TableRow>
+                          <TableRow className="bg-yellow-50">
+                            <TableCell colSpan={columns.length} className="font-bold text-lg py-3">
+                              GESAMTSUMME ALLER PRODUKTE
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="bg-yellow-50/50">
+                            <TableCell colSpan={columns.length} className="py-3">
+                              <div className="text-base">
+                                {Object.entries(grandTotal)
+                                  .sort(([a], [b]) => a.localeCompare(b))
+                                  .map(([name, qty]) => `${qty}× ${name}`)
+                                  .join(", ")}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        </>
+                      )}
+                    </>
                   ) : (
                     <TableRow>
                       <TableCell colSpan={columns.length} className="h-24 text-center">

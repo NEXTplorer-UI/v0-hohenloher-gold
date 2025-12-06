@@ -76,7 +76,8 @@ export async function GET() {
         categories!inner (
           id,
           name,
-          slug
+          slug,
+          display_order
         )
       `,
       )
@@ -133,6 +134,7 @@ export async function GET() {
       const currentStock = product.inventory_raw_id ? availability?.gram_stock || 0 : availability?.piece_stock || 0
 
       const category = product.categories?.name || "Unbekannt"
+      const categoryDisplayOrder = product.categories?.display_order ?? 999
       const isSouthernFruit = category === "Südfrüchte"
 
       const attributes = product.attributes || {}
@@ -221,6 +223,7 @@ export async function GET() {
         unit: product.unit,
         price: product.price,
         category: category,
+        category_display_order: categoryDisplayOrder,
         description: product.description || "",
         image_url: product.image_url || "/placeholder.svg",
         images: images,
@@ -242,7 +245,8 @@ export async function GET() {
 
     return NextResponse.json(enrichedProducts, {
       headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Cache-Control": "public, max-age=60, must-revalidate",
+        "CDN-Cache-Control": "public, max-age=60",
       },
     })
   } catch (error) {
