@@ -245,7 +245,6 @@ export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions
           Tel: 0157 357 038 64
         </p>
         <p style="margin-top: 10px; color: #cbd5e0;">
-          Ihr Partner für frische sizilianische Südfrüchte und regionale Köstlichkeiten aus Hohenlohe.
         </p>
         ${unsubscribeLink}
       </div>
