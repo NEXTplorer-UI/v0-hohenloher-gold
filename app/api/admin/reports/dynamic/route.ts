@@ -316,8 +316,12 @@ function processOrderData(orders: any[], config: any) {
       if (order.order_items && Array.isArray(order.order_items)) {
         order.order_items.forEach((item: any) => {
           const productName = item.product_name || "Unbekanntes Produkt"
-          productTotals[productName] = (productTotals[productName] || 0) + (item.quantity || 0)
-          globalProductTotals[productName] = (globalProductTotals[productName] || 0) + (item.quantity || 0)
+          const productSize = item.product_size || ""
+          // Create unique key with size if available
+          const productKey = productSize ? `${productName} (${productSize})` : productName
+
+          productTotals[productKey] = (productTotals[productKey] || 0) + (item.quantity || 0)
+          globalProductTotals[productKey] = (globalProductTotals[productKey] || 0) + (item.quantity || 0)
         })
       }
     })
