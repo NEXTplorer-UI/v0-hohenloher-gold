@@ -440,7 +440,16 @@ function getFieldValue(order: any, field: string): any {
     case "created_at":
       return new Date(order.created_at).toLocaleDateString("de-DE")
     case "products":
-      return order.order_items?.map((item: any) => `${item.quantity}x ${item.product_name}`).join(", ") || ""
+      return (
+        order.order_items
+          ?.map((item: any) => {
+            const productSize = item.product_size || ""
+            const productName = item.product_name
+            const displayName = productSize ? `${productName} (${productSize})` : productName
+            return `${item.quantity}x ${displayName}`
+          })
+          .join(", ") || ""
+      )
     case "product_count":
       return order.order_items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0
     case "notes":
