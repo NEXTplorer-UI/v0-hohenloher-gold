@@ -141,15 +141,16 @@ function parseAndAccumulateProducts(row: any, totals: Record<string, number>) {
   const text = row.products
   if (!text || typeof text !== "string") return
 
-  // Aktuell trennst du in der UI ja mit Kommas -> wiederverwenden
+  // Split by comma and trim each part
   const parts = text
     .split(",")
     .map((p) => p.trim())
     .filter(Boolean)
 
   for (const part of parts) {
-    // Versuche: "3x Orange", "3× Orange", "3 Orange"
-    const match = part.match(/^(\d+)\s*[x×]?\s*(.+)$/i)
+    // Match patterns like "3x Orange", "3× Orange (1kg)", "3 Orange Bio (500g)"
+    // The regex now properly captures everything after the quantity, including parentheses
+    const match = part.match(/^(\d+)\s*[x×]?\s*(.+?)$/i)
     let qty = 1
     let name = part
 
