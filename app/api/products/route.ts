@@ -56,6 +56,8 @@ export async function GET() {
   try {
     const supabase = getAdminClient()
 
+    console.log("[v0] === PRODUCTS API CALLED ===")
+
     const { data: products, error: productsError } = await supabase
       .from("products")
       .select(
@@ -88,9 +90,14 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to load products" }, { status: 500 })
     }
 
+    console.log("[v0] Total products fetched from DB:", products?.length || 0)
+    console.log("[v0] All product names:", products?.map((p: any) => p.name).join(", "))
+
     const { data: availabilityData, error: availabilityError } = await supabase
       .from("product_availability")
       .select("product_id, stock_status, piece_stock, gram_stock")
+
+    console.log("[v0] Total availability records:", availabilityData?.length || 0)
 
     // Create map for quick lookup
     const availabilityMap = new Map<number, any>()
@@ -131,11 +138,14 @@ export async function GET() {
       const availability = availabilityMap.get(product.id)
       const stockStatus = availability?.stock_status || "out_of_stock"
 
-      if (product.name.includes("Maulbeeren") || product.name.includes("1L") || product.name.includes("1 L")) {
+      if (product.name.toLowerCase().includes("maulbeer") || product.name.toLowerCase().includes("olivenöl")) {
+        console.log("[v0] ========================================")
         console.log("[v0] DEBUG Product:", product.name)
+        console.log("[v0] - product.id:", product.id)
         console.log("[v0] - availability from map:", availability)
         console.log("[v0] - stock_status:", stockStatus)
         console.log("[v0] - category:", product.categories?.name)
+        console.log("[v0] - is_active:", product.is_active)
         console.log("[v0] - attributes:", product.attributes)
       }
 
@@ -224,11 +234,13 @@ export async function GET() {
         }
       }
 
-      if (product.name.includes("Maulbeeren") || product.name.includes("1L") || product.name.includes("1 L")) {
+      if (product.name.toLowerCase().includes("maulbeer") || product.name.toLowerCase().includes("olivenöl")) {
         console.log("[v0] - FINAL inStock:", inStock)
         console.log("[v0] - FINAL availabilityMessage:", availabilityMessage)
         console.log("[v0] - currentStock:", currentStock)
-        console.log("[v0] ---")
+        console.log("[v0] - isSouthernFruit:", isSouthernFruit)
+        console.log("[v0] - requiresDeliverySchedule:", requiresDeliverySchedule)
+        console.log("[v0] ========================================")
       }
 
       return {
@@ -257,6 +269,9 @@ export async function GET() {
         attributes: product.attributes,
       }
     })
+
+    console.log("[v0] Total enriched products:", enrichedProducts.length)
+    console.log("[v0] === PRODUCTS API COMPLETE ===")
 
     return NextResponse.json(enrichedProducts, {
       headers: {
