@@ -25,6 +25,8 @@ const AVAILABLE_COLUMNS_DEFS: Record<string, { type: string }> = {
   internal_status: { type: "string" },
   payment_method: { type: "string" },
   products: { type: "string" },
+  products_südfrüchte: { type: "string" },
+  products_other: { type: "string" },
   product_count: { type: "number" },
   total: { type: "number" },
   created_at: { type: "date" },
@@ -443,6 +445,30 @@ function getFieldValue(order: any, field: string): any {
       return (
         order.order_items
           ?.map((item: any) => {
+            const productSize = item.product_size || ""
+            const productName = item.product_name
+            const displayName = productSize ? `${productName} (${productSize})` : productName
+            return `${item.quantity}x ${displayName}`
+          })
+          .join(", ") || ""
+      )
+    case "products_südfrüchte":
+      return (
+        order.order_items
+          ?.filter((item: any) => item.product_category === "Südfrüchte")
+          .map((item: any) => {
+            const productSize = item.product_size || ""
+            const productName = item.product_name
+            const displayName = productSize ? `${productName} (${productSize})` : productName
+            return `${item.quantity}x ${displayName}`
+          })
+          .join(", ") || ""
+      )
+    case "products_other":
+      return (
+        order.order_items
+          ?.filter((item: any) => item.product_category !== "Südfrüchte")
+          .map((item: any) => {
             const productSize = item.product_size || ""
             const productName = item.product_name
             const displayName = productSize ? `${productName} (${productSize})` : productName

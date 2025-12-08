@@ -49,17 +49,18 @@ const AVAILABLE_COLUMNS = [
   { id: "pickup_location_normalized", label: "Abholort", type: "string" },
   { id: "distribution_person", label: "Verteilperson", type: "string" },
   { id: "status", label: "Status", type: "string" },
-  { id: "internal_status", label: "Interner Status", type: "string" }, // Added internal_status
+  { id: "internal_status", label: "Interner Status", type: "string" },
   { id: "payment_method", label: "Zahlungsart", type: "string" },
   { id: "products", label: "Produkte", type: "string" },
+  { id: "products_südfrüchte", label: "Südfrüchte", type: "string" },
+  { id: "products_other", label: "Restliche Produkte", type: "string" },
   { id: "product_count", label: "Produktanzahl", type: "number" },
   { id: "total", label: "Gesamtbetrag", type: "number" },
   { id: "created_at", label: "Datum", type: "date" },
   { id: "notes", label: "Notizen", type: "string" },
-  { id: "admin_notes", label: "Admin-Notizen", type: "string" }, // Added admin_notes
-  { id: "special_requests", label: "Sonderwünsche", type: "string" }, // Added special_requests
+  { id: "admin_notes", label: "Admin-Notizen", type: "string" },
+  { id: "special_requests", label: "Sonderwünsche", type: "string" },
   { id: "product_category", label: "Warengruppe", type: "string" },
-  // NEW COLUMNS FOR MONTH AND DELIVERY METHOD
   { id: "pickup_month", label: "Abholmonat", type: "string" },
   { id: "order_month", label: "Bestellmonat", type: "string" },
   { id: "delivery_method", label: "Lieferart", type: "string" },
@@ -807,6 +808,11 @@ export default function ReportBuilder() {
             }
           }
 
+          // Display values for new product columns
+          if (col.id === "products_südfrüchte" || col.id === "products_other") {
+            return value || "" // These columns will now display the specific product types
+          }
+
           // Default display for string types
           return value || ""
         },
@@ -850,6 +856,9 @@ export default function ReportBuilder() {
     { value: "pickup_month", label: "Abholmonat" },
     { value: "order_month", label: "Bestellmonat" },
     { value: "delivery_method", label: "Lieferart (Abholung/Lieferung)" },
+    // Add new product columns to group by options if applicable
+    { value: "products_südfrüchte", label: "Südfrüchte" },
+    { value: "products_other", label: "Restliche Produkte" },
   ]
 
   return (
