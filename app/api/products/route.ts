@@ -131,6 +131,14 @@ export async function GET() {
       const availability = availabilityMap.get(product.id)
       const stockStatus = availability?.stock_status || "out_of_stock"
 
+      if (product.name.includes("Maulbeeren") || product.name.includes("1L") || product.name.includes("1 L")) {
+        console.log("[v0] DEBUG Product:", product.name)
+        console.log("[v0] - availability from map:", availability)
+        console.log("[v0] - stock_status:", stockStatus)
+        console.log("[v0] - category:", product.categories?.name)
+        console.log("[v0] - attributes:", product.attributes)
+      }
+
       const currentStock = product.inventory_raw_id ? availability?.gram_stock || 0 : availability?.piece_stock || 0
 
       const category = product.categories?.name || "Unbekannt"
@@ -214,6 +222,13 @@ export async function GET() {
           availabilityMessage = "Nicht auf Lager"
           inStock = false
         }
+      }
+
+      if (product.name.includes("Maulbeeren") || product.name.includes("1L") || product.name.includes("1 L")) {
+        console.log("[v0] - FINAL inStock:", inStock)
+        console.log("[v0] - FINAL availabilityMessage:", availabilityMessage)
+        console.log("[v0] - currentStock:", currentStock)
+        console.log("[v0] ---")
       }
 
       return {
