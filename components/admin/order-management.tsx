@@ -476,9 +476,9 @@ const OrderItem = memo(
                   {getPaymentMethodDisplay(order.payment_method)} • {getPaymentStatusDisplay(order.payment_status)}
                 </div>
 
-                {/* CHANGE: Fixed to use order.notes instead of order.customer.notes */}
-                {(order.notes || order.customer?.special_requests) && (
-                  <div className="mt-3 border-l-4 border-l-gold bg-gold/10 p-3 rounded-r">
+                {/* CHANGE: Moved admin notes into the yellow info box with red background */}
+                {(order.notes || order.customer?.special_requests || order.admin_notes) && (
+                  <div className="mt-3 border-l-4 border-l-gold bg-gold/10 p-3 rounded-r space-y-2">
                     <div className="flex items-start gap-2">
                       <Info className="h-5 w-5 text-gold mt-0.5 flex-shrink-0" />
                       <div className="flex-1">
@@ -495,6 +495,18 @@ const OrderItem = memo(
                         )}
                       </div>
                     </div>
+                    {/* CHANGE: Add admin notes with red background */}
+                    {order.admin_notes && (
+                      <div className="border-l-4 border-l-red-500 bg-red-50 p-2 rounded-r">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <span className="font-semibold text-red-600">ADMIN-NOTIZ:</span>
+                            <p className="text-sm text-foreground/80 mt-1">{order.admin_notes}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -550,42 +562,7 @@ const OrderItem = memo(
                   )}
                 </div>
 
-                {/* Admin Notes section */}
-                <div className="mt-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowAdminNotes(!showAdminNotes)}
-                    className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    {showAdminNotes ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-                    Admin-Notizen {order.admin_notes ? "✓" : ""}
-                  </Button>
-                  {showAdminNotes && (
-                    <div className="mt-2 pl-4 border-l-2 border-muted space-y-2">
-                      <textarea
-                        value={adminNotes}
-                        onChange={(e) => setAdminNotes(e.target.value)}
-                        placeholder="Admin-Notizen hier eingeben..."
-                        className="w-full p-2 text-sm border rounded min-h-[80px]"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={handleSaveAdminNotes}
-                        disabled={isSavingNotes || adminNotes === (order.admin_notes || "")}
-                      >
-                        {isSavingNotes ? (
-                          <>
-                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                            Speichert...
-                          </>
-                        ) : (
-                          "Speichern"
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                {/* Admin Notes section - REMOVED */}
               </div>
             </div>
             <div className="flex flex-col items-end gap-2">
