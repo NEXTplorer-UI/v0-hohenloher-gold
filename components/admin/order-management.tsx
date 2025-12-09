@@ -1406,72 +1406,119 @@ function OrderManagement() {
 
   const handleStatusChange = useCallback(
     async (orderId: string, status?: string, paymentStatus?: string, internalStatus?: string | null) => {
+      console.log("[v0] handleStatusChange called:", {
+        orderId,
+        status,
+        paymentStatus,
+        internalStatus,
+      })
+      // </CHANGE>
+
       try {
         updateOrdersCache((prevData) => {
-          const prevOrders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
-          const updatedOrders = prevOrders.map((order) => {
+          // Use prevOrders directly and handle both array and object types for prevData
+          const orders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
+
+          console.log("[v0] Optimistic update - before:", {
+            orderId,
+            currentInternalStatus: orders.find((o) => o.id === orderId)?.internal_status,
+            newInternalStatus: internalStatus,
+          })
+          // </CHANGE>
+
+          const updated = orders.map((order) => {
             if (order.id === orderId) {
               return {
                 ...order,
                 ...(status && { status }),
                 ...(paymentStatus && { payment_status: paymentStatus }),
-                ...(internalStatus !== undefined && { internal_status: internalStatus }), // Update internal_status
+                ...(internalStatus !== undefined && { internal_status: internalStatus }),
               }
             }
             return order
           })
-          return Array.isArray(prevData) ? updatedOrders : { orders: updatedOrders, total: prevData?.total ?? 0 }
-        })
+
+          console.log("[v0] Optimistic update - after:", {
+            orderId,
+            newInternalStatus: updated.find((o) => o.id === orderId)?.internal_status,
+          })
+          // </CHANGE>
+
+          // Return the correct structure based on prevData type
+          return Array.isArray(prevData) ? updated : { ...prevData, orders: updated }
+        }, false)
 
         const response = await fetch("/api/admin/update-order-status", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            orderId,
-            status,
-            paymentStatus,
-            internalStatus, // Send internalStatus to backend
-          }),
+          body: JSON.stringify({ orderId, status, paymentStatus, internalStatus }),
         })
 
-        if (response.ok) {
-          const { order: updatedOrder } = await response.json()
-
-          updateOrdersCache((prevData) => {
-            const prevOrders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
-            const updatedOrders = prevOrders.map((order) => {
-              if (order.id === orderId && updatedOrder) {
-                return {
-                  ...order,
-                  status: updatedOrder.status,
-                  payment_status: updatedOrder.payment_status,
-                  internal_status: updatedOrder.internal_status, // Update internal_status from backend response
-                }
-              }
-              return order
-            })
-            return Array.isArray(prevData) ? updatedOrders : { orders: updatedOrders, total: prevData?.total ?? 0 }
-          })
-
-          toast({
-            title: "Status aktualisiert",
-            description: "Der Bestellstatus wurde erfolgreich geändert",
-          })
-        } else {
+        if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
           // Revert optimistic update if failed
           await fetchOrders()
 
           toast({
             title: "Fehler",
-            description: errorData.error || "Status konnte nicht geändert werden",
+            description: errorData.error || "Status konnte nicht aktualisiert werden",
             variant: "destructive",
           })
+          return // Exit early if API call failed
         }
+
+        const result = await response.json()
+
+        console.log("[v0] API response:", {
+          orderId,
+          returnedInternalStatus: result.order?.internal_status,
+          fullOrder: result.order,
+        })
+        // </CHANGE>
+
+        const updatedOrder = result.order
+
+        updateOrdersCache((prevData) => {
+          // Use prevOrders directly and handle both array and object types for prevData
+          const orders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
+
+          console.log("[v0] Applying API response - before:", {
+            orderId,
+            currentInternalStatus: orders.find((o) => o.id === orderId)?.internal_status,
+            apiInternalStatus: updatedOrder?.internal_status,
+          })
+          // </CHANGE>
+
+          const updated = orders.map((order) => {
+            if (order.id === orderId && updatedOrder) {
+              return {
+                ...order,
+                status: updatedOrder.status,
+                payment_status: updatedOrder.payment_status,
+                internal_status: updatedOrder.internal_status,
+              }
+            }
+            return order
+          })
+
+          console.log("[v0] Applying API response - after:", {
+            orderId,
+            finalInternalStatus: updated.find((o) => o.id === orderId)?.internal_status,
+          })
+          // </CHANGE>
+
+          // Return the correct structure based on prevData type
+          return Array.isArray(prevData) ? updated : { ...prevData, orders: updated }
+        }, false)
+
+        toast({
+          title: "Status aktualisiert",
+          description: "Der Bestellstatus wurde erfolgreich aktualisiert",
+        })
       } catch (error) {
-        console.error(`[v0] Error updating order status:`, error)
+        console.error("[v0] Error updating order status:", error)
         // Revert optimistic update if failed
         await fetchOrders()
 
@@ -1482,7 +1529,7 @@ function OrderManagement() {
         })
       }
     },
-    [updateOrdersCache, fetchOrders, toast, orders],
+    [toast, updateOrdersCache, fetchOrders], // Ensure fetchOrders is a dependency if used for revert
   )
 
   const handleAdminNotesChange = useCallback(
