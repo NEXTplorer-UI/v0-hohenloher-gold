@@ -1037,47 +1037,47 @@ function OrderManagement() {
     console.log("[v0] manualOrderForm:", manualOrderForm)
     console.log("[v0] isCreatingOrder:", isCreatingOrder)
 
+    if (!manualOrderForm.customerId) {
+      toast({
+        title: "Fehler",
+        description: "Bitte wählen Sie einen Kunden aus",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (manualOrderForm.items.length === 0 || !manualOrderForm.items[0].productId) {
+      toast({
+        title: "Fehler",
+        description: "Bitte fügen Sie mindestens ein Produkt hinzu",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (manualOrderForm.deliveryMethod === "pickup" && !manualOrderForm.pickupLocationId) {
+      toast({
+        title: "Fehler",
+        description: "Bitte wählen Sie einen Abholort aus",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const customer =
+      customers.find((c) => c.id === manualOrderForm.customerId) ||
+      customerSearchResults.find((c) => c.id === manualOrderForm.customerId)
+    if (!customer) {
+      toast({
+        title: "Fehler",
+        description: "Kunde nicht gefunden",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setIsCreatingOrder(true)
-
-      if (!manualOrderForm.customerId) {
-        toast({
-          title: "Fehler",
-          description: "Bitte wählen Sie einen Kunden aus",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (manualOrderForm.items.length === 0 || !manualOrderForm.items[0].productId) {
-        toast({
-          title: "Fehler",
-          description: "Bitte fügen Sie mindestens ein Produkt hinzu",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (manualOrderForm.deliveryMethod === "pickup" && !manualOrderForm.pickupLocationId) {
-        toast({
-          title: "Fehler",
-          description: "Bitte wählen Sie einen Abholort aus",
-          variant: "destructive",
-        })
-        return
-      }
-
-      const customer =
-        customers.find((c) => c.id === manualOrderForm.customerId) ||
-        customerSearchResults.find((c) => c.id === manualOrderForm.customerId)
-      if (!customer) {
-        toast({
-          title: "Fehler",
-          description: "Kunde nicht gefunden",
-          variant: "destructive",
-        })
-        return
-      }
 
       const orderItems = manualOrderForm.items
         .filter((item) => item.productId)
