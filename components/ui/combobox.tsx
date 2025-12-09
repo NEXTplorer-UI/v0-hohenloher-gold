@@ -75,7 +75,7 @@ export function Combobox({
         console.log("[v0] Popover onOpenChange called:", newOpen)
         setOpen(newOpen)
       }}
-      modal={false}
+      modal={true}
     >
       <PopoverTrigger asChild>
         <Button
@@ -96,6 +96,7 @@ export function Combobox({
         className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999]"
         align="start"
         sideOffset={8}
+        portal={true}
         onInteractOutside={(e) => {
           const target = e.target as HTMLElement
           if (target.closest('[data-slot="popover-content"]')) {

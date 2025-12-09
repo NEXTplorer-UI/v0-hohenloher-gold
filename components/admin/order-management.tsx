@@ -1033,6 +1033,10 @@ function OrderManagement() {
   }, [showManualOrderForm, customers.length, fetchFormData])
 
   const handleCreateManualOrder = useCallback(async () => {
+    console.log("[v0] handleCreateManualOrder called")
+    console.log("[v0] manualOrderForm:", manualOrderForm)
+    console.log("[v0] isCreatingOrder:", isCreatingOrder)
+
     try {
       setIsCreatingOrder(true)
 
@@ -2169,7 +2173,13 @@ function OrderManagement() {
                     >
                       Abbrechen
                     </Button>
-                    <Button onClick={handleCreateManualOrder} disabled={isCreatingOrder}>
+                    <Button
+                      onClick={(e) => {
+                        console.log("[v0] Create order button clicked")
+                        handleCreateManualOrder()
+                      }}
+                      disabled={isCreatingOrder}
+                    >
                       {isCreatingOrder ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
