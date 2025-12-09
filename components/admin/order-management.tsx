@@ -144,9 +144,9 @@ const OrderItem = memo(
     onNotify,
     onStatusChange,
     onAdminNotesChange,
-    onSyncStatus, // Added onSyncStatus prop
-    onCancelInvoice, // Added onCancelInvoice prop
-    onMarkAsPaid, // Added onMarkAsPaid prop
+    onSyncStatus,
+    onCancelInvoice,
+    onMarkAsPaid,
     isSelected,
     onSelectionChange,
   }: {
@@ -172,6 +172,10 @@ const OrderItem = memo(
     const [showCustomerDetails, setShowCustomerDetails] = useState(false)
     const [customerDetails, setCustomerDetails] = useState<CustomerDetails | null>(null)
     const [loadingCustomerDetails, setLoadingCustomerDetails] = useState(false)
+
+    useEffect(() => {
+      setAdminNotes(order.admin_notes || "")
+    }, [order.admin_notes])
 
     // State and handler for notifications
     const [selectedNotification, setSelectedNotification] = useState<EmailTemplateId | "">("")
@@ -545,7 +549,8 @@ const OrderItem = memo(
                     </div>
                   )}
                 </div>
-                {order.notes && !isBulkOrder && <div>Notiz: {order.notes}</div>}
+
+                {/* Admin Notes section */}
                 <div className="mt-2">
                   <Button
                     variant="ghost"
@@ -554,23 +559,29 @@ const OrderItem = memo(
                     className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
                   >
                     {showAdminNotes ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-                    Admin-Notizen {order.admin_notes ? "(vorhanden)" : "(leer)"}
+                    Admin-Notizen {order.admin_notes ? "✓" : ""}
                   </Button>
                   {showAdminNotes && (
-                    <div className="mt-2 space-y-2">
+                    <div className="mt-2 pl-4 border-l-2 border-muted space-y-2">
                       <textarea
                         value={adminNotes}
                         onChange={(e) => setAdminNotes(e.target.value)}
-                        placeholder="Interne Notizen zur Bestellung (nur für Admins sichtbar)..."
-                        className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y"
+                        placeholder="Admin-Notizen hier eingeben..."
+                        className="w-full p-2 text-sm border rounded min-h-[80px]"
                       />
                       <Button
                         size="sm"
                         onClick={handleSaveAdminNotes}
-                        disabled={isSavingNotes || adminNotes === order.admin_notes}
+                        disabled={isSavingNotes || adminNotes === (order.admin_notes || "")}
                       >
-                        {isSavingNotes ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                        Notizen speichern
+                        {isSavingNotes ? (
+                          <>
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            Speichert...
+                          </>
+                        ) : (
+                          "Speichern"
+                        )}
                       </Button>
                     </div>
                   )}
