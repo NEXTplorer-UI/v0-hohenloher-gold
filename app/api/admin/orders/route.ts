@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
       payment_method: row.payment_method,
       payment_status: row.payment_status,
       notes: row.notes,
+      admin_notes: row.admin_notes || null,
       created_at: row.created_at,
       qr_code_url: row.qr_code_url,
       hellocash_invoice_id: row.hellocash_invoice_id,
