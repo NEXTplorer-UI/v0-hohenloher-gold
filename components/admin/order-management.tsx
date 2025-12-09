@@ -477,7 +477,7 @@ const OrderItem = memo(
                   {getPaymentMethodDisplay(order.payment_method)} • {getPaymentStatusDisplay(order.payment_status)}
                 </div>
 
-                {/* CHANGE: Moved admin notes into the yellow info box with red background */}
+                {/* CHANGE: Admin notes display only in yellow box, button moved outside */}
                 {(order.notes || order.customer?.special_requests || order.admin_notes) && (
                   <div className="mt-3 border-l-4 border-l-gold bg-gold/10 p-3 rounded-r space-y-2">
                     <div className="flex items-start gap-2">
@@ -496,7 +496,7 @@ const OrderItem = memo(
                         )}
                       </div>
                     </div>
-                    {/* CHANGE: Add admin notes with red background */}
+                    {/* CHANGE: Admin notes with red background, only display text here */}
                     {order.admin_notes && (
                       <div className="border-l-4 border-l-red-500 bg-red-50 p-2 rounded-r">
                         <div className="flex items-start gap-2">
@@ -505,28 +505,33 @@ const OrderItem = memo(
                             <span className="font-semibold text-red-600">ADMIN-NOTIZ:</span>
                             <p className="text-sm text-foreground/80 mt-1">{order.admin_notes}</p>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setShowAdminNotes(!showAdminNotes)}
-                            className="h-8"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
                         </div>
-                      </div>
-                    )}
-                    {/* CHANGE: Add button to add admin notes if none exist */}
-                    {!order.admin_notes && (
-                      <div className="mt-2">
-                        <Button variant="outline" size="sm" onClick={() => setShowAdminNotes(true)} className="h-8">
-                          <Plus className="h-4 w-4 mr-1" />
-                          Admin-Notiz hinzufügen
-                        </Button>
                       </div>
                     )}
                   </div>
                 )}
+
+                {/* CHANGE: Admin notes button always visible, outside the container */}
+                <div className="mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAdminNotes(!showAdminNotes)}
+                    className="h-8"
+                  >
+                    {order.admin_notes ? (
+                      <>
+                        <Edit className="h-4 w-4 mr-1" />
+                        Admin-Notiz bearbeiten
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Admin-Notiz hinzufügen
+                      </>
+                    )}
+                  </Button>
+                </div>
 
                 {isBulkOrder && (
                   <div className="mt-2">
