@@ -1,5 +1,3 @@
-console.log("[v0] DEBUG: route.ts LOADED")
-
 import { getAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 
@@ -26,7 +24,7 @@ async function getNextDeliverySchedule(supabase: any) {
 
     return availableSchedule || null
   } catch (error) {
-    console.log("[v0] Could not fetch delivery schedules:", error)
+    console.error("Could not fetch delivery schedules:", error)
     return null
   }
 }
@@ -47,7 +45,7 @@ async function getNextDeliveryScheduleRegardlessOfDeadline(supabase: any) {
 
     return futureSchedules[0]
   } catch (error) {
-    console.log("[v0] Could not fetch next delivery schedule:", error)
+    console.error("Could not fetch next delivery schedule:", error)
     return null
   }
 }
@@ -55,8 +53,6 @@ async function getNextDeliveryScheduleRegardlessOfDeadline(supabase: any) {
 export async function GET() {
   try {
     const supabase = getAdminClient()
-
-    console.log("[v0] === PRODUCTS API CALLED ===")
 
     const { data: products, error: productsError } = await supabase
       .from("products")
@@ -86,18 +82,13 @@ export async function GET() {
       .eq("is_active", true)
 
     if (productsError) {
-      console.error("[v0] Error loading products:", productsError.message)
+      console.error("Error loading products:", productsError.message)
       return NextResponse.json({ error: "Failed to load products" }, { status: 500 })
     }
-
-    console.log("[v0] Total products fetched from DB:", products?.length || 0)
-    console.log("[v0] All product names:", products?.map((p: any) => p.name).join(", "))
 
     const { data: availabilityData, error: availabilityError } = await supabase
       .from("product_availability")
       .select("product_id, stock_status, piece_stock, gram_stock")
-
-    console.log("[v0] Total availability records:", availabilityData?.length || 0)
 
     // Create map for quick lookup
     const availabilityMap = new Map<number, any>()
@@ -137,17 +128,6 @@ export async function GET() {
     const enrichedProducts = (products || []).map((product: any) => {
       const availability = availabilityMap.get(product.id)
       const stockStatus = availability?.stock_status || "out_of_stock"
-
-      if (product.name.toLowerCase().includes("maulbeer") || product.name.toLowerCase().includes("olivenöl")) {
-        console.log("[v0] ========================================")
-        console.log("[v0] DEBUG Product:", product.name)
-        console.log("[v0] - product.id:", product.id)
-        console.log("[v0] - availability from map:", availability)
-        console.log("[v0] - stock_status:", stockStatus)
-        console.log("[v0] - category:", product.categories?.name)
-        console.log("[v0] - is_active:", product.is_active)
-        console.log("[v0] - attributes:", product.attributes)
-      }
 
       const currentStock = product.inventory_raw_id ? availability?.gram_stock || 0 : availability?.piece_stock || 0
 
@@ -234,15 +214,6 @@ export async function GET() {
         }
       }
 
-      if (product.name.toLowerCase().includes("maulbeer") || product.name.toLowerCase().includes("olivenöl")) {
-        console.log("[v0] - FINAL inStock:", inStock)
-        console.log("[v0] - FINAL availabilityMessage:", availabilityMessage)
-        console.log("[v0] - currentStock:", currentStock)
-        console.log("[v0] - isSouthernFruit:", isSouthernFruit)
-        console.log("[v0] - requiresDeliverySchedule:", requiresDeliverySchedule)
-        console.log("[v0] ========================================")
-      }
-
       return {
         id: product.id,
         name: product.name,
@@ -270,9 +241,6 @@ export async function GET() {
       }
     })
 
-    console.log("[v0] Total enriched products:", enrichedProducts.length)
-    console.log("[v0] === PRODUCTS API COMPLETE ===")
-
     return NextResponse.json(enrichedProducts, {
       headers: {
         "Cache-Control": "public, max-age=60, must-revalidate",
@@ -280,7 +248,7 @@ export async function GET() {
       },
     })
   } catch (error) {
-    console.error("[v0] Error in products API:", error)
+    console.error("Error in products API:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
