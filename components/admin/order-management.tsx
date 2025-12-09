@@ -1439,9 +1439,9 @@ function OrderManagement() {
   const handleAdminNotesChange = useCallback(
     async (orderId: string, adminNotes: string) => {
       try {
-        // Optimistic update
-        updateOrdersCache((prevOrders) =>
-          prevOrders?.map((order) => {
+        updateOrdersCache((prevData) => {
+          const prevOrders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
+          const updatedOrders = prevOrders.map((order) => {
             if (order.id === orderId) {
               return {
                 ...order,
@@ -1449,8 +1449,9 @@ function OrderManagement() {
               }
             }
             return order
-          }),
-        )
+          })
+          return Array.isArray(prevData) ? updatedOrders : { orders: updatedOrders, total: prevData?.total ?? 0 }
+        })
 
         const response = await fetch("/api/admin/update-order-notes", {
           method: "POST",
@@ -1464,9 +1465,9 @@ function OrderManagement() {
         })
 
         if (response.ok) {
-          // Update cache with actual data from backend
-          updateOrdersCache((prevOrders) =>
-            prevOrders?.map((order) => {
+          updateOrdersCache((prevData) => {
+            const prevOrders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
+            const updatedOrders = prevOrders.map((order) => {
               if (order.id === orderId) {
                 return {
                   ...order,
@@ -1474,8 +1475,9 @@ function OrderManagement() {
                 }
               }
               return order
-            }),
-          )
+            })
+            return Array.isArray(prevData) ? updatedOrders : { orders: updatedOrders, total: prevData?.total ?? 0 }
+          })
 
           toast({
             title: "Notizen gespeichert",
