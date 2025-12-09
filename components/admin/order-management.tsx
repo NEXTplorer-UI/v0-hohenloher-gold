@@ -29,6 +29,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Info,
+  Edit,
 } from "lucide-react"
 import { mapDBToUIStatus } from "@/lib/order-status-mapping"
 import type { EmailTemplateId } from "@/lib/email/build"
@@ -504,7 +505,24 @@ const OrderItem = memo(
                             <span className="font-semibold text-red-600">ADMIN-NOTIZ:</span>
                             <p className="text-sm text-foreground/80 mt-1">{order.admin_notes}</p>
                           </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowAdminNotes(!showAdminNotes)}
+                            className="h-8"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
                         </div>
+                      </div>
+                    )}
+                    {/* CHANGE: Add button to add admin notes if none exist */}
+                    {!order.admin_notes && (
+                      <div className="mt-2">
+                        <Button variant="outline" size="sm" onClick={() => setShowAdminNotes(true)} className="h-8">
+                          <Plus className="h-4 w-4 mr-1" />
+                          Admin-Notiz hinzufügen
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -783,6 +801,44 @@ const OrderItem = memo(
             </div>
           </div>
         </div>
+
+        {showAdminNotes && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md mx-4">
+              <CardHeader>
+                <CardTitle>Admin-Notiz bearbeiten</CardTitle>
+                <CardDescription>Fügen Sie eine Notiz zur Bestellung {order.order_number} hinzu.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="adminNotesInput">Notiz</Label>
+                  <textarea
+                    id="adminNotesInput"
+                    value={adminNotes}
+                    onChange={(e) => setAdminNotes(e.target.value)}
+                    placeholder="Geben Sie Ihre Notiz hier ein..."
+                    className="w-full min-h-[100px] p-2 text-sm border rounded-md resize-y"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setShowAdminNotes(false)} disabled={isSavingNotes}>
+                    Abbrechen
+                  </Button>
+                  <Button onClick={handleSaveAdminNotes} disabled={isSavingNotes}>
+                    {isSavingNotes ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Speichert...
+                      </>
+                    ) : (
+                      "Speichern"
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {showCancelModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
