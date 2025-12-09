@@ -58,9 +58,9 @@ const nextConfig = {
     ].join("; ")
 
     const cardVerificationCSP = [
-      "frame-src https://*.mycardplace.com https://*.3dsecure.io https://*.mastercard.com https://*.visa.com https://*.ppipe.net https://oppwa.com https://*.oppwa.com",
-      "connect-src https://*.mycardplace.com https://*.3dsecure.io https://*.mastercard.com https://*.visa.com https://*.ppipe.net https://oppwa.com https://*.oppwa.com",
-      "script-src https://*.mycardplace.com https://*.3dsecure.io https://*.ppipe.net https://oppwa.com https://*.oppwa.com",
+      "frame-src https://*.mycardplace.com https://*.3dsecure.io https://*.mastercard.com https://*.visa.com https://*.ppipe.net https://oppwa.com https://*.oppwa.com https://*.monext.fr",
+      "connect-src https://*.mycardplace.com https://*.3dsecure.io https://*.mastercard.com https://*.visa.com https://*.ppipe.net https://oppwa.com https://*.oppwa.com https://*.monext.fr",
+      "script-src https://*.mycardplace.com https://*.3dsecure.io https://*.ppipe.net https://oppwa.com https://*.oppwa.com https://*.monext.fr",
     ].join("; ")
 
     let finalCSP = mergeCsp(baseCSP, sumupCSP)
