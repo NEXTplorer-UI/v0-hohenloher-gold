@@ -1025,35 +1025,11 @@ function ProductCard({
 
   const availability = getProductStatus(product, cartQuantity)
 
-  if (product.name.toLowerCase().includes("maulbeer") || product.name.toLowerCase().includes("olivenöl")) {
-    console.log("[v0] CLIENT ProductCard Debug:", {
-      name: product.name,
-      product_in_stock: product.in_stock,
-      availability_status: availability.status,
-      availability_label: availability.label,
-      current_stock: product.current_stock,
-      category: product.category,
-      is_seasonal: product.is_seasonal,
-      availability_message: product.availability_message,
-    })
-  }
-
   const handleQuickAddToCart = () => {
     addToCart(product, 1)
   }
 
   const canAddToCart = product.in_stock && availability.status !== "out-of-stock"
-
-  if (product.name.toLowerCase().includes("maulbeer") || product.name.toLowerCase().includes("olivenöl")) {
-    console.log("[v0] CLIENT canAddToCart:", {
-      name: product.name,
-      canAddToCart,
-      product_in_stock: product.in_stock,
-      availability_status: availability.status,
-    })
-  }
-
-  // Removed redundant getCacheBustedImageUrl from here, as it's now declared outside.
 
   const imageUrl = product.image_url || product.images?.[0] || "/images/banana-chips-placeholder.jpg"
 

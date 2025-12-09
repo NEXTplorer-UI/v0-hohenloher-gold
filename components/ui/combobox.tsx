@@ -96,7 +96,6 @@ export function Combobox({
         className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999]"
         align="start"
         sideOffset={8}
-        portal={true}
         onInteractOutside={(e) => {
           const target = e.target as HTMLElement
           if (target.closest('[data-slot="popover-content"]')) {
