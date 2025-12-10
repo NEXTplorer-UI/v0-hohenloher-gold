@@ -61,7 +61,7 @@ export const emailCopy = {
 
   // Newsletter
   newsletter: {
-    unsubscribe: "Newsletter abbestellen",
+    unsubscribe: "E-Mail abbestellen",
   },
 
   // Newsletter-Bestätigung

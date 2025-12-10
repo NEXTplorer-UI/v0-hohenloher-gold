@@ -181,19 +181,33 @@ export function RawStockManagement({ cachedData, onDataChange }: RawStockManagem
       else if (unit === "ml") grams = amount
       else if (unit === "L") grams = amount * 1000
 
+      console.log("[v0] RAW STOCK OPERATION START:", {
+        rawStockId,
+        type,
+        inputAmount: amountStr,
+        inputUnit: unit,
+        calculatedGrams: grams,
+        finalGramsToSend: type === "in" ? grams : -grams,
+        reason,
+      })
+
       setPendingItems((prev) => new Set(prev).add(rawStockId))
 
       try {
+        const payload = {
+          inventoryRawId: rawStockId,
+          qtyGrams: type === "in" ? grams : -grams,
+          reason: reason,
+        }
+
+        console.log("[v0] Sending to API:", payload)
+
         const response = await fetch("/api/admin/inventory/raw-stock/movement", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            inventoryRawId: rawStockId,
-            qtyGrams: type === "in" ? grams : -grams,
-            reason: reason,
-          }),
+          body: JSON.stringify(payload),
         })
 
         if (!response.ok) {
@@ -202,6 +216,9 @@ export function RawStockManagement({ cachedData, onDataChange }: RawStockManagem
         }
 
         const result = await response.json()
+
+        console.log("[v0] API Response:", result)
+
         if (!result.success) {
           throw new Error(result.error || "Failed to create movement")
         }
@@ -219,14 +236,22 @@ export function RawStockManagement({ cachedData, onDataChange }: RawStockManagem
           reason: "",
         })
 
+        console.log("[v0] Updating local state with newStock:", result.newStock)
+
         setRawStocks((prevStocks) =>
           prevStocks.map((stock) => (stock.id === rawStockId ? { ...stock, stock_grams: result.newStock } : stock)),
         )
+
+        console.log("[v0] Fetching fresh data from server")
 
         const refreshResponse = await fetch("/api/admin/inventory/raw-stock")
         if (refreshResponse.ok) {
           const refreshData = await refreshResponse.json()
           const updatedStocks = refreshData.rawStocks || []
+
+          const refreshedStock = updatedStocks.find((s: RawStock) => s.id === rawStockId)
+          console.log("[v0] Refreshed stock value:", refreshedStock?.stock_grams)
+
           setRawStocks(updatedStocks)
         }
       } catch (error: any) {

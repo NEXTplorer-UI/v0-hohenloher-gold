@@ -29,6 +29,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Info,
+  Edit,
 } from "lucide-react"
 import { mapDBToUIStatus } from "@/lib/order-status-mapping"
 import type { EmailTemplateId } from "@/lib/email/build"
@@ -144,9 +145,9 @@ const OrderItem = memo(
     onNotify,
     onStatusChange,
     onAdminNotesChange,
-    onSyncStatus, // Added onSyncStatus prop
-    onCancelInvoice, // Added onCancelInvoice prop
-    onMarkAsPaid, // Added onMarkAsPaid prop
+    onSyncStatus,
+    onCancelInvoice,
+    onMarkAsPaid,
     isSelected,
     onSelectionChange,
   }: {
@@ -172,6 +173,10 @@ const OrderItem = memo(
     const [showCustomerDetails, setShowCustomerDetails] = useState(false)
     const [customerDetails, setCustomerDetails] = useState<CustomerDetails | null>(null)
     const [loadingCustomerDetails, setLoadingCustomerDetails] = useState(false)
+
+    useEffect(() => {
+      setAdminNotes(order.admin_notes || "")
+    }, [order.admin_notes])
 
     // State and handler for notifications
     const [selectedNotification, setSelectedNotification] = useState<EmailTemplateId | "">("")
@@ -472,9 +477,9 @@ const OrderItem = memo(
                   {getPaymentMethodDisplay(order.payment_method)} • {getPaymentStatusDisplay(order.payment_status)}
                 </div>
 
-                {/* CHANGE: Fixed to use order.notes instead of order.customer.notes */}
-                {(order.notes || order.customer?.special_requests) && (
-                  <div className="mt-3 border-l-4 border-l-gold bg-gold/10 p-3 rounded-r">
+                {/* CHANGE: Admin notes display only in yellow box, button moved outside */}
+                {(order.notes || order.customer?.special_requests || order.admin_notes) && (
+                  <div className="mt-3 border-l-4 border-l-gold bg-gold/10 p-3 rounded-r space-y-2">
                     <div className="flex items-start gap-2">
                       <Info className="h-5 w-5 text-gold mt-0.5 flex-shrink-0" />
                       <div className="flex-1">
@@ -491,8 +496,42 @@ const OrderItem = memo(
                         )}
                       </div>
                     </div>
+                    {/* CHANGE: Admin notes with red background, only display text here */}
+                    {order.admin_notes && (
+                      <div className="border-l-4 border-l-red-500 bg-red-50 p-2 rounded-r">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <span className="font-semibold text-red-600">ADMIN-NOTIZ:</span>
+                            <p className="text-sm text-foreground/80 mt-1">{order.admin_notes}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
+
+                {/* CHANGE: Admin notes button always visible, outside the container */}
+                <div className="mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAdminNotes(!showAdminNotes)}
+                    className="h-8"
+                  >
+                    {order.admin_notes ? (
+                      <>
+                        <Edit className="h-4 w-4 mr-1" />
+                        Admin-Notiz bearbeiten
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Admin-Notiz hinzufügen
+                      </>
+                    )}
+                  </Button>
+                </div>
 
                 {isBulkOrder && (
                   <div className="mt-2">
@@ -545,36 +584,8 @@ const OrderItem = memo(
                     </div>
                   )}
                 </div>
-                {order.notes && !isBulkOrder && <div>Notiz: {order.notes}</div>}
-                <div className="mt-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowAdminNotes(!showAdminNotes)}
-                    className="h-auto p-0 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    {showAdminNotes ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-                    Admin-Notizen {order.admin_notes ? "(vorhanden)" : "(leer)"}
-                  </Button>
-                  {showAdminNotes && (
-                    <div className="mt-2 space-y-2">
-                      <textarea
-                        value={adminNotes}
-                        onChange={(e) => setAdminNotes(e.target.value)}
-                        placeholder="Interne Notizen zur Bestellung (nur für Admins sichtbar)..."
-                        className="w-full min-h-[80px] p-2 text-sm border rounded-md resize-y"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={handleSaveAdminNotes}
-                        disabled={isSavingNotes || adminNotes === order.admin_notes}
-                      >
-                        {isSavingNotes ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-                        Notizen speichern
-                      </Button>
-                    </div>
-                  )}
-                </div>
+
+                {/* Admin Notes section - REMOVED */}
               </div>
             </div>
             <div className="flex flex-col items-end gap-2">
@@ -795,6 +806,44 @@ const OrderItem = memo(
             </div>
           </div>
         </div>
+
+        {showAdminNotes && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md mx-4">
+              <CardHeader>
+                <CardTitle>Admin-Notiz bearbeiten</CardTitle>
+                <CardDescription>Fügen Sie eine Notiz zur Bestellung {order.order_number} hinzu.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="adminNotesInput">Notiz</Label>
+                  <textarea
+                    id="adminNotesInput"
+                    value={adminNotes}
+                    onChange={(e) => setAdminNotes(e.target.value)}
+                    placeholder="Geben Sie Ihre Notiz hier ein..."
+                    className="w-full min-h-[100px] p-2 text-sm border rounded-md resize-y"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setShowAdminNotes(false)} disabled={isSavingNotes}>
+                    Abbrechen
+                  </Button>
+                  <Button onClick={handleSaveAdminNotes} disabled={isSavingNotes}>
+                    {isSavingNotes ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Speichert...
+                      </>
+                    ) : (
+                      "Speichern"
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {showCancelModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -1033,47 +1082,51 @@ function OrderManagement() {
   }, [showManualOrderForm, customers.length, fetchFormData])
 
   const handleCreateManualOrder = useCallback(async () => {
+    console.log("[v0] handleCreateManualOrder called")
+    console.log("[v0] manualOrderForm:", manualOrderForm)
+    console.log("[v0] isCreatingOrder:", isCreatingOrder)
+
+    if (!manualOrderForm.customerId) {
+      toast({
+        title: "Fehler",
+        description: "Bitte wählen Sie einen Kunden aus",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (manualOrderForm.items.length === 0 || !manualOrderForm.items[0].productId) {
+      toast({
+        title: "Fehler",
+        description: "Bitte fügen Sie mindestens ein Produkt hinzu",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (manualOrderForm.deliveryMethod === "pickup" && !manualOrderForm.pickupLocationId) {
+      toast({
+        title: "Fehler",
+        description: "Bitte wählen Sie einen Abholort aus",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const customer =
+      customers.find((c) => c.id === manualOrderForm.customerId) ||
+      customerSearchResults.find((c) => c.id === manualOrderForm.customerId)
+    if (!customer) {
+      toast({
+        title: "Fehler",
+        description: "Kunde nicht gefunden",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setIsCreatingOrder(true)
-
-      if (!manualOrderForm.customerId) {
-        toast({
-          title: "Fehler",
-          description: "Bitte wählen Sie einen Kunden aus",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (manualOrderForm.items.length === 0 || !manualOrderForm.items[0].productId) {
-        toast({
-          title: "Fehler",
-          description: "Bitte fügen Sie mindestens ein Produkt hinzu",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (manualOrderForm.deliveryMethod === "pickup" && !manualOrderForm.pickupLocationId) {
-        toast({
-          title: "Fehler",
-          description: "Bitte wählen Sie einen Abholort aus",
-          variant: "destructive",
-        })
-        return
-      }
-
-      const customer =
-        customers.find((c) => c.id === manualOrderForm.customerId) ||
-        customerSearchResults.find((c) => c.id === manualOrderForm.customerId)
-      if (!customer) {
-        toast({
-          title: "Fehler",
-          description: "Kunde nicht gefunden",
-          variant: "destructive",
-        })
-        return
-      }
 
       const orderItems = manualOrderForm.items
         .filter((item) => item.productId)
@@ -1353,72 +1406,119 @@ function OrderManagement() {
 
   const handleStatusChange = useCallback(
     async (orderId: string, status?: string, paymentStatus?: string, internalStatus?: string | null) => {
+      console.log("[v0] handleStatusChange called:", {
+        orderId,
+        status,
+        paymentStatus,
+        internalStatus,
+      })
+      // </CHANGE>
+
       try {
         updateOrdersCache((prevData) => {
-          const prevOrders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
-          const updatedOrders = prevOrders.map((order) => {
+          // Use prevOrders directly and handle both array and object types for prevData
+          const orders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
+
+          console.log("[v0] Optimistic update - before:", {
+            orderId,
+            currentInternalStatus: orders.find((o) => o.id === orderId)?.internal_status,
+            newInternalStatus: internalStatus,
+          })
+          // </CHANGE>
+
+          const updated = orders.map((order) => {
             if (order.id === orderId) {
               return {
                 ...order,
                 ...(status && { status }),
                 ...(paymentStatus && { payment_status: paymentStatus }),
-                ...(internalStatus !== undefined && { internal_status: internalStatus }), // Update internal_status
+                ...(internalStatus !== undefined && { internal_status: internalStatus }),
               }
             }
             return order
           })
-          return Array.isArray(prevData) ? updatedOrders : { orders: updatedOrders, total: prevData?.total ?? 0 }
-        })
+
+          console.log("[v0] Optimistic update - after:", {
+            orderId,
+            newInternalStatus: updated.find((o) => o.id === orderId)?.internal_status,
+          })
+          // </CHANGE>
+
+          // Return the correct structure based on prevData type
+          return Array.isArray(prevData) ? updated : { ...prevData, orders: updated }
+        }, false)
 
         const response = await fetch("/api/admin/update-order-status", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            orderId,
-            status,
-            paymentStatus,
-            internalStatus, // Send internalStatus to backend
-          }),
+          body: JSON.stringify({ orderId, status, paymentStatus, internalStatus }),
         })
 
-        if (response.ok) {
-          const { order: updatedOrder } = await response.json()
-
-          updateOrdersCache((prevData) => {
-            const prevOrders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
-            const updatedOrders = prevOrders.map((order) => {
-              if (order.id === orderId && updatedOrder) {
-                return {
-                  ...order,
-                  status: updatedOrder.status,
-                  payment_status: updatedOrder.payment_status,
-                  internal_status: updatedOrder.internal_status, // Update internal_status from backend response
-                }
-              }
-              return order
-            })
-            return Array.isArray(prevData) ? updatedOrders : { orders: updatedOrders, total: prevData?.total ?? 0 }
-          })
-
-          toast({
-            title: "Status aktualisiert",
-            description: "Der Bestellstatus wurde erfolgreich geändert",
-          })
-        } else {
+        if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
           // Revert optimistic update if failed
           await fetchOrders()
 
           toast({
             title: "Fehler",
-            description: errorData.error || "Status konnte nicht geändert werden",
+            description: errorData.error || "Status konnte nicht aktualisiert werden",
             variant: "destructive",
           })
+          return // Exit early if API call failed
         }
+
+        const result = await response.json()
+
+        console.log("[v0] API response:", {
+          orderId,
+          returnedInternalStatus: result.order?.internal_status,
+          fullOrder: result.order,
+        })
+        // </CHANGE>
+
+        const updatedOrder = result.order
+
+        updateOrdersCache((prevData) => {
+          // Use prevOrders directly and handle both array and object types for prevData
+          const orders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
+
+          console.log("[v0] Applying API response - before:", {
+            orderId,
+            currentInternalStatus: orders.find((o) => o.id === orderId)?.internal_status,
+            apiInternalStatus: updatedOrder?.internal_status,
+          })
+          // </CHANGE>
+
+          const updated = orders.map((order) => {
+            if (order.id === orderId && updatedOrder) {
+              return {
+                ...order,
+                status: updatedOrder.status,
+                payment_status: updatedOrder.payment_status,
+                internal_status: updatedOrder.internal_status,
+              }
+            }
+            return order
+          })
+
+          console.log("[v0] Applying API response - after:", {
+            orderId,
+            finalInternalStatus: updated.find((o) => o.id === orderId)?.internal_status,
+          })
+          // </CHANGE>
+
+          // Return the correct structure based on prevData type
+          return Array.isArray(prevData) ? updated : { ...prevData, orders: updated }
+        }, false)
+
+        toast({
+          title: "Status aktualisiert",
+          description: "Der Bestellstatus wurde erfolgreich aktualisiert",
+        })
       } catch (error) {
-        console.error(`[v0] Error updating order status:`, error)
+        console.error("[v0] Error updating order status:", error)
         // Revert optimistic update if failed
         await fetchOrders()
 
@@ -1429,15 +1529,15 @@ function OrderManagement() {
         })
       }
     },
-    [updateOrdersCache, fetchOrders, toast, orders],
+    [toast, updateOrdersCache, fetchOrders], // Ensure fetchOrders is a dependency if used for revert
   )
 
   const handleAdminNotesChange = useCallback(
     async (orderId: string, adminNotes: string) => {
       try {
-        // Optimistic update
-        updateOrdersCache((prevOrders) =>
-          prevOrders?.map((order) => {
+        updateOrdersCache((prevData) => {
+          const prevOrders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
+          const updatedOrders = prevOrders.map((order) => {
             if (order.id === orderId) {
               return {
                 ...order,
@@ -1445,8 +1545,9 @@ function OrderManagement() {
               }
             }
             return order
-          }),
-        )
+          })
+          return Array.isArray(prevData) ? updatedOrders : { orders: updatedOrders, total: prevData?.total ?? 0 }
+        })
 
         const response = await fetch("/api/admin/update-order-notes", {
           method: "POST",
@@ -1460,9 +1561,9 @@ function OrderManagement() {
         })
 
         if (response.ok) {
-          // Update cache with actual data from backend
-          updateOrdersCache((prevOrders) =>
-            prevOrders?.map((order) => {
+          updateOrdersCache((prevData) => {
+            const prevOrders = Array.isArray(prevData) ? prevData : (prevData?.orders ?? [])
+            const updatedOrders = prevOrders.map((order) => {
               if (order.id === orderId) {
                 return {
                   ...order,
@@ -1470,8 +1571,9 @@ function OrderManagement() {
                 }
               }
               return order
-            }),
-          )
+            })
+            return Array.isArray(prevData) ? updatedOrders : { orders: updatedOrders, total: prevData?.total ?? 0 }
+          })
 
           toast({
             title: "Notizen gespeichert",
@@ -2169,7 +2271,13 @@ function OrderManagement() {
                     >
                       Abbrechen
                     </Button>
-                    <Button onClick={handleCreateManualOrder} disabled={isCreatingOrder}>
+                    <Button
+                      onClick={(e) => {
+                        console.log("[v0] Create order button clicked")
+                        handleCreateManualOrder()
+                      }}
+                      disabled={isCreatingOrder}
+                    >
                       {isCreatingOrder ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />

@@ -21,25 +21,25 @@ export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions
   } = options
 
   let siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://suedfruechte-hohenlohe.de"
-  
+
   // Validate and clean the URL
   try {
     // Remove any invalid characters or malformed parts
     siteUrl = siteUrl.trim()
-    
+
     // If URL doesn't start with http, add https
     if (!siteUrl.startsWith("http")) {
       siteUrl = `https://${siteUrl}`
     }
-    
+
     // Force HTTPS for security
     if (siteUrl.startsWith("http://")) {
       siteUrl = siteUrl.replace("http://", "https://")
     }
-    
+
     // Remove trailing slash
     siteUrl = siteUrl.replace(/\/$/, "")
-    
+
     // Validate URL format - if invalid, use fallback
     new URL(siteUrl) // This will throw if URL is malformed
   } catch (error) {
@@ -55,7 +55,7 @@ export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions
   const unsubscribeLink = unsubscribeEmail
     ? `<p style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #4a5568;">
          <a href="${siteUrl}/newsletter/unsubscribe?email=${encodeURIComponent(unsubscribeEmail)}" style="color: ${headerColor};">
-           Newsletter abbestellen
+           E-Mail abbestellen
          </a>
        </p>`
     : ""
@@ -238,10 +238,13 @@ export function wrapInBaseLayout(contentHtml: string, options: BaseLayoutOptions
       
       <div class="email-footer">
         <p><strong>Südfrüchte Hohenlohe</strong></p>
+        <p>www.suedfruechte-hohenlohe.de</p>
         <p>Weststraße 28 | 74629 Pfedelbach</p>
         <p>
-          <a href="mailto:kontakt@suedfruechte-hohenlohe.de">kontakt@suedfruechte-hohenlohe.de</a> | 
+          kontakt@suedfruechte-hohenlohe.de | 
           Tel: 0157 357 038 64
+        </p>
+        <p style="margin-top: 10px; color: #cbd5e0;">
         </p>
         ${unsubscribeLink}
       </div>

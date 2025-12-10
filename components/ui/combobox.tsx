@@ -75,6 +75,7 @@ export function Combobox({
         console.log("[v0] Popover onOpenChange called:", newOpen)
         setOpen(newOpen)
       }}
+      modal={true}
     >
       <PopoverTrigger asChild>
         <Button
@@ -82,7 +83,8 @@ export function Combobox({
           role="combobox"
           aria-expanded={open}
           className={cn("w-full justify-between", className)}
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation()
             console.log("[v0] Combobox button clicked, current open state:", open)
           }}
         >
@@ -90,7 +92,17 @@ export function Combobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+      <PopoverContent
+        className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999]"
+        align="start"
+        sideOffset={8}
+        onInteractOutside={(e) => {
+          const target = e.target as HTMLElement
+          if (target.closest('[data-slot="popover-content"]')) {
+            e.preventDefault()
+          }
+        }}
+      >
         <Command shouldFilter={false}>
           <CommandInput
             ref={inputRef}

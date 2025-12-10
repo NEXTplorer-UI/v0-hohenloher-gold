@@ -25,6 +25,8 @@ const AVAILABLE_COLUMNS_DEFS: Record<string, { type: string }> = {
   internal_status: { type: "string" },
   payment_method: { type: "string" },
   products: { type: "string" },
+  products_südfrüchte: { type: "string" },
+  products_other: { type: "string" },
   product_count: { type: "number" },
   total: { type: "number" },
   created_at: { type: "date" },
@@ -316,8 +318,12 @@ function processOrderData(orders: any[], config: any) {
       if (order.order_items && Array.isArray(order.order_items)) {
         order.order_items.forEach((item: any) => {
           const productName = item.product_name || "Unbekanntes Produkt"
-          productTotals[productName] = (productTotals[productName] || 0) + (item.quantity || 0)
-          globalProductTotals[productName] = (globalProductTotals[productName] || 0) + (item.quantity || 0)
+          const productSize = item.product_size || ""
+          // Create unique key with size if available
+          const productKey = productSize ? `${productName} (${productSize})` : productName
+
+          productTotals[productKey] = (productTotals[productKey] || 0) + (item.quantity || 0)
+          globalProductTotals[productKey] = (globalProductTotals[productKey] || 0) + (item.quantity || 0)
         })
       }
     })
@@ -436,7 +442,40 @@ function getFieldValue(order: any, field: string): any {
     case "created_at":
       return new Date(order.created_at).toLocaleDateString("de-DE")
     case "products":
-      return order.order_items?.map((item: any) => `${item.quantity}x ${item.product_name}`).join(", ") || ""
+      return (
+        order.order_items
+          ?.map((item: any) => {
+            const productSize = item.product_size || ""
+            const productName = item.product_name
+            const displayName = productSize ? `${productName} (${productSize})` : productName
+            return `${item.quantity}x ${displayName}`
+          })
+          .join(", ") || ""
+      )
+    case "products_südfrüchte":
+      return (
+        order.order_items
+          ?.filter((item: any) => item.product_category === "Südfrüchte")
+          .map((item: any) => {
+            const productSize = item.product_size || ""
+            const productName = item.product_name
+            const displayName = productSize ? `${productName} (${productSize})` : productName
+            return `${item.quantity}x ${displayName}`
+          })
+          .join(", ") || ""
+      )
+    case "products_other":
+      return (
+        order.order_items
+          ?.filter((item: any) => item.product_category !== "Südfrüchte")
+          .map((item: any) => {
+            const productSize = item.product_size || ""
+            const productName = item.product_name
+            const displayName = productSize ? `${productName} (${productSize})` : productName
+            return `${item.quantity}x ${displayName}`
+          })
+          .join(", ") || ""
+      )
     case "product_count":
       return order.order_items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0
     case "notes":

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/server"
 import { requireAdmin } from "@/lib/auth/api-auth"
 import { buildEmail } from "@/lib/email/build"
 import { markdownToHtml } from "@/lib/markdown"
+import { htmlToPlainText } from "@/lib/email/html-to-text"
 import { Resend } from "resend"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -268,11 +269,15 @@ export async function POST(request: Request) {
           newsletterId: newsletterSend?.id || "",
         })
 
+        const plainText = htmlToPlainText(html)
+
         await resend.emails.send({
-          from: "Südfrüchte Hohenlohe <noreply@suedfruechte-hohenlohe.de>",
+          from: "Südfrüchte Hohenlohe <kontakt@suedfruechte-hohenlohe.de>",
           to: recipient.email,
           subject: personalizedSubject.replace(/\{\{customerName\}\}/g, customerName),
           html,
+          text: plainText, // Plain text version for spam filters
+          reply_to: "kontakt@suedfruechte-hohenlohe.de", // Explicit reply-to header
         })
 
         if (newsletterSend) {

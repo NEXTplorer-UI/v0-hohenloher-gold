@@ -1,5 +1,3 @@
-console.log("[v0] DEBUG: route.ts LOADED")
-
 import { getAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 
@@ -26,7 +24,7 @@ async function getNextDeliverySchedule(supabase: any) {
 
     return availableSchedule || null
   } catch (error) {
-    console.log("[v0] Could not fetch delivery schedules:", error)
+    console.error("Could not fetch delivery schedules:", error)
     return null
   }
 }
@@ -47,7 +45,7 @@ async function getNextDeliveryScheduleRegardlessOfDeadline(supabase: any) {
 
     return futureSchedules[0]
   } catch (error) {
-    console.log("[v0] Could not fetch next delivery schedule:", error)
+    console.error("Could not fetch next delivery schedule:", error)
     return null
   }
 }
@@ -84,7 +82,7 @@ export async function GET() {
       .eq("is_active", true)
 
     if (productsError) {
-      console.error("[v0] Error loading products:", productsError.message)
+      console.error("Error loading products:", productsError.message)
       return NextResponse.json({ error: "Failed to load products" }, { status: 500 })
     }
 
@@ -250,7 +248,7 @@ export async function GET() {
       },
     })
   } catch (error) {
-    console.error("[v0] Error in products API:", error)
+    console.error("Error in products API:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

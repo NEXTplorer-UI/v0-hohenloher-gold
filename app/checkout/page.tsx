@@ -40,6 +40,7 @@ import { safeJson } from "@/lib/utils/safe-json"
 import { useNearbyPickups } from "@/lib/hooks/use-nearby-pickups"
 import { createClient } from "@/lib/supabase/client" // Import the singleton client
 import { Textarea } from "@/components/ui/textarea" // Import Textarea
+import { PickupLocationValidationDialog } from "@/components/checkout/pickup-location-validation-dialog"
 
 const NEXT_PICKUP_DATE = "15. Dezember 2024"
 
@@ -107,6 +108,10 @@ export default function CheckoutPage() {
 
   const [bulkOrderNames, setBulkOrderNames] = useState<string[]>([])
   const [isBulkOrderExpanded, setIsBulkOrderExpanded] = useState(false)
+
+  const [showPickupValidationDialog, setShowPickupValidationDialog] = useState(false)
+  const [defaultPickupLocation, setDefaultPickupLocation] = useState<any>(null)
+  const [customerId, setCustomerId] = useState<string | null>(null)
 
   const {
     locations: nearestLocations,
@@ -1008,6 +1013,59 @@ export default function CheckoutPage() {
     }
 
     setIsCheckingEmail(false)
+
+    if (deliveryMethod === "pickup" && pickupLocation === "station" && selectedLocation?.id) {
+      try {
+        const response = await fetch(
+          `/api/customers/check-pickup-location?email=${encodeURIComponent(email)}&currentLocationId=${selectedLocation.id}`,
+        )
+        if (response.ok) {
+          const data = await response.json()
+          if (data.hasDefault && data.isDifferent) {
+            setDefaultPickupLocation(data.defaultLocation)
+            setCustomerId(data.customerId)
+            setShowPickupValidationDialog(true)
+          }
+        }
+      } catch (error) {
+        console.error("[v0] Error checking pickup location:", error)
+      }
+    }
+  }
+
+  const handlePickupValidationConfirm = async (action: {
+    type: "use-default" | "keep-current" | "manual"
+    manualInput?: string
+    updateDefault?: boolean
+  }) => {
+    if (action.type === "use-default") {
+      // Use the default location
+      setSelectedLocation(defaultPickupLocation)
+      setPickupLocation("station")
+    } else if (action.type === "manual") {
+      // Set manual input
+      setSelectedLocation({ id: "custom", name: action.manualInput })
+      setCustomPickupPerson(action.manualInput || "")
+      setPickupLocation("station")
+    } else if (action.type === "keep-current") {
+      // Keep current selection
+      if (action.updateDefault && selectedLocation?.id) {
+        // Update customer's default pickup location
+        try {
+          await fetch("/api/customers/update-default-pickup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email,
+              pickupLocationId: selectedLocation.id,
+            }),
+          })
+        } catch (error) {
+          console.error("[v0] Error updating default pickup:", error)
+        }
+      }
+    }
+    setShowPickupValidationDialog(false) // Close the dialog regardless of action
   }
 
   const StepIndicator = () => {
@@ -2127,6 +2185,17 @@ export default function CheckoutPage() {
           </Card>
         )}
       </div>
+
+      {showPickupValidationDialog && defaultPickupLocation && (
+        <PickupLocationValidationDialog
+          open={showPickupValidationDialog}
+          onClose={() => setShowPickupValidationDialog(false)}
+          defaultLocation={defaultPickupLocation}
+          currentLocation={selectedLocation}
+          onConfirm={handlePickupValidationConfirm}
+          email={email}
+        />
+      )}
     </div>
   )
 }

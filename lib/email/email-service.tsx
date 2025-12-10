@@ -25,6 +25,8 @@ export async function sendEmail(data: EmailData): Promise<SendEmailResult> {
       return { success: true }
     }
 
+    const plainText = htmlToPlainText(data.html)
+
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -36,6 +38,8 @@ export async function sendEmail(data: EmailData): Promise<SendEmailResult> {
         to: [data.to],
         subject: data.subject,
         html: data.html,
+        text: plainText, // Add plain text version for multipart
+        reply_to: "kontakt@suedfruechte-hohenlohe.de", // Add explicit reply-to header
         attachments: data.attachments?.map((att) => ({
           filename: att.filename,
           content: att.content,
@@ -167,3 +171,4 @@ export class EmailService {
 }
 
 import { buildEmail } from "./build"
+import { htmlToPlainText } from "./html-to-text"

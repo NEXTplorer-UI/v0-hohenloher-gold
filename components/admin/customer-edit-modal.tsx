@@ -119,9 +119,16 @@ export default function CustomerEditModal({
     if (!editingCustomer) return
 
     console.log("[v0] CustomerEditModal - saving customer:", editingCustomer)
+    const customerToSave = {
+      ...editingCustomer,
+      default_pickup_location_id: editingCustomer.default_pickup_location_id || null,
+      default_distribution_person_id: editingCustomer.default_distribution_person_id || null,
+    }
+    console.log("[v0] CustomerEditModal - customerToSave with IDs:", customerToSave)
+
     setSaving(true)
     try {
-      await onSave(editingCustomer)
+      await onSave(customerToSave)
       onClose()
     } catch (error) {
       console.error("[v0] Error saving customer:", error)

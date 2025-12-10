@@ -51,6 +51,8 @@ interface ExtendedCustomer {
   customer_tags?: { tag_id: string; tag_name: string }[]
   pickup_location_name?: string
   distribution_person_name?: string
+  default_pickup_location_id?: string
+  default_distribution_person_id?: string
 }
 
 const AVAILABLE_COLUMNS = [
@@ -284,6 +286,11 @@ const CustomerTable = memo(() => {
 
   const handleSaveCustomer = useCallback(
     async (customer: ExtendedCustomer) => {
+      console.log("[v0] CustomerTable - saving customer with IDs:", {
+        id: customer.id,
+        default_pickup_location_id: customer.default_pickup_location_id,
+        default_distribution_person_id: customer.default_distribution_person_id,
+      })
       await saveCustomer(customer)
       setIsEditModalOpen(false)
       setEditingCustomer(null)

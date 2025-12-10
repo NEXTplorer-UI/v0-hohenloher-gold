@@ -21,6 +21,13 @@ export async function POST(request: NextRequest) {
 
     const { orderId, status, paymentStatus, internalStatus } = await request.json()
 
+    console.log("[v0] [update-order-status] Received parameters:", {
+      orderId,
+      status,
+      paymentStatus,
+      internalStatus,
+    })
+
     if (!orderId || (!status && !paymentStatus && internalStatus === undefined)) {
       return NextResponse.json({ error: "Order ID and at least one status field required" }, { status: 400 })
     }
@@ -50,6 +57,11 @@ export async function POST(request: NextRequest) {
     if (paymentStatus) updateData.payment_status = paymentStatus
     if (internalStatus !== undefined) updateData.internal_status = internalStatus
 
+    console.log("[v0] [update-order-status] Writing to database:", {
+      orderId,
+      updateData,
+    })
+
     const { data, error } = await supabase
       .from("orders")
       .update(updateData)
@@ -61,6 +73,13 @@ export async function POST(request: NextRequest) {
       console.error("[v0] [update-order-status] Error updating order status:", error)
       return NextResponse.json({ error: "Failed to update order status" }, { status: 500 })
     }
+
+    console.log("[v0] [update-order-status] Database returned:", {
+      orderId,
+      status: data.status,
+      payment_status: data.payment_status,
+      internal_status: data.internal_status,
+    })
 
     console.log("[v0] [update-order-status] Order status updated successfully:", orderId)
 

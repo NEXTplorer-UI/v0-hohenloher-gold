@@ -1031,8 +1031,6 @@ function ProductCard({
 
   const canAddToCart = product.in_stock && availability.status !== "out-of-stock"
 
-  // Removed redundant getCacheBustedImageUrl from here, as it's now declared outside.
-
   const imageUrl = product.image_url || product.images?.[0] || "/images/banana-chips-placeholder.jpg"
 
   const cacheBustedImageUrl = getCacheBustedImageUrl(imageUrl, product.id)
