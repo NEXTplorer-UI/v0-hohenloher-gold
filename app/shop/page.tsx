@@ -230,11 +230,10 @@ export default function ShopPage() {
     error,
     isLoading: loading,
     mutate,
-  } = useSWR(`/api/products?t=${Date.now()}`, fetcher, {
-    revalidateOnFocus: true,
+  } = useSWR(`/api/products`, fetcher, {
+    revalidateOnFocus: false,
     revalidateOnReconnect: false,
-    dedupingInterval: 2000,
-    refreshInterval: 60000,
+    dedupingInterval: 5000,
   })
 
   // Extract products from the response
