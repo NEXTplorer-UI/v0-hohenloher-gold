@@ -226,16 +226,19 @@ export default function ShopPage() {
   const { cart } = useCart()
 
   const {
-    data: products,
+    data: productsResponse,
     error,
     isLoading: loading,
     mutate,
-  } = useSWR("/api/products", fetcher, {
-    revalidateOnFocus: true, // Revalidate when user returns to tab
+  } = useSWR(`/api/products?t=${Date.now()}`, fetcher, {
+    revalidateOnFocus: true,
     revalidateOnReconnect: false,
-    dedupingInterval: 2000, // Prevent duplicate requests within 2 seconds
-    refreshInterval: 60000, // Auto-refresh every 1 minute (was 5 minutes)
+    dedupingInterval: 2000,
+    refreshInterval: 60000,
   })
+
+  // Extract products from the response
+  const products = useMemo(() => productsResponse, [productsResponse])
 
   const {
     data: dbCategories,
