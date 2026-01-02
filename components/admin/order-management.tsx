@@ -2033,7 +2033,8 @@ function OrderManagement() {
                             }}
                             searchValue={customerSearchQuery}
                             placeholder="Kunde suchen..."
-                            emptyText={isSearchingCustomers ? "Suche läuft..." : "Keine Kunden gefunden"}
+                            emptyText="Keine Kunden gefunden"
+                            isLoading={isSearchingCustomers}
                             options={customerSearchResults.map((customer) => ({
                               value: customer.id,
                               label: `${customer.first_name} ${customer.last_name} (${customer.email})`,
@@ -2173,6 +2174,7 @@ function OrderManagement() {
                           <SelectItem value="confirmed">Bestätigt</SelectItem>
                           <SelectItem value="ready">Bereit</SelectItem>
                           <SelectItem value="picked_up">Abgeholt</SelectItem>
+                          <SelectItem value="cancelled">Storniert</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

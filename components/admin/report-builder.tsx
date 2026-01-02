@@ -46,6 +46,8 @@ const AVAILABLE_COLUMNS = [
   { id: "customer_street", label: "Straße", type: "string" },
   { id: "customer_city", label: "Stadt", type: "string" },
   { id: "customer_address", label: "Vollständige Adresse", type: "string" },
+  { id: "customer_default_pickup_location", label: "Standard-Abholort (Kunde)", type: "string" },
+  { id: "customer_default_distribution_person", label: "Standard-Verteilperson (Kunde)", type: "string" },
   { id: "pickup_location_normalized", label: "Abholort", type: "string" },
   { id: "distribution_person", label: "Verteilperson", type: "string" },
   { id: "status", label: "Status", type: "string" },
@@ -251,6 +253,7 @@ export default function ReportBuilder() {
     months: [],
     statuses: [],
     dateRange: { start: null, end: null }, // Date range filter
+    legacyChiemgau: false, // Added legacy Chiemgau filter
   })
 
   const [isExporting, setIsExporting] = useState(false)
@@ -260,7 +263,14 @@ export default function ReportBuilder() {
   // Initialize columnOrderState with ALL available column IDs
   const [columnOrderState, setColumnOrderState] = useState<ColumnOrderState>(AVAILABLE_COLUMNS.map((col) => col.id))
   const [showAggregations, setShowAggregations] = useState(true)
-  const [showProductSummary, setShowProductSummary] = useState(true)
+  const [showProductSummary, setShowProductSummary] = useState(false) // Default to false
+  const [showGroupProductTotals, setShowGroupProductTotals] = useState(false) // New state
+  const [showProductsAsList, setShowProductsAsList] = useState(false)
+  const [showSeparateProductTotals, setShowSeparateProductTotals] = useState(false)
+  const [sortBy, setSortBy] = useState<string>("customer_name")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
+  const [groupSortBy, setGroupSortBy] = useState<string>("name")
+  const [groupSortOrder, setGroupSortOrder] = useState<"asc" | "desc">("asc")
   const [wrapText, setWrapText] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showGrandTotal, setShowGrandTotal] = useState(false)
@@ -312,8 +322,13 @@ export default function ReportBuilder() {
     },
   )
 
+  const pickupLocations = Array.isArray(pickupLocationsData?.locations)
+    ? pickupLocationsData.locations.filter((loc: any) => loc.is_active)
+    : []
+
+  // FIX: Declare toursData before using it
   const { data: toursData } = useSWR(
-    "/api/admin/delivery-routes",
+    "/api/admin/tours", // Assuming this is the correct API endpoint for tours
     async (url) => {
       const res = await fetch(url)
       if (!res.ok) return { routes: [] }
@@ -325,10 +340,6 @@ export default function ReportBuilder() {
       dedupingInterval: 60000,
     },
   )
-
-  const pickupLocations = Array.isArray(pickupLocationsData?.locations)
-    ? pickupLocationsData.locations.filter((loc: any) => loc.is_active)
-    : []
 
   const tours = Array.isArray(toursData?.routes) ? toursData.routes.filter((route: any) => route.is_active) : []
 
@@ -342,7 +353,16 @@ export default function ReportBuilder() {
       setGroupBy(preset.group_by || [])
       setAggregations(preset.aggregations || [])
       setShowAggregations(preset.show_aggregations ?? true)
+      setShowGroupProductTotals(preset.show_group_product_totals ?? false)
+      // Load showProductsAsList from preset if available
+      setShowProductsAsList(preset.show_products_as_list ?? false)
+      // Load showSeparateProductTotals from preset if available
+      setShowSeparateProductTotals(preset.show_separate_product_totals ?? false)
+      setSortBy(preset.sort_by || "customer_name")
+      setSortOrder(preset.sort_order || "asc")
       setWrapText(preset.wrap_text ?? false)
+      // Add showGroupProductTotals to loaded preset
+      // setShowGroupProductTotals(preset.show_group_product_totals ?? false) // This line was duplicated, removed one
       setFilters(
         preset.filters || {
           deliveryType: [],
@@ -352,6 +372,7 @@ export default function ReportBuilder() {
           months: [],
           statuses: [],
           dateRange: { start: null, end: null },
+          legacyChiemgau: false, // Ensure legacyChiemgau is loaded from preset
         },
       )
 
@@ -384,6 +405,12 @@ export default function ReportBuilder() {
           group_by: groupBy,
           aggregations,
           show_aggregations: showAggregations,
+          show_group_product_totals: showGroupProductTotals,
+          show_products_as_list: showProductsAsList, // Save new state
+          // Save new state
+          show_separate_product_totals: showSeparateProductTotals,
+          sort_by: sortBy,
+          sort_order: sortOrder,
           wrap_text: wrapText,
           excel_options: excelOptions,
         }),
@@ -517,6 +544,9 @@ export default function ReportBuilder() {
       rows.forEach((row: any, idx: number) => {
         const rowData = selectedColumns.map((colId) => {
           if (row._isAggregation && colId === "products" && row.product_summary) {
+            if (showProductsAsList) {
+              return row.product_summary.split(", ").join("\n")
+            }
             return row.product_summary
           }
           // Handle new columns
@@ -541,7 +571,11 @@ export default function ReportBuilder() {
             pattern: "solid",
             fgColor: { argb: "FF" + excelOptions.groupBackground.replace("#", "") },
           }
-          excelRow.font = { bold: true, size: excelOptions.fontSize, name: excelOptions.fontFamily }
+          excelRow.font = {
+            bold: true,
+            size: Math.max(16, excelOptions.fontSize),
+            name: excelOptions.fontFamily,
+          }
         } else if (row._isAggregation && excelOptions.includeAggregations) {
           excelRow.fill = {
             type: "pattern",
@@ -597,12 +631,11 @@ export default function ReportBuilder() {
         // Merge cells for header
         worksheet.mergeCells(grandTotalHeaderRow.number, 1, grandTotalHeaderRow.number, selectedColumns.length)
 
-        // Grand total products row
         const entries = Object.entries(grandTotal)
         const grandTotalText = entries
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([name, qty]) => `${qty}× ${name}`)
-          .join(", ")
+          .join(showProductsAsList ? "\n" : ", ")
 
         const grandTotalRow = worksheet.addRow([grandTotalText])
         grandTotalRow.font = {
@@ -664,8 +697,30 @@ export default function ReportBuilder() {
       showAggregations,
       showProductSummary,
       showProductDetails,
+      showGroupProductTotals,
+      showProductsAsList,
+      showSeparateProductTotals,
+      sortBy,
+      sortOrder,
+      groupSortBy,
+      groupSortOrder,
     }
-  }, [selectedColumns, groupBy, aggregations, filters, showAggregations, showProductSummary, showProductDetails])
+  }, [
+    selectedColumns,
+    groupBy,
+    aggregations,
+    filters,
+    showAggregations,
+    showProductSummary,
+    showProductDetails,
+    showGroupProductTotals,
+    showProductsAsList,
+    showSeparateProductTotals,
+    sortBy,
+    sortOrder,
+    groupSortBy,
+    groupSortOrder,
+  ])
 
   const swrKey = useMemo(() => {
     return ["/api/admin/reports/dynamic", JSON.stringify(reportConfig)]
@@ -712,13 +767,19 @@ export default function ReportBuilder() {
       groupBy,
       "showAggregations:",
       showAggregations,
+      // Log showGroupProductTotals here for debugging
+      "showGroupProductTotals:",
+      showGroupProductTotals,
+      // Log showProductsAsList here
+      "showProductsAsList:",
+      showProductsAsList,
     )
 
     try {
       const base = reportData?.data || []
       console.log("[v0] FRONTEND: Base data rows:", base.length)
 
-      const result = addProductTotalsPerGroup(base, groupBy, showAggregations)
+      const result = addProductTotalsPerGroup(base, groupBy, showGroupProductTotals)
       console.log("[v0] FRONTEND: Processed data rows:", result.length)
 
       return result
@@ -726,7 +787,7 @@ export default function ReportBuilder() {
       console.error("[v0] FRONTEND: Error in dataWithProductTotals processing:", error)
       throw error
     }
-  }, [reportData?.data, groupBy, showAggregations])
+  }, [reportData?.data, groupBy, showGroupProductTotals]) // Updated dependency array
 
   const grandTotal = useMemo(() => {
     if (!showGrandTotal || !reportData?.data) return null
@@ -813,6 +874,11 @@ export default function ReportBuilder() {
             return value || "" // These columns will now display the specific product types
           }
 
+          // Display values for new customer default columns
+          if (col.id === "customer_default_pickup_location" || col.id === "customer_default_distribution_person") {
+            return value || "-"
+          }
+
           // Default display for string types
           return value || ""
         },
@@ -856,6 +922,8 @@ export default function ReportBuilder() {
     { value: "pickup_month", label: "Abholmonat" },
     { value: "order_month", label: "Bestellmonat" },
     { value: "delivery_method", label: "Lieferart (Abholung/Lieferung)" },
+    { value: "customer_default_pickup_location", label: "Standard-Abholort (Kunde)" },
+    { value: "customer_default_distribution_person", label: "Standard-Verteilperson (Kunde)" },
     // Add new product columns to group by options if applicable
     { value: "products_südfrüchte", label: "Südfrüchte" },
     { value: "products_other", label: "Restliche Produkte" },
@@ -1030,6 +1098,21 @@ export default function ReportBuilder() {
                   <Label className="text-sm mb-2 block">Abholort</Label>
                   <ScrollArea className="h-32 border rounded-md p-2">
                     <div className="space-y-1">
+                      <div className="flex items-center space-x-2 pb-2 mb-2 border-b">
+                        <Checkbox
+                          id="filter-location-legacy-chiemgau"
+                          checked={filters.legacyChiemgau === true}
+                          onCheckedChange={(checked) => {
+                            setFilters((prev: any) => ({
+                              ...prev,
+                              legacyChiemgau: checked === true,
+                            }))
+                          }}
+                        />
+                        <Label htmlFor="filter-location-legacy-chiemgau" className="text-sm cursor-pointer font-medium">
+                          Chiemgau (alte Bestellungen)
+                        </Label>
+                      </div>
                       {pickupLocations.map((location) => (
                         <div key={location.id} className="flex items-center space-x-2">
                           <Checkbox
@@ -1160,6 +1243,84 @@ export default function ReportBuilder() {
             </div>
           </div>
 
+          <div>
+            <Label className="text-base font-semibold mb-3 block">Sortierung innerhalb Gruppen</Label>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="sort-by" className="text-sm">
+                  Sortieren nach
+                </Label>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger id="sort-by">
+                    <SelectValue placeholder="Sortierfeld wählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="customer_name">Kunde (Name)</SelectItem>
+                    <SelectItem value="order_number">Bestellnummer</SelectItem>
+                    <SelectItem value="order_date">Bestelldatum</SelectItem>
+                    <SelectItem value="delivery_date">Lieferdatum</SelectItem>
+                    <SelectItem value="total_price">Bestellsumme</SelectItem>
+                    <SelectItem value="pickup_location">Abholort</SelectItem>
+                    <SelectItem value="status">Status</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="sort-order" className="text-sm">
+                  Reihenfolge
+                </Label>
+                <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as "asc" | "desc")}>
+                  <SelectTrigger id="sort-order">
+                    <SelectValue placeholder="Reihenfolge wählen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="asc">Aufsteigend (A-Z, 0-9)</SelectItem>
+                    <SelectItem value="desc">Absteigend (Z-A, 9-0)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Group Sorting Options */}
+              {groupBy.length > 0 && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="group-sort-by" className="text-sm">
+                      Gruppen sortieren nach
+                    </Label>
+                    <Select value={groupSortBy} onValueChange={setGroupSortBy}>
+                      <SelectTrigger id="group-sort-by">
+                        <SelectValue placeholder="Gruppensortierung wählen" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="name">Gruppenname (alphabetisch)</SelectItem>
+                        <SelectItem value="count">Anzahl Bestellungen</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="group-sort-order" className="text-sm">
+                      Gruppensortierreihenfolge
+                    </Label>
+                    <Select
+                      value={groupSortOrder}
+                      onValueChange={(value) => setGroupSortOrder(value as "asc" | "desc")}
+                    >
+                      <SelectTrigger id="group-sort-order">
+                        <SelectValue placeholder="Reihenfolge wählen" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="asc">Aufsteigend (A-Z, 0-9)</SelectItem>
+                        <SelectItem value="desc">Absteigend (Z-A, 9-0)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-4">
             <Label className="text-base font-semibold">Anzeigeoptionen</Label>
             <div className="space-y-2">
@@ -1176,12 +1337,44 @@ export default function ReportBuilder() {
 
               <div className="flex items-center space-x-2">
                 <Checkbox
-                  id="show-product-summary"
+                  id="showProductSummary"
                   checked={showProductSummary}
                   onCheckedChange={(checked) => setShowProductSummary(!!checked)}
                 />
-                <Label htmlFor="show-product-summary" className="text-sm cursor-pointer">
+                <Label htmlFor="showProductSummary" className="text-sm cursor-pointer">
                   Produktsummen anzeigen
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-group-product-totals"
+                  checked={showGroupProductTotals}
+                  onCheckedChange={(checked) => setShowGroupProductTotals(!!checked)}
+                />
+                <Label htmlFor="show-group-product-totals" className="text-sm cursor-pointer">
+                  Produktsummen pro Gruppe anzeigen
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="show-products-as-list"
+                  checked={showProductsAsList}
+                  onCheckedChange={(checked) => setShowProductsAsList(!!checked)}
+                />
+                <Label htmlFor="show-products-as-list" className="text-sm cursor-pointer">
+                  Produktsummen untereinander anzeigen
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="showSeparateProductTotals"
+                  checked={showSeparateProductTotals}
+                  onCheckedChange={(checked) => setShowSeparateProductTotals(!!checked)}
+                />
+                <Label htmlFor="showSeparateProductTotals" className="text-sm cursor-pointer">
+                  Separate Summen für Südfrüchte/Restliche Produkte
                 </Label>
               </div>
 
@@ -1444,7 +1637,7 @@ export default function ReportBuilder() {
                                 {Object.entries(grandTotal)
                                   .sort(([a], [b]) => a.localeCompare(b))
                                   .map(([name, qty]) => `${qty}× ${name}`)
-                                  .join(", ")}
+                                  .join(showProductsAsList ? "\n" : ", ")}
                               </div>
                             </TableCell>
                           </TableRow>

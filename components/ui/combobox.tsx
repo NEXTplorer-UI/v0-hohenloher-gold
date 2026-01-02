@@ -21,6 +21,7 @@ interface ComboboxProps {
   placeholder?: string
   emptyText?: string
   className?: string
+  isLoading?: boolean
 }
 
 export function Combobox({
@@ -32,16 +33,20 @@ export function Combobox({
   placeholder = "Select...",
   emptyText = "No results found.",
   className,
+  isLoading = false,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
     console.log("[v0] Combobox open state changed:", open)
-  }, [open])
+    console.log("[v0] Combobox options count:", options.length)
+    console.log("[v0] Combobox isLoading:", isLoading)
+  }, [open, options.length, isLoading])
 
   React.useEffect(() => {
     if (open) {
+      console.log("[v0] Popover opened, attempting to focus input")
       // Strategy 1: Try immediate focus on ref
       if (inputRef.current) {
         inputRef.current.focus()
@@ -93,7 +98,7 @@ export function Combobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[var(--radix-popover-trigger-width)] p-0 z-[9999]"
+        className="w-[var(--radix-popover-trigger-width)] min-h-[200px] p-0 z-[9999]"
         align="start"
         sideOffset={8}
         onInteractOutside={(e) => {
@@ -103,7 +108,7 @@ export function Combobox({
           }
         }}
       >
-        <Command shouldFilter={false}>
+        <Command shouldFilter={false} className="h-full">
           <CommandInput
             ref={inputRef}
             placeholder="Suchen..."
@@ -112,23 +117,34 @@ export function Combobox({
             autoFocus
           />
           <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
-            <CommandGroup>
-              {options.map((option) => (
-                <CommandItem
-                  key={option.value}
-                  value={option.value}
-                  onSelect={() => {
-                    console.log("[v0] ComboboxItem selected:", option.value)
-                    onValueChange(option.value)
-                    setOpen(false)
-                  }}
-                >
-                  <Check className={cn("mr-2 h-4 w-4", value === option.value ? "opacity-100" : "opacity-0")} />
-                  {option.label}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Suche läuft...
+                </div>
+              </div>
+            ) : (
+              <>
+                <CommandEmpty>{emptyText}</CommandEmpty>
+                <CommandGroup>
+                  {options.map((option) => (
+                    <CommandItem
+                      key={option.value}
+                      value={option.value}
+                      onSelect={() => {
+                        console.log("[v0] ComboboxItem selected:", option.value)
+                        onValueChange(option.value)
+                        setOpen(false)
+                      }}
+                    >
+                      <Check className={cn("mr-2 h-4 w-4", value === option.value ? "opacity-100" : "opacity-0")} />
+                      {option.label}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

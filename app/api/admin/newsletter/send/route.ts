@@ -171,6 +171,19 @@ export async function POST(request: Request) {
 
     console.log(`[v0] Final recipient count after all filters: ${recipients.length}`)
 
+    console.log("[v0] SAFETY CHECK - About to send emails to the following recipients:")
+    console.log(`[v0] Total recipients after filtering: ${recipients.length}`)
+    console.log(
+      `[v0] First 5 recipient emails: ${recipients
+        .slice(0, 5)
+        .map((r) => r.email)
+        .join(", ")}`,
+    )
+
+    if (recipients.length > 100) {
+      console.warn(`[v0] WARNING: About to send ${recipients.length} emails. This is a large batch.`)
+    }
+
     console.log(`[v0] Sending newsletter to ${recipients.length} recipients with template type: ${templateType}`)
 
     const { data: newsletterSend, error: createError } = await supabase
@@ -233,6 +246,8 @@ export async function POST(request: Request) {
     for (const recipient of recipients) {
       try {
         const customerName = `${recipient.first_name || ""} ${recipient.last_name || ""}`.trim() || "Kunde"
+
+        console.log(`[v0] Sending email ${sent + 1}/${recipients.length} to: ${recipient.email}`)
 
         let personalizedContent = content
         const personalizedSubject = subject

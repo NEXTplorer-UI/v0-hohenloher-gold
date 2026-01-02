@@ -14,6 +14,7 @@ export async function GET() {
           products(id, name, category_id)
         )
       `)
+      .neq("status", "completed")
       .order("delivery_date", { ascending: true })
 
     if (error) {

@@ -19,6 +19,8 @@ const AVAILABLE_COLUMNS_DEFS: Record<string, { type: string }> = {
   customer_street: { type: "string" },
   customer_city: { type: "string" },
   customer_address: { type: "string" },
+  customer_default_pickup_location: { type: "string" },
+  customer_default_distribution_person: { type: "string" },
   pickup_location_normalized: { type: "string" },
   distribution_person: { type: "string" },
   status: { type: "string" },
@@ -50,41 +52,95 @@ export async function POST(request: NextRequest) {
       hasFilters: !!config.filters,
       hasGroupBy: !!config.groupBy,
       groupByLength: config.groupBy?.length || 0,
+      sortBy: config.sortBy,
+      sortOrder: config.sortOrder,
+      groupSortBy: config.groupSortBy,
+      groupSortOrder: config.groupSortOrder,
       filtersKeys: config.filters ? Object.keys(config.filters) : [],
     })
     console.log("[v0] API: config.filters structure:", JSON.stringify(config.filters, null, 2))
     console.log("[v0] API: config.groupBy:", config.groupBy)
 
-    const { data: orders, error } = await supabase
+    const {
+      columns,
+      groupBy = [],
+      filters = {},
+      aggregations = [],
+      showAggregations = false,
+      showProductSummary = false,
+      showProductDetails = false,
+      showGroupProductTotals = false,
+      showSeparateProductTotals = false,
+      sortBy,
+      sortOrder = "asc",
+      groupSortBy,
+      groupSortOrder = "asc",
+    } = config
+
+    const query = supabase
       .from("orders")
-      .select(`
+      .select(
+        `
         *,
-        customer:customers(*),
-        order_items(*, product:products(*)),
-        distribution_person:distribution_persons(id, name, phone),
-        pickup_location_ref:pickup_locations!pickup_location_id(id, name)
-      `)
-      .neq("status", "cancelled")
+        customer:customers!orders_customer_id_fkey (
+          id,
+          first_name,
+          last_name,
+          email,
+          phone,
+          street,
+          house_number,
+          postal_code,
+          city,
+          default_pickup_location_id,
+          default_distribution_person_id,
+          default_pickup_location:pickup_locations!customers_default_pickup_location_id_fkey (
+            name
+          ),
+          default_distribution_person:distribution_persons!customers_default_distribution_person_id_fkey (
+            name
+          )
+        ),
+        order_items!order_items_order_id_fkey (
+          id,
+          quantity,
+          product_name,
+          product_size,
+          product_category,
+          product_id,
+          product:products!order_items_product_id_fkey (
+            unit,
+            category_id
+          )
+        ),
+        distribution_person:distribution_persons!orders_distribution_person_id_fkey (
+          name
+        ),
+        route:delivery_routes!orders_route_id_fkey (
+          name
+        )
+      `,
+      )
       .order("created_at", { ascending: false })
-      .limit(1000)
+
+    // Fetch orders from the database
+    const { data: orders, error } = await query
 
     if (error) {
-      console.error("[v0] API ERROR: Fetching orders failed:", error)
+      console.error("[v0] API ERROR: Failed to fetch orders:", error)
       throw error
     }
-
-    console.log("[v0] API: Fetched orders count:", orders?.length || 0)
 
     // Apply filters
     let filteredOrders = orders || []
 
-    if (config.filters?.dateRange?.start) {
-      console.log("[v0] API: Applying start date filter:", config.filters.dateRange.start)
+    if (filters.dateRange?.start) {
+      console.log("[v0] API: Applying start date filter:", filters.dateRange.start)
       const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
         if (!order.created_at) return false
         const orderDate = new Date(order.created_at)
-        const startDate = new Date(config.filters.dateRange.start)
+        const startDate = new Date(filters.dateRange.start)
         // Set both to start of day for proper date-only comparison
         orderDate.setHours(0, 0, 0, 0)
         startDate.setHours(0, 0, 0, 0)
@@ -93,13 +149,13 @@ export async function POST(request: NextRequest) {
       console.log("[v0] API: After start date filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    if (config.filters?.dateRange?.end) {
-      console.log("[v0] API: Applying end date filter:", config.filters.dateRange.end)
+    if (filters.dateRange?.end) {
+      console.log("[v0] API: Applying end date filter:", filters.dateRange.end)
       const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
         if (!order.created_at) return false
         const orderDate = new Date(order.created_at)
-        const endDate = new Date(config.filters.dateRange.end)
+        const endDate = new Date(filters.dateRange.end)
         // Set both to end of day for proper date-only comparison
         orderDate.setHours(0, 0, 0, 0)
         endDate.setHours(23, 59, 59, 999)
@@ -108,44 +164,32 @@ export async function POST(request: NextRequest) {
       console.log("[v0] API: After end date filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    if (
-      config.filters?.deliveryType &&
-      Array.isArray(config.filters.deliveryType) &&
-      config.filters.deliveryType.length > 0
-    ) {
-      console.log("[v0] API: Applying deliveryType filter:", config.filters.deliveryType)
+    if (filters.deliveryType && Array.isArray(filters.deliveryType) && filters.deliveryType.length > 0) {
+      console.log("[v0] API: Applying deliveryType filter:", filters.deliveryType)
       const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
-        if (config.filters.deliveryType.includes("pickup") && order.is_pickup) return true
-        if (config.filters.deliveryType.includes("shipping") && !order.is_pickup) return true
+        if (filters.deliveryType.includes("pickup") && order.is_pickup) return true
+        if (filters.deliveryType.includes("shipping") && !order.is_pickup) return true
         return false
       })
       console.log("[v0] API: After deliveryType filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    if (
-      config.filters?.paymentMethod &&
-      Array.isArray(config.filters.paymentMethod) &&
-      config.filters.paymentMethod.length > 0
-    ) {
-      console.log("[v0] API: Applying paymentMethod filter:", config.filters.paymentMethod)
+    if (filters.paymentMethod && Array.isArray(filters.paymentMethod) && filters.paymentMethod.length > 0) {
+      console.log("[v0] API: Applying paymentMethod filter:", filters.paymentMethod)
       const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) =>
-        config.filters.paymentMethod.includes(order.payment_method?.toLowerCase()),
+        filters.paymentMethod.includes(order.payment_method?.toLowerCase()),
       )
       console.log("[v0] API: After paymentMethod filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    if (
-      config.filters?.pickupLocations &&
-      Array.isArray(config.filters.pickupLocations) &&
-      config.filters.pickupLocations.length > 0
-    ) {
-      console.log("[v0] API: Applying pickupLocations filter:", config.filters.pickupLocations)
+    if (filters.pickupLocations && Array.isArray(filters.pickupLocations) && filters.pickupLocations.length > 0) {
+      console.log("[v0] API: Applying pickupLocations filter:", filters.pickupLocations)
       const { data: selectedLocations } = await supabase
         .from("pickup_locations")
         .select("name")
-        .in("id", config.filters.pickupLocations)
+        .in("id", filters.pickupLocations)
 
       const normalizedLocationNames = selectedLocations?.map((loc: any) => normalizeLocationName(loc.name)) || []
       const beforeCount = filteredOrders.length
@@ -157,52 +201,45 @@ export async function POST(request: NextRequest) {
       console.log("[v0] API: After pickupLocations filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    if (config.filters?.tours && Array.isArray(config.filters.tours) && config.filters.tours.length > 0) {
-      console.log("[v0] API: Applying tours filter:", config.filters.tours)
-      const { data: routeLocations } = await supabase
-        .from("route_locations")
-        .select("pickup_location_id, pickup_locations!inner(name)")
-        .in("route_id", config.filters.tours)
-
-      const normalizedTourLocationNames =
-        routeLocations?.map((rl: any) => normalizeLocationName(rl.pickup_locations.name)) || []
+    if (filters.legacyChiemgau === true) {
+      console.log("[v0] API: Applying legacy chiemgau filter")
       const beforeCount = filteredOrders.length
 
       filteredOrders = filteredOrders.filter((order: any) => {
         const orderLocation = normalizeLocationName(order.pickup_location_normalized)
-        return normalizedTourLocationNames.includes(orderLocation)
+        return orderLocation === "chiemgau"
       })
-      console.log("[v0] API: After tours filter:", beforeCount, "→", filteredOrders.length)
+      console.log("[v0] API: After legacy chiemgau filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    if (config.filters?.months && Array.isArray(config.filters.months) && config.filters.months.length > 0) {
-      console.log("[v0] API: Applying months filter:", config.filters.months)
+    if (filters.months && Array.isArray(filters.months) && filters.months.length > 0) {
+      console.log("[v0] API: Applying months filter:", filters.months)
       const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => {
         const match = order.order_number?.match(/HG-\d{4}-(\d{2})-\d+/)
         if (!match) return false
         const orderMonth = match[1]
-        return config.filters.months.includes(orderMonth)
+        return filters.months.includes(orderMonth)
       })
       console.log("[v0] API: After months filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    if (config.filters?.statuses && Array.isArray(config.filters.statuses) && config.filters.statuses.length > 0) {
-      console.log("[v0] API: Applying statuses filter:", config.filters.statuses)
+    if (filters.statuses && Array.isArray(filters.statuses) && filters.statuses.length > 0) {
+      console.log("[v0] API: Applying statuses filter:", filters.statuses)
       const beforeCount = filteredOrders.length
-      filteredOrders = filteredOrders.filter((order: any) => config.filters.statuses.includes(order.status))
+      filteredOrders = filteredOrders.filter((order: any) => filters.statuses.includes(order.status))
       console.log("[v0] API: After statuses filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    if (config.filters?.dateFrom) {
-      const fromDate = new Date(config.filters.dateFrom)
+    if (filters.dateFrom) {
+      const fromDate = new Date(filters.dateFrom)
       const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => new Date(order.created_at) >= fromDate)
       console.log("[v0] API: After dateFrom filter:", beforeCount, "→", filteredOrders.length)
     }
 
-    if (config.filters?.dateTo) {
-      const toDate = new Date(config.filters.dateTo)
+    if (filters.dateTo) {
+      const toDate = new Date(filters.dateTo)
       const beforeCount = filteredOrders.length
       filteredOrders = filteredOrders.filter((order: any) => new Date(order.created_at) <= toDate)
       console.log("[v0] API: After dateTo filter:", beforeCount, "→", filteredOrders.length)
@@ -236,10 +273,23 @@ function processOrderData(orders: any[], config: any) {
   console.log("[v0] API processOrderData: Starting with", orders.length, "orders")
   console.log("[v0] API processOrderData: groupBy:", config.groupBy)
 
-  const { groupBy, columns, aggregations, showAggregations, showProductSummary, showProductDetails } = config
+  const {
+    columns,
+    groupBy = [],
+    filters = {},
+    aggregations = [],
+    showAggregations = false,
+    showProductSummary = false,
+    showProductDetails = false,
+    showGroupProductTotals = false,
+    showSeparateProductTotals = false,
+    sortBy,
+    sortOrder = "asc",
+    groupSortBy,
+    groupSortOrder = "asc",
+  } = config
 
   if (!groupBy || groupBy.length === 0) {
-    // No grouping - return flat data
     console.log("[v0] API processOrderData: No grouping, returning flat data")
     return orders.map((order) => flattenOrder(order, columns))
   }
@@ -254,8 +304,11 @@ function processOrderData(orders: any[], config: any) {
       const groupKey = groupBy
         .map((field: string) => {
           const value = getFieldValue(order, field)
-          console.log(`[v0] API processOrderData: Order ${index}, field "${field}" = "${value}"`)
-          return value
+          const normalizedValue = field === "pickup_location_normalized" ? normalizeLocationName(value) : value
+          console.log(
+            `[v0] API processOrderData: Order ${index}, field "${field}" = "${value}" (normalized: "${normalizedValue}")`,
+          )
+          return normalizedValue
         })
         .join("|||")
 
@@ -271,10 +324,38 @@ function processOrderData(orders: any[], config: any) {
 
   console.log("[v0] API processOrderData: Created", grouped.size, "groups")
 
+  const groupEntries = Array.from(grouped.entries())
+
+  if (groupSortBy) {
+    console.log("[v0] API processOrderData: Sorting groups by:", groupSortBy, "order:", groupSortOrder)
+
+    groupEntries.sort((a, b) => {
+      const [keyA] = a
+      const [keyB] = b
+
+      if (groupSortBy === "name") {
+        // Sort by group name (the groupKey)
+        const comparison = keyA.localeCompare(keyB, "de-DE")
+        return groupSortOrder === "desc" ? -comparison : comparison
+      } else if (groupSortBy === "count") {
+        // Sort by number of orders in group
+        const countA = a[1].length
+        const countB = b[1].length
+        return groupSortOrder === "desc" ? countB - countA : countA - countB
+      }
+
+      return 0
+    })
+
+    console.log("[v0] API processOrderData: Groups sorted")
+  }
+
   const result: any[] = []
   const globalProductTotals: Record<string, number> = {}
+  const globalProductTotalsSuedfruechte: Record<string, number> = {}
+  const globalProductTotalsOther: Record<string, number> = {}
 
-  grouped.forEach((groupOrders, groupKey) => {
+  groupEntries.forEach(([groupKey, groupOrders]) => {
     const groupValues = groupKey.split("|||")
 
     const headerRow: any = { _isGroup: true }
@@ -291,6 +372,45 @@ function processOrderData(orders: any[], config: any) {
     headerRow._groupLabel = groupLabels.join(" | ")
 
     result.push(headerRow)
+
+    console.log(
+      "[v0] API processOrderData: Sorting group, sortBy:",
+      sortBy,
+      "sortOrder:",
+      sortOrder,
+      "group size:",
+      groupOrders.length,
+    )
+
+    if (sortBy && groupOrders.length > 1) {
+      console.log("[v0] API processOrderData: Applying sort to group...")
+      groupOrders.sort((a, b) => {
+        const aVal = getFieldValue(a, sortBy)
+        const bVal = getFieldValue(b, sortBy)
+
+        console.log("[v0] API processOrderData: Comparing values:", aVal, "vs", bVal)
+
+        // Handle different types
+        if (typeof aVal === "number" && typeof bVal === "number") {
+          return sortOrder === "desc" ? bVal - aVal : aVal - bVal
+        }
+
+        // Convert to string for comparison
+        const aStr = String(aVal || "").toLowerCase()
+        const bStr = String(bVal || "").toLowerCase()
+        const comparison = aStr.localeCompare(bStr, "de-DE")
+
+        return sortOrder === "desc" ? -comparison : comparison
+      })
+      console.log("[v0] API processOrderData: Sort complete")
+    } else {
+      console.log(
+        "[v0] API processOrderData: Sort skipped - sortBy:",
+        sortBy,
+        "groupOrders.length:",
+        groupOrders.length,
+      )
+    }
 
     // Add detail rows
     groupOrders.forEach((order) => {
@@ -318,23 +438,30 @@ function processOrderData(orders: any[], config: any) {
       if (order.order_items && Array.isArray(order.order_items)) {
         order.order_items.forEach((item: any) => {
           const productName = item.product_name || "Unbekanntes Produkt"
-          const productSize = item.product_size || ""
-          // Create unique key with size if available
+          const productSize = item.product_size || item.product?.unit || ""
           const productKey = productSize ? `${productName} (${productSize})` : productName
+          const category = (item.product_category || "").toLowerCase()
 
           productTotals[productKey] = (productTotals[productKey] || 0) + (item.quantity || 0)
           globalProductTotals[productKey] = (globalProductTotals[productKey] || 0) + (item.quantity || 0)
+
+          if (category.includes("südfr")) {
+            globalProductTotalsSuedfruechte[productKey] =
+              (globalProductTotalsSuedfruechte[productKey] || 0) + (item.quantity || 0)
+          } else {
+            globalProductTotalsOther[productKey] = (globalProductTotalsOther[productKey] || 0) + (item.quantity || 0)
+          }
         })
       }
     })
 
-    if (showProductSummary && Object.keys(productTotals).length > 0) {
+    if (showGroupProductTotals && Object.keys(productTotals).length > 0) {
       const entries = Object.entries(productTotals).sort(([a], [b]) => a.localeCompare(b))
       const productsText = entries.map(([name, qty]) => `${qty}× ${name}`).join(", ")
       aggRow.product_summary = productsText
     }
 
-    if (showAggregations && hasAggregations) {
+    if ((showGroupProductTotals && Object.keys(productTotals).length > 0) || (showAggregations && hasAggregations)) {
       result.push(aggRow)
     }
 
@@ -351,7 +478,68 @@ function processOrderData(orders: any[], config: any) {
     }
   })
 
-  if ((showProductSummary || showProductDetails) && Object.keys(globalProductTotals).length > 0) {
+  if (
+    showSeparateProductTotals &&
+    (Object.keys(globalProductTotalsSuedfruechte).length > 0 || Object.keys(globalProductTotalsOther).length > 0)
+  ) {
+    if (Object.keys(globalProductTotalsSuedfruechte).length > 0) {
+      result.push({
+        _isGroup: true,
+        _isGlobalTotal: true,
+        _groupLabel: "═══ GESAMTSUMME SÜDFRÜCHTE ═══",
+        [groupBy[0]]: "═══ SÜDFRÜCHTE ═══",
+      })
+
+      if (showProductDetails) {
+        Object.entries(globalProductTotalsSuedfruechte)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .forEach(([product, quantity]) => {
+            result.push({
+              _isAggregation: true,
+              _isProductDetail: true,
+              _isGlobalTotal: true,
+              products: `${quantity}× ${product}`,
+            })
+          })
+      } else if (showProductSummary) {
+        const entries = Object.entries(globalProductTotalsSuedfruechte).sort(([a], [b]) => a.localeCompare(b))
+        const productsText = entries.map(([name, qty]) => `${qty}× ${name}`).join(", ")
+        result.push({
+          _isAggregation: true,
+          product_summary: productsText,
+        })
+      }
+    }
+
+    if (Object.keys(globalProductTotalsOther).length > 0) {
+      result.push({
+        _isGroup: true,
+        _isGlobalTotal: true,
+        _groupLabel: "═══ GESAMTSUMME RESTLICHE PRODUKTE ═══",
+        [groupBy[0]]: "═══ RESTLICHE PRODUKTE ═══",
+      })
+
+      if (showProductDetails) {
+        Object.entries(globalProductTotalsOther)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .forEach(([product, quantity]) => {
+            result.push({
+              _isAggregation: true,
+              _isProductDetail: true,
+              _isGlobalTotal: true,
+              products: `${quantity}× ${product}`,
+            })
+          })
+      } else if (showProductSummary) {
+        const entries = Object.entries(globalProductTotalsOther).sort(([a], [b]) => a.localeCompare(b))
+        const productsText = entries.map(([name, qty]) => `${qty}× ${name}`).join(", ")
+        result.push({
+          _isAggregation: true,
+          product_summary: productsText,
+        })
+      }
+    }
+  } else if ((showProductSummary || showProductDetails) && Object.keys(globalProductTotals).length > 0) {
     result.push({
       _isGroup: true,
       _isGlobalTotal: true,
@@ -408,149 +596,105 @@ function flattenOrder(order: any, columns: string[]) {
 function getFieldValue(order: any, field: string): any {
   switch (field) {
     case "order_number":
-      return order.order_number
+      return order.order_number || ""
     case "customer_name":
-      return `${order.customer?.last_name || ""}, ${order.customer?.first_name || ""}`.trim()
+      return order.customer ? `${order.customer.first_name || ""} ${order.customer.last_name || ""}`.trim() : ""
     case "customer_email":
-      return order.customer?.email
+      return order.customer?.email || ""
     case "customer_phone":
-      return order.customer?.phone
+      return order.customer?.phone || ""
     case "customer_postal_code":
-      return order.customer?.postal_code
+      return order.customer?.postal_code || ""
     case "customer_street":
-      return order.customer?.street
+      return order.customer?.street || ""
     case "customer_city":
-      return order.customer?.city
-    case "customer_country":
-      return order.customer?.country
-    case "status":
-      return order.status
-    case "internal_status":
-      return order.internal_status
-    case "payment_method":
-      return order.payment_method
-    case "payment_status":
-      return order.payment_status
-    case "pickup_location":
-      return order.pickup_location
+      return order.customer?.city || ""
+    case "customer_address":
+      const street = order.customer?.street || ""
+      const houseNumber = order.customer?.house_number || ""
+      const postalCode = order.customer?.postal_code || ""
+      const city = order.customer?.city || ""
+      return `${street} ${houseNumber}, ${postalCode} ${city}`.trim()
+    case "customer_default_pickup_location":
+      return order.customer?.default_pickup_location?.name || ""
+    case "customer_default_distribution_person":
+      return order.customer?.default_distribution_person?.name || ""
     case "pickup_location_normalized":
-      return order.pickup_location_normalized || order.pickup_location_ref?.name || order.pickup_location
+      return order.pickup_location_normalized || ""
     case "distribution_person":
-      return order.distribution_person?.name
+      return order.distribution_person?.name || ""
+    case "status":
+      return order.status || ""
+    case "internal_status":
+      return order.internal_status || ""
+    case "payment_method":
+      return order.payment_method || ""
     case "total":
-      return order.total
+      return order.total || 0
     case "created_at":
-      return new Date(order.created_at).toLocaleDateString("de-DE")
-    case "products":
-      return (
-        order.order_items
-          ?.map((item: any) => {
-            const productSize = item.product_size || ""
-            const productName = item.product_name
-            const displayName = productSize ? `${productName} (${productSize})` : productName
-            return `${item.quantity}x ${displayName}`
-          })
-          .join(", ") || ""
-      )
-    case "products_südfrüchte":
-      return (
-        order.order_items
-          ?.filter((item: any) => item.product_category === "Südfrüchte")
-          .map((item: any) => {
-            const productSize = item.product_size || ""
-            const productName = item.product_name
-            const displayName = productSize ? `${productName} (${productSize})` : productName
-            return `${item.quantity}x ${displayName}`
-          })
-          .join(", ") || ""
-      )
-    case "products_other":
-      return (
-        order.order_items
-          ?.filter((item: any) => item.product_category !== "Südfrüchte")
-          .map((item: any) => {
-            const productSize = item.product_size || ""
-            const productName = item.product_name
-            const displayName = productSize ? `${productName} (${productSize})` : productName
-            return `${item.quantity}x ${displayName}`
-          })
-          .join(", ") || ""
-      )
-    case "product_count":
-      return order.order_items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0
+      return order.created_at ? new Date(order.created_at).toLocaleDateString("de-DE") : ""
     case "notes":
-      return order.notes
+      return order.notes || ""
     case "admin_notes":
-      return order.admin_notes
+      return order.admin_notes || ""
     case "special_requests":
-      return order.customer?.special_requests
+      return order.customer?.special_requests || ""
     case "pickup_month":
-      if (order.pickup_date) {
-        const date = new Date(order.pickup_date)
-        const monthNames = [
-          "Januar",
-          "Februar",
-          "März",
-          "April",
-          "Mai",
-          "Juni",
-          "Juli",
-          "August",
-          "September",
-          "Oktober",
-          "November",
-          "Dezember",
-        ]
-        return `${monthNames[date.getMonth()]} ${date.getFullYear()}`
-      }
-      const pickupMatch = order.order_number?.match(/HG-(\d{4})-(\d{2})-\d+/)
-      if (pickupMatch) {
-        const year = pickupMatch[1]
-        const month = Number.parseInt(pickupMatch[2], 10) - 1
-        const monthNames = [
-          "Januar",
-          "Februar",
-          "März",
-          "April",
-          "Mai",
-          "Juni",
-          "Juli",
-          "August",
-          "September",
-          "Oktober",
-          "November",
-          "Dezember",
-        ]
-        return `${monthNames[month]} ${year}`
-      }
-      return "Unbekannt"
-
+      return order.pickup_date ? new Date(order.pickup_date).toLocaleDateString("de-DE", { month: "long" }) : ""
     case "order_month":
-      const orderMatch = order.order_number?.match(/HG-(\d{4})-(\d{2})-\d+/)
-      if (orderMatch) {
-        const year = orderMatch[1]
-        const month = Number.parseInt(orderMatch[2], 10) - 1
-        const monthNames = [
-          "Januar",
-          "Februar",
-          "März",
-          "April",
-          "Mai",
-          "Juni",
-          "Juli",
-          "August",
-          "September",
-          "Oktober",
-          "November",
-          "Dezember",
-        ]
-        return `${monthNames[month]} ${year}`
-      }
-      return "Unbekannt"
-
+      return order.created_at ? new Date(order.created_at).toLocaleDateString("de-DE", { month: "long" }) : ""
     case "delivery_method":
-      return order.is_pickup ? "Abholung" : "Lieferung"
+      return order.delivery_method || ""
+    case "products":
+      if (order.order_items && order.order_items.length > 0) {
+        console.log("[v0] DEBUG products - First item:", {
+          product_name: order.order_items[0].product_name,
+          product_category: order.order_items[0].product_category,
+          product_size: order.order_items[0].product_size,
+          product_unit: order.order_items[0].product?.unit,
+        })
+      }
+      return (order.order_items || [])
+        .map((item: any) => {
+          const productName = item.product_name || "Unbekannt"
+          const productSize = item.product_size || item.product?.unit || ""
+          const displayName = productSize ? `${productName} (${productSize})` : productName
+          return `${item.quantity}× ${displayName}`
+        })
+        .join(", ")
+    case "products_südfrüchte":
+      return (order.order_items || [])
+        .filter((item: any) => {
+          const category = item.product_category?.toLowerCase() || ""
+          console.log(
+            "[v0] DEBUG südfrüchte filter - category:",
+            category,
+            "includes südfr:",
+            category.includes("südfr"),
+          )
+          return category.includes("südfr")
+        })
+        .map((item: any) => {
+          const productName = item.product_name || "Unbekannt"
+          const productSize = item.product_size || item.product?.unit || ""
+          const displayName = productSize ? `${productName} (${productSize})` : productName
+          return `${item.quantity}× ${displayName}`
+        })
+        .join(", ")
+    case "products_other":
+      return (order.order_items || [])
+        .filter((item: any) => {
+          const category = item.product_category?.toLowerCase() || ""
+          return !category.includes("südfr")
+        })
+        .map((item: any) => {
+          const productName = item.product_name || "Unbekannt"
+          const productSize = item.product_size || item.product?.unit || ""
+          const displayName = productSize ? `${productName} (${productSize})` : productName
+          return `${item.quantity}× ${displayName}`
+        })
+        .join(", ")
     default:
-      return order[field]
+      return ""
   }
 }

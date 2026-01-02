@@ -8,7 +8,7 @@ Das Projekt verwendet ein standardisiertes Error-Handling-System mit benutzerdef
 
 ### Custom Error Classes
 
-\`\`\`typescript
+```typescript
 import { 
   ValidationError, 
   AuthenticationError, 
@@ -31,11 +31,11 @@ throw new NotFoundError('Produkt')
 
 // Datenbankfehler
 throw new DatabaseError('Fehler beim Speichern', error)
-\`\`\`
+```
 
 ### Error Handler Wrapper
 
-\`\`\`typescript
+```typescript
 import { withErrorHandling } from '@/lib/errors/error-handler'
 
 export const GET = withErrorHandling(async (request: NextRequest) => {
@@ -45,11 +45,11 @@ export const GET = withErrorHandling(async (request: NextRequest) => {
   const data = await fetchData()
   return NextResponse.json(data)
 })
-\`\`\`
+```
 
 ### Manuelle Fehlerbehandlung
 
-\`\`\`typescript
+```typescript
 import { handleAPIError } from '@/lib/errors/error-handler'
 
 export async function POST(request: NextRequest) {
@@ -59,13 +59,13 @@ export async function POST(request: NextRequest) {
     return handleAPIError(error)
   }
 }
-\`\`\`
+```
 
 ## Client-Side
 
 ### Fetch mit Error Handling
 
-\`\`\`typescript
+```typescript
 import { fetchWithErrorHandling, ClientError } from '@/lib/errors/client-errors'
 
 try {
@@ -76,11 +76,11 @@ try {
     console.error(error.message, error.code)
   }
 }
-\`\`\`
+```
 
 ### Error Alert Component
 
-\`\`\`tsx
+```tsx
 import { ErrorAlert } from '@/components/ui/error-alert'
 
 function MyComponent() {
@@ -98,11 +98,11 @@ function MyComponent() {
     </>
   )
 }
-\`\`\`
+```
 
 ### Error Helper Functions
 
-\`\`\`typescript
+```typescript
 import { 
   getErrorMessage, 
   isNetworkError, 
@@ -116,20 +116,20 @@ if (isNetworkError(error)) {
 if (isAuthError(error)) {
   // Redirect zu Login
 }
-\`\`\`
+```
 
 ## Error Response Format
 
 Alle API-Fehler folgen diesem Format:
 
-\`\`\`json
+```json
 {
   "error": "Fehlermeldung",
   "code": "ERROR_CODE",
   "details": { /* optional */ },
   "timestamp": "2025-01-21T10:30:00.000Z"
 }
-\`\`\`
+```
 
 ## Best Practices
 
