@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import { getAdminClient } from "@/lib/supabase/admin"
 
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
 export async function GET() {
   try {
     const supabase = getAdminClient()
@@ -64,7 +67,13 @@ export async function GET() {
       }
     })
 
-    return NextResponse.json(transformedSchedules || [])
+    return NextResponse.json(transformedSchedules || [], {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "CDN-Cache-Control": "no-store",
+        "Vercel-CDN-Cache-Control": "no-store",
+      },
+    })
   } catch (error) {
     console.error("[v0] Error loading delivery schedules:", error)
     return NextResponse.json({ error: "Failed to load delivery schedules" }, { status: 500 })

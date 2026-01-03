@@ -29,6 +29,8 @@ import { calculateBasePrice } from "@/lib/utils/price"
 import { AddToCartButton } from "@/components/add-to-cart-button" // Declare AddToCartButton
 import { useSearchParams } from "next/navigation"
 
+export const dynamic = "force-dynamic"
+
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center p-8">
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>

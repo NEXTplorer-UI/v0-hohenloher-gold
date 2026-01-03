@@ -10,7 +10,7 @@ Diese Vorlagen können im Supabase Dashboard unter **Authentication → Email Te
 
 **Body (HTML):**
 
-```html
+\`\`\`html
 <!DOCTYPE html>
 <html>
 <head>
@@ -87,7 +87,7 @@ Diese Vorlagen können im Supabase Dashboard unter **Authentication → Email Te
   </table>
 </body>
 </html>
-```
+\`\`\`
 
 ---
 
@@ -97,7 +97,7 @@ Diese Vorlagen können im Supabase Dashboard unter **Authentication → Email Te
 
 **Body (HTML):**
 
-```html
+\`\`\`html
 <!DOCTYPE html>
 <html>
 <head>
@@ -180,7 +180,7 @@ Diese Vorlagen können im Supabase Dashboard unter **Authentication → Email Te
   </table>
 </body>
 </html>
-```
+\`\`\`
 
 ---
 
