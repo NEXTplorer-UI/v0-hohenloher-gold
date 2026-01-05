@@ -33,6 +33,8 @@ import {
   CheckCircle,
   Clock,
   Filter,
+  Copy,
+  Download,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import NewsletterConfirmationDialog from "./newsletter-confirmation-dialog"
@@ -176,6 +178,85 @@ export default function NewsletterSystem() {
   const [emailSends, setEmailSends] = useState<EmailSend[]>([])
   const [showSendDetails, setShowSendDetails] = useState(false)
   const [isResending, setIsResending] = useState(false)
+
+  const handleCopyEmails = async () => {
+    try {
+      const response = await fetch("/api/admin/newsletter/get-recipients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filters: recipientFilters }),
+      })
+
+      const data = await response.json()
+
+      if (data.recipients && data.recipients.length > 0) {
+        const emails = data.recipients.map((r: any) => r.email).join("; ")
+        await navigator.clipboard.writeText(emails)
+
+        toast({
+          title: "E-Mails kopiert",
+          description: `${data.recipients.length} E-Mail-Adressen wurden in die Zwischenablage kopiert`,
+        })
+      } else {
+        toast({
+          title: "Keine Empfänger",
+          description: "Es wurden keine E-Mail-Adressen gefunden",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Error copying emails:", error)
+      toast({
+        title: "Fehler",
+        description: "E-Mails konnten nicht kopiert werden",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDownloadEmails = async () => {
+    try {
+      const response = await fetch("/api/admin/newsletter/get-recipients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filters: recipientFilters }),
+      })
+
+      const data = await response.json()
+
+      if (data.recipients && data.recipients.length > 0) {
+        const emails = data.recipients.map((r: any) => r.email).join("\n")
+        const blob = new Blob([emails], { type: "text/plain" })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `email-adressen-${new Date().toISOString().split("T")[0]}.txt`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+
+        toast({
+          title: "E-Mails exportiert",
+          description: `${data.recipients.length} E-Mail-Adressen wurden heruntergeladen`,
+        })
+      } else {
+        toast({
+          title: "Keine Empfänger",
+          description: "Es wurden keine E-Mail-Adressen gefunden",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Error downloading emails:", error)
+      toast({
+        title: "Fehler",
+        description: "E-Mails konnten nicht heruntergeladen werden",
+        variant: "destructive",
+      })
+    }
+  }
+  // </CHANGE>
 
   const loadSendDetails = async (sendId: string) => {
     try {
@@ -1203,17 +1284,13 @@ Entdecken Sie unsere aktuellen Sonderangebote auf frische Südfrüchte.
             </div>
 
             <div className="flex gap-2 flex-wrap">
-              <Button
-                variant="outline"
-                onClick={handleOpenSaveDraft}
-                disabled={isLoading || !subject.trim() || !content.trim()}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Als Entwurf speichern
+              <Button variant="outline" disabled={isLoading || recipientCount === 0} onClick={handleCopyEmails}>
+                <Copy className="h-4 w-4 mr-2" />
+                E-Mails kopieren
               </Button>
-              <Button variant="outline" onClick={() => setShowDrafts(true)} disabled={isLoading}>
-                <FolderOpen className="h-4 w-4 mr-2" />
-                Entwürfe laden ({drafts?.length ?? 0})
+              <Button variant="outline" disabled={isLoading || recipientCount === 0} onClick={handleDownloadEmails}>
+                <Download className="h-4 w-4 mr-2" />
+                Als TXT
               </Button>
               <Button
                 variant="outline"
@@ -1231,6 +1308,7 @@ Entdecken Sie unsere aktuellen Sonderangebote auf frische Südfrüchte.
                 Senden ({recipientCount} Empfänger)
               </Button>
             </div>
+            {/* </CHANGE> */}
           </div>
         </CardContent>
       </Card>
