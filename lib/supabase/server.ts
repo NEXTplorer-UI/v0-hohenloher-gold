@@ -75,14 +75,19 @@ export async function requireAdmin() {
 
   // Check cache first
   const now = Date.now()
-  if (adminCheckCache && adminCheckCache.userId === user.id && (now - adminCheckCache.timestamp) < ADMIN_CHECK_CACHE_DURATION) {
+  if (
+    adminCheckCache &&
+    adminCheckCache.userId === user.id &&
+    now - adminCheckCache.timestamp < ADMIN_CHECK_CACHE_DURATION
+  ) {
     if (!adminCheckCache.isAdmin) {
       throw new Error("Forbidden: Admin access required")
     }
     return user
   }
 
-  const { data: profile, error: profileError } = await supabase
+  const adminClient = await createAdminClient()
+  const { data: profile, error: profileError } = await adminClient
     .from("profiles")
     .select("role")
     .eq("id", user.id)
@@ -93,12 +98,12 @@ export async function requireAdmin() {
   }
 
   const isAdmin = profile.role === "admin"
-  
+
   // Update cache
   adminCheckCache = {
     userId: user.id,
     isAdmin,
-    timestamp: now
+    timestamp: now,
   }
 
   if (!isAdmin) {

@@ -1133,10 +1133,13 @@ function OrderManagement() {
         .map((item) => {
           const product = products.find((p) => p.id.toString() === item.productId)
           return {
+            id: product?.id || null, // Send product ID
             name: product?.name || "Unbekanntes Produkt",
             quantity: item.quantity,
             price: item.price || product?.price || 0,
-            category: "Manuell erfasst",
+            category: product?.category || "Unbekannt", // Use real category instead of "Manuell erfasst"
+            size: product?.size || null, // Add product size
+            unit: product?.unit || null, // Add product unit
           }
         })
 

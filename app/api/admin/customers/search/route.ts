@@ -1,28 +1,9 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createServerClient()
-    
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-
-    if (profile?.role !== "admin") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-    // </CHANGE>
+    const supabase = createAdminClient()
 
     const searchParams = request.nextUrl.searchParams
     const query = searchParams.get("q") || ""
@@ -38,10 +19,11 @@ export async function GET(request: NextRequest) {
     const { data: customers, error } = await supabase
       .from("customers")
       .select("id, email, first_name, last_name, phone, default_distribution_person_id")
-      .or(`first_name.ilike.%${searchLower}%,last_name.ilike.%${searchLower}%,email.ilike.%${searchLower}%,phone.ilike.%${searchLower}%`)
+      .or(
+        `first_name.ilike.%${searchLower}%,last_name.ilike.%${searchLower}%,email.ilike.%${searchLower}%,phone.ilike.%${searchLower}%`,
+      )
       .limit(20)
       .order("last_name")
-    // </CHANGE>
 
     if (error) {
       console.error("[v0] Error searching customers:", error)
