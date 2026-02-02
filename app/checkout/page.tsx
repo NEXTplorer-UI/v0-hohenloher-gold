@@ -636,30 +636,54 @@ export default function CheckoutPage() {
             }
           }
 
-          const tempOrderNumber = `HG-TEMP-${Date.now()}`
-
-          const response = await fetch("/api/payments/sumup/create-checkout", {
+          // Erstelle Checkout über /api/checkout/temp für korrekte Bestellnummer
+          const siteUrl = typeof window !== "undefined" ? window.location.origin : ""
+          
+          const checkoutResponse = await fetch("/api/checkout/temp", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              amount: totalAmount.toFixed(2),
-              currency: "eur",
-              orderNumber: tempOrderNumber,
-              customerEmail: email,
+              paymentMethod: "sumup",
+              email,
+              firstName,
+              lastName,
+              phone,
+              deliveryDate: finalPickupDate,
+              deliveryTimeSlot: deliveryDateInfo?.pickupStartTime && deliveryDateInfo?.pickupEndTime 
+                ? `${deliveryDateInfo.pickupStartTime} - ${deliveryDateInfo.pickupEndTime}` 
+                : null,
+              deliveryAddress: deliveryMethod === "delivery" 
+                ? { street, houseNumber, zip, city }
+                : null,
+              cartItems: state.items.map((item) => ({
+                ...item,
+                price: safeCalculatePrice(item.price, item.category),
+              })),
+              totalAmount,
+              notes: finalOrderMessage,
+              siteUrl,
+              // Zusätzliche Daten für die Bestellung
+              pickupLocation: finalPickupLocation,
+              pickupLocationId: finalPickupLocationId,
+              deliveryMethod,
+              deliveryScheduleId: deliveryDateInfo?.scheduleId || null,
+              emailReminder,
+              emailUpdates,
+              isTest: isTestMode,
             }),
           })
 
-          const parsed = await safeJson(response)
+          const checkoutParsed = await safeJson(checkoutResponse)
 
-          if (!response.ok) {
-            throw new Error(parsed.error || `Request failed (${response.status})`)
+          if (!checkoutResponse.ok) {
+            throw new Error(checkoutParsed.error || `Checkout konnte nicht erstellt werden (${checkoutResponse.status})`)
           }
 
-          const { checkoutId } = parsed
+          const { checkoutId, tempOrderNumber, sumupCheckoutId: sumupId } = checkoutParsed
 
-          setSumupCheckoutId(checkoutId)
+          setSumupCheckoutId(sumupId)
           setSumupOrderData({
             customerName: `${firstName} ${lastName}`,
             email,
@@ -683,8 +707,9 @@ export default function CheckoutPage() {
             pickupEndTime: deliveryDateInfo?.pickupEndTime || null,
             attributes: filledBulkOrderNames.length > 0 ? { bulk_order_names: filledBulkOrderNames } : undefined,
             orderNumber: tempOrderNumber,
+            checkoutId: checkoutId, // DB Checkout ID für spätere Referenz
             isTest: isTestMode,
-            testMode: isTestMode, // Add testMode flag for invoice creation
+            testMode: isTestMode,
           })
           setShowSumUpPayment(true)
           return

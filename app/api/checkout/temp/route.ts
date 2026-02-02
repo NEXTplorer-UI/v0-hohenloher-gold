@@ -19,6 +19,14 @@ export async function POST(request: Request) {
       totalAmount,
       notes,
       siteUrl,
+      // Zusätzliche Felder für vollständige Bestelldaten
+      pickupLocation,
+      pickupLocationId,
+      deliveryMethod,
+      deliveryScheduleId,
+      emailReminder,
+      emailUpdates,
+      isTest,
     } = body
 
     console.log("[v0] [Checkout] Request data:", {
@@ -26,6 +34,7 @@ export async function POST(request: Request) {
       email,
       itemCount: cartItems?.length,
       totalAmount,
+      deliveryMethod,
     })
 
     // Validation
@@ -59,28 +68,91 @@ export async function POST(request: Request) {
     const ipAddress = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || undefined
     const referrer = request.headers.get("referer") || undefined
 
-    const { data: checkout, error: checkoutError } = await supabase
+    // Prüfe ob ein fehlgeschlagener Checkout für diese Email existiert (Wiederverwendung)
+    const { data: existingCheckout } = await supabase
       .from("checkouts")
-      .insert({
-        status: "initiated",
-        payment_method: paymentMethod,
-        email: email.toLowerCase().trim(),
-        first_name: firstName,
-        last_name: lastName,
-        phone,
-        delivery_date: deliveryDate,
-        delivery_time_slot: deliveryTimeSlot,
-        delivery_address: deliveryAddress,
-        cart_items: cartItems,
-        total_amount: totalAmount,
-        notes,
-        expires_at: expiresAt.toISOString(),
-        user_agent: userAgent,
-        ip_address: ipAddress,
-        referrer: referrer,
-      })
-      .select()
+      .select("id, sumup_checkout_id, status")
+      .eq("email", email.toLowerCase().trim())
+      .in("status", ["failed", "initiated"])
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single()
+
+    let checkout
+    let checkoutError
+
+    if (existingCheckout && existingCheckout.status === "failed") {
+      // Fehlgeschlagenen Checkout wiederverwenden
+      console.log("[v0] [Checkout] Reusing failed checkout:", existingCheckout.id)
+      
+      const { data: updatedCheckout, error: updateError } = await supabase
+        .from("checkouts")
+        .update({
+          status: "initiated",
+          payment_method: paymentMethod,
+          first_name: firstName,
+          last_name: lastName,
+          phone,
+          delivery_date: deliveryDate,
+          delivery_time_slot: deliveryTimeSlot,
+          delivery_address: deliveryAddress,
+          cart_items: cartItems,
+          total_amount: totalAmount,
+          notes,
+          expires_at: expiresAt.toISOString(),
+          user_agent: userAgent,
+          ip_address: ipAddress,
+          referrer: referrer,
+          pickup_location: pickupLocation,
+          pickup_location_id: pickupLocationId,
+          delivery_method: deliveryMethod,
+          delivery_schedule_id: deliveryScheduleId,
+          email_reminder: emailReminder,
+          email_updates: emailUpdates,
+          is_test: isTest,
+          sumup_checkout_id: null, // Reset SumUp checkout für neuen Versuch
+        })
+        .eq("id", existingCheckout.id)
+        .select()
+        .single()
+      
+      checkout = updatedCheckout
+      checkoutError = updateError
+    } else {
+      // Neuen Checkout erstellen
+      const { data: newCheckout, error: insertError } = await supabase
+        .from("checkouts")
+        .insert({
+          status: "initiated",
+          payment_method: paymentMethod,
+          email: email.toLowerCase().trim(),
+          first_name: firstName,
+          last_name: lastName,
+          phone,
+          delivery_date: deliveryDate,
+          delivery_time_slot: deliveryTimeSlot,
+          delivery_address: deliveryAddress,
+          cart_items: cartItems,
+          total_amount: totalAmount,
+          notes,
+          expires_at: expiresAt.toISOString(),
+          user_agent: userAgent,
+          ip_address: ipAddress,
+          referrer: referrer,
+          pickup_location: pickupLocation,
+          pickup_location_id: pickupLocationId,
+          delivery_method: deliveryMethod,
+          delivery_schedule_id: deliveryScheduleId,
+          email_reminder: emailReminder,
+          email_updates: emailUpdates,
+          is_test: isTest,
+        })
+        .select()
+        .single()
+      
+      checkout = newCheckout
+      checkoutError = insertError
+    }
 
     if (checkoutError) {
       console.error("[v0] [Checkout] Failed to create checkout:", checkoutError)

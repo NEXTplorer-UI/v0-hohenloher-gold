@@ -107,22 +107,76 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
                   setIsLoading(false)
                   onSuccess?.(body)
                 } else if (body?.status === "FAILED") {
-                  console.log("[v0] [SumUp Widget] Payment failed - status: FAILED")
-                  const reason = body?.message || body?.failure_reason || "Zahlung fehlgeschlagen"
-                  setFailureReason(reason)
+                  console.log("[v0] [SumUp Widget] Payment failed - status: FAILED", body)
+                  
+                  // Detaillierte Fehleranalyse basierend auf SumUp failure_reason
+                  const failureCode = body?.failure_reason || body?.error_code || ""
+                  const failureMessage = body?.message || ""
+                  
+                  let detailedReason = "Die Zahlung konnte nicht abgeschlossen werden."
+                  
+                  // 3D-Secure spezifische Fehler
+                  if (failureCode.includes("3ds") || failureCode.includes("3DS") || 
+                      failureMessage.toLowerCase().includes("3d secure") ||
+                      failureMessage.toLowerCase().includes("authentication")) {
+                    detailedReason = "Die 3D-Secure Authentifizierung ist fehlgeschlagen. Bitte stellen Sie sicher, dass Sie die Authentifizierung in Ihrer Banking-App oder per SMS-Code bestätigen."
+                  } 
+                  // Karte abgelehnt
+                  else if (failureCode.includes("declined") || failureCode.includes("DECLINED") ||
+                           failureMessage.toLowerCase().includes("declined") ||
+                           failureMessage.toLowerCase().includes("abgelehnt")) {
+                    detailedReason = "Ihre Karte wurde von Ihrer Bank abgelehnt. Bitte kontaktieren Sie Ihre Bank oder verwenden Sie eine andere Karte."
+                  }
+                  // Unzureichendes Guthaben
+                  else if (failureCode.includes("insufficient") || failureCode.includes("INSUFFICIENT") ||
+                           failureMessage.toLowerCase().includes("insufficient") ||
+                           failureMessage.toLowerCase().includes("guthaben")) {
+                    detailedReason = "Das Kartenguthaben reicht nicht aus. Bitte verwenden Sie eine andere Karte oder Zahlungsmethode."
+                  }
+                  // Karte abgelaufen
+                  else if (failureCode.includes("expired") || failureCode.includes("EXPIRED") ||
+                           failureMessage.toLowerCase().includes("expired") ||
+                           failureMessage.toLowerCase().includes("abgelaufen")) {
+                    detailedReason = "Ihre Karte ist abgelaufen. Bitte verwenden Sie eine gültige Karte."
+                  }
+                  // Ungültige Kartendaten
+                  else if (failureCode.includes("invalid") || failureCode.includes("INVALID") ||
+                           failureMessage.toLowerCase().includes("invalid") ||
+                           failureMessage.toLowerCase().includes("ungültig")) {
+                    detailedReason = "Die Kartendaten sind ungültig. Bitte überprüfen Sie Kartennummer, Ablaufdatum und CVV."
+                  }
+                  // Abgebrochen vom Benutzer
+                  else if (failureCode.includes("cancelled") || failureCode.includes("CANCELLED") ||
+                           failureCode.includes("aborted") || failureCode.includes("ABORTED") ||
+                           failureMessage.toLowerCase().includes("cancelled") ||
+                           failureMessage.toLowerCase().includes("abgebrochen")) {
+                    detailedReason = "Die Zahlung wurde abgebrochen. Bitte versuchen Sie es erneut, wenn Sie fortfahren möchten."
+                  }
+                  // Netzwerkfehler
+                  else if (failureCode.includes("network") || failureCode.includes("timeout") ||
+                           failureMessage.toLowerCase().includes("network") ||
+                           failureMessage.toLowerCase().includes("timeout")) {
+                    detailedReason = "Es gab ein Netzwerkproblem. Bitte überprüfen Sie Ihre Internetverbindung und versuchen Sie es erneut."
+                  }
+                  // Fallback mit Original-Nachricht wenn vorhanden
+                  else if (failureMessage) {
+                    detailedReason = failureMessage
+                  }
+                  
+                  setFailureReason(detailedReason)
                   setPaymentFailed(true)
                   setIsLoading(false)
                   onFailed?.(body)
                 } else if (body?.status === "PENDING") {
                   console.log("[v0] [SumUp Widget] Payment pending - status: PENDING")
-                  setFailureReason("Zahlung wird noch verarbeitet. Bitte warten Sie einen Moment.")
+                  setFailureReason("Die Zahlung wird noch verarbeitet. Bitte schließen Sie diese Seite nicht. Falls die Verarbeitung länger als 2 Minuten dauert, kontaktieren Sie uns bitte.")
                   setPaymentFailed(true)
                   setIsLoading(false)
                   onFailed?.(body)
                 } else {
                   console.warn("[v0] [SumUp Widget] Unknown payment status:", body?.status)
                   setFailureReason(
-                    `Unbekannter Status: ${body?.status}. Bitte kontaktieren Sie uns, falls Probleme auftreten.`,
+                    `Die Zahlung hat einen unerwarteten Status (${body?.status}). Bitte kontaktieren Sie uns unter kontakt@suedfruechte-hohenlohe.de falls Sie Fragen haben.`,
                   )
                   setPaymentFailed(true)
                   setIsLoading(false)
@@ -130,7 +184,7 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
                 }
               } else if (type === "error") {
                 const errorMsg = body?.message || "Zahlung fehlgeschlagen"
-                console.error("[v0] [SumUp Widget] Payment error:", errorMsg)
+                console.error("[v0] [SumUp Widget] Payment error:", errorMsg, body)
                 setError(errorMsg)
                 setIsLoading(false)
                 onError?.(errorMsg)
@@ -194,17 +248,15 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
           <div className="flex items-start space-x-3">
             <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
             <div className="flex-1">
-              <h3 className="font-semibold text-red-900 mb-1">Zahlung fehlgeschlagen</h3>
-              <p className="text-sm text-red-700">{failureReason}</p>
-              <div className="mt-3 text-xs text-red-600 space-y-1">
-                <p>
-                  <strong>Mögliche Ursachen:</strong>
-                </p>
-                <ul className="list-disc list-inside ml-2">
-                  <li>Karte wurde abgelehnt</li>
-                  <li>Unzureichendes Guthaben</li>
-                  <li>3D-Secure-Authentifizierung fehlgeschlagen</li>
-                  <li>Netzwerkprobleme</li>
+              <h3 className="font-semibold text-red-900 mb-2">Zahlung nicht abgeschlossen</h3>
+              <p className="text-sm text-red-700 mb-3">{failureReason}</p>
+              <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+                <p className="font-semibold mb-1">Was Sie tun können:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Versuchen Sie es erneut mit derselben oder einer anderen Karte</li>
+                  <li>Stellen Sie sicher, dass 3D-Secure / Verified by Visa aktiviert ist</li>
+                  <li>Wählen Sie alternativ "Überweisung" als Zahlungsmethode</li>
+                  <li>Bei weiteren Problemen: kontakt@suedfruechte-hohenlohe.de</li>
                 </ul>
               </div>
             </div>
@@ -226,7 +278,7 @@ export function PaymentSumUp({ checkoutId, onSuccess, onError, onFailed }: Payme
             onClick={() => {
               window.location.href = "/checkout"
             }}
-            className="flex-1"
+            className="flex-1 bg-transparent"
           >
             Zahlungsweise ändern
           </Button>
