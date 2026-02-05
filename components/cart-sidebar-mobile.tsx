@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useCart } from "@/contexts/cart-context"
-import { ShoppingCart, Plus, Minus, Trash2 } from "lucide-react"
+import { ShoppingCart, Plus, Minus, Trash2, RefreshCw } from "lucide-react"
 import Link from "next/link"
 
 const CartSidebarMobile = memo(() => {
@@ -90,6 +90,26 @@ const CartSidebarMobile = memo(() => {
                       Zur Kasse
                     </Button>
                   </Link>
+                </div>
+
+                <div className="border-t pt-3 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm("Möchten Sie den Warenkorb wirklich zurücksetzen? Alle Produkte werden entfernt.")) {
+                        try {
+                          localStorage.removeItem("hohenloher-gold-cart")
+                          window.location.reload()
+                        } catch (e) {
+                          window.location.reload()
+                        }
+                      }
+                    }}
+                    className="w-full text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center justify-center gap-1.5 py-2"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Probleme? Warenkorb zurücksetzen
+                  </button>
                 </div>
               </>
             )}
