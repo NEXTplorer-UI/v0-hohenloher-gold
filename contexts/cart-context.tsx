@@ -38,6 +38,7 @@ const CartContext = createContext<{
   removeItem: (id: number) => void
   updateQuantity: (id: number, quantity: number) => Promise<void>
   clearCart: () => void
+  forceResetCart: () => void
   isEmpty: boolean
   hasItems: boolean
   totalItems: number
@@ -356,6 +357,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: "CLEAR_CART" })
   }
 
+  // Force reset - löscht localStorage direkt und lädt Seite neu
+  const forceResetCart = () => {
+    try {
+      localStorage.removeItem("hohenloher-gold-cart")
+      dispatch({ type: "CLEAR_CART" })
+      window.location.reload()
+    } catch (error) {
+      console.error("Error force resetting cart:", error)
+      // Fallback: Trotzdem versuchen die Seite neu zu laden
+      window.location.reload()
+    }
+  }
+
   useEffect(() => {
     const currentWeight = calculateTotalWeight()
     if (currentWeight <= 10 && weightWarningShown) {
@@ -375,6 +389,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       removeItem,
       updateQuantity,
       clearCart,
+      forceResetCart,
       isEmpty: (state.items || []).length === 0,
       hasItems: (state.items || []).length > 0,
       totalItems: state.itemCount,

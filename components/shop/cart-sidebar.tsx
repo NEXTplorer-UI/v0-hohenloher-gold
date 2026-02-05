@@ -1,13 +1,21 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useState } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/contexts/cart-context"
-import { ShoppingCart, Plus, Minus, Trash2 } from "lucide-react"
+import { ShoppingCart, Plus, Minus, Trash2, RefreshCw } from "lucide-react"
 
 const CartSidebar = memo(() => {
-  const { items = [], isOpen, setIsOpen, updateQuantity, removeFromCart, getTotalPrice } = useCart()
+  const { items = [], isOpen, setIsOpen, updateQuantity, removeFromCart, getTotalPrice, forceResetCart } = useCart()
+  const [isResetting, setIsResetting] = useState(false)
+
+  const handleForceReset = () => {
+    if (window.confirm("Möchten Sie den Warenkorb wirklich zurücksetzen? Alle Produkte werden entfernt.")) {
+      setIsResetting(true)
+      forceResetCart()
+    }
+  }
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -55,6 +63,18 @@ const CartSidebar = memo(() => {
               </Button>
             </div>
           )}
+
+          {/* Warenkorb zurücksetzen Button - immer sichtbar */}
+          <div className="border-t pt-4 mt-4">
+            <button
+              onClick={handleForceReset}
+              disabled={isResetting}
+              className="w-full text-xs text-muted-foreground hover:text-destructive transition-colors flex items-center justify-center gap-1.5 py-2"
+            >
+              <RefreshCw className={`w-3 h-3 ${isResetting ? "animate-spin" : ""}`} />
+              {isResetting ? "Wird zurückgesetzt..." : "Probleme? Warenkorb zurücksetzen"}
+            </button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
