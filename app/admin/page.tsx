@@ -327,7 +327,7 @@ function CustomerSegments() {
 
 function AdminDashboardContent() {
   const { state, dispatch, updateActivity, handleLogout } = useAdmin()
-  const { user: authUser } = useAuth()
+  const { user: authUser, loading: authLoading } = useAuth()
   const router = useRouter()
   const [activeTab, setActiveTab] = usePersistedState({
     key: "admin-active-tab",
@@ -337,6 +337,9 @@ function AdminDashboardContent() {
   const [isRegeneratingQR, setIsRegeneratingQR] = useState(false)
 
   useEffect(() => {
+    // Warte bis Auth-Loading abgeschlossen ist
+    if (authLoading) return
+
     const checkAuth = async () => {
       try {
         if (!authUser) {
@@ -367,7 +370,7 @@ function AdminDashboardContent() {
       document.removeEventListener("visibilitychange", handleVisibilityChange)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, authUser])
+  }, [router, authUser, authLoading])
 
   useEffect(() => {
     if (!state.autoLogoutEnabled || !state.user) return
@@ -549,7 +552,7 @@ function AdminDashboardContent() {
     }
   }
 
-  if (state.loading) {
+  if (state.loading || authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
