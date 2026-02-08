@@ -552,7 +552,10 @@ function AdminDashboardContent() {
     }
   }
 
+  console.log("[v0] Admin render - authLoading:", authLoading, "state.loading:", state.loading, "state.user:", state.user?.email, "authUser:", authUser?.email)
+
   if (state.loading || authLoading) {
+    console.log("[v0] Admin showing loading spinner - authLoading:", authLoading, "state.loading:", state.loading)
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -562,8 +565,11 @@ function AdminDashboardContent() {
   }
 
   if (!state.user) {
+    console.log("[v0] Admin - no state.user, returning null")
     return null
   }
+
+  console.log("[v0] Admin - rendering dashboard for:", state.user.email)
 
   return (
     <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6">
@@ -788,9 +794,10 @@ function AdminDashboardContent() {
 }
 
 export default function AdminDashboard() {
+  console.log("[v0] AdminDashboard wrapper rendering")
   return (
-    <AdminProvider>
-      <AdminDashboardContent />
-    </AdminProvider>
+  <AdminProvider>
+  <AdminDashboardContent />
+  </AdminProvider>
   )
 }
