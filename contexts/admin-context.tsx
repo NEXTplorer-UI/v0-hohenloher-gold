@@ -37,6 +37,7 @@ const AdminContext = createContext<{
 } | null>(null)
 
 function adminReducer(state: AdminState, action: AdminAction): AdminState {
+  console.log("[v0] adminReducer action:", action.type, "payload:", "payload" in action ? action.payload : "N/A")
   switch (action.type) {
     case "SET_USER":
       return { ...state, user: action.payload }
@@ -64,6 +65,7 @@ function adminReducer(state: AdminState, action: AdminAction): AdminState {
 }
 
 export function AdminProvider({ children }: { children: ReactNode }) {
+  console.log("[v0] AdminProvider render - mounting/re-rendering")
   const [state, dispatch] = useReducer(adminReducer, {
     user: null,
     loading: true,
@@ -105,6 +107,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const handleLogout = useCallback(async () => {
+    console.log("[v0] AdminProvider - handleLogout called")
     const { createClient } = await import("@/lib/supabase/client")
     const supabase = createClient()
     await supabase.auth.signOut()

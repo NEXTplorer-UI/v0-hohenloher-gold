@@ -17,25 +17,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [loading, setLoading] = useState(true)
 
+  console.log("[v0] AuthProvider render - loading:", loading, "user:", user?.email ?? "null")
+
   useEffect(() => {
-    const supabase = getBrowserClient()
+    console.log("[v0] AuthProvider useEffect - mounting, calling getBrowserClient")
+    let supabase: ReturnType<typeof getBrowserClient>
+    try {
+      supabase = getBrowserClient()
+      console.log("[v0] AuthProvider - supabase client created successfully")
+    } catch (err) {
+      console.error("[v0] AuthProvider - ERROR creating supabase client:", err)
+      setLoading(false)
+      return
+    }
 
     // Get initial session
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    console.log("[v0] AuthProvider - calling getUser()")
+    supabase.auth.getUser().then(({ data: { user }, error }) => {
+      console.log("[v0] AuthProvider - getUser result:", user?.email ?? "null", "error:", error?.message ?? "none")
       setUser(user)
+      setLoading(false)
+    }).catch((err) => {
+      console.error("[v0] AuthProvider - getUser() EXCEPTION:", err)
       setLoading(false)
     })
 
     // Listen for auth changes
+    console.log("[v0] AuthProvider - setting up onAuthStateChange listener")
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("[v0] AuthProvider - onAuthStateChange event:", _event, "user:", session?.user?.email ?? "null")
       setUser(session?.user ?? null)
       setLoading(false)
     })
 
     // Cleanup: unsubscribe when component unmounts
     return () => {
+      console.log("[v0] AuthProvider - unmounting, unsubscribing")
       subscription.unsubscribe()
     }
   }, []) // Empty dependency array - only run once on mount

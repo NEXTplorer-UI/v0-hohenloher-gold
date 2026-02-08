@@ -91,34 +91,33 @@ const calculateTotalsWithDiscount = (state: CartState): CartState => {
 }
 
 function cartReducer(state: CartState, action: CartAction): CartState {
-  const items = state.items || []
   switch (action.type) {
     case "ADD_ITEM": {
-      const existingItem = items.find((item) => item.id === action.payload.id)
+      const existingItem = state.items.find((item) => item.id === action.payload.id)
 
       if (existingItem) {
-        const updatedItems = items.map((item) =>
+        const updatedItems = state.items.map((item) =>
           item.id === action.payload.id ? { ...item, quantity: item.quantity + 1 } : item,
         )
         return calculateTotalsWithDiscount({ ...state, items: updatedItems })
       } else {
-        const newItems = [...items, { ...action.payload, quantity: 1 }]
+        const newItems = [...state.items, { ...action.payload, quantity: 1 }]
         return calculateTotalsWithDiscount({ ...state, items: newItems })
       }
     }
 
     case "REMOVE_ITEM": {
-      const newItems = items.filter((item) => item.id !== action.payload)
+      const newItems = state.items.filter((item) => item.id !== action.payload)
       return calculateTotalsWithDiscount({ ...state, items: newItems })
     }
 
     case "UPDATE_QUANTITY": {
       if (action.payload.quantity <= 0) {
-        const newItems = items.filter((item) => item.id !== action.payload.id)
+        const newItems = state.items.filter((item) => item.id !== action.payload.id)
         return calculateTotalsWithDiscount({ ...state, items: newItems })
       }
 
-      const updatedItems = items.map((item) =>
+      const updatedItems = state.items.map((item) =>
         item.id === action.payload.id ? { ...item, quantity: action.payload.quantity } : item,
       )
       return calculateTotalsWithDiscount({ ...state, items: updatedItems })
@@ -129,8 +128,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     }
 
     case "LOAD_CART": {
-      const loadedItems = Array.isArray(action.payload) ? action.payload : []
-      return calculateTotalsWithDiscount({ ...state, items: loadedItems })
+      return calculateTotalsWithDiscount({ ...state, items: action.payload })
     }
 
     case "SET_DELIVERY_METHOD": {
@@ -172,14 +170,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      localStorage.setItem("hohenloher-gold-cart", JSON.stringify(state.items || []))
+      localStorage.setItem("hohenloher-gold-cart", JSON.stringify(state.items))
     }, 100)
 
     return () => clearTimeout(timeoutId)
   }, [state.items])
 
   const calculateTotalWeight = useCallback(() => {
-    return (state.items || []).reduce((total, item) => {
+    return state.items.reduce((total, item) => {
       const itemWeight = item.weight_kg || 1.0
       return total + itemWeight * item.quantity
     }, 0)
@@ -205,7 +203,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       const allItems = [
         // All existing cart items
-        ...(state.items || []).map((item) => ({
+        ...state.items.map((item) => ({
           productId: item.id,
           quantity: item.quantity,
         })),
@@ -261,7 +259,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     console.log("[v0] isSeasonalProduct:", isSeasonalProduct, "category:", product.category)
 
     if (!isSeasonalProduct) {
-      const existingItem = (state.items || []).find((item) => item.id === product.id)
+      const existingItem = state.items.find((item) => item.id === product.id)
       const totalQuantity = (existingItem?.quantity || 0) + quantity
 
       console.log(
@@ -304,7 +302,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     console.log("[v0] updateQuantity called - id:", id, "new quantity:", quantity)
 
     // Find the current item
-    const currentItem = (state.items || []).find((item) => item.id === id)
+    const currentItem = state.items.find((item) => item.id === id)
     if (!currentItem) {
       console.log("[v0] updateQuantity - item not found")
       return

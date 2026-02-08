@@ -326,32 +326,72 @@ function CustomerSegments() {
 }
 
 function AdminDashboardContent() {
-  const { state, dispatch, updateActivity, handleLogout } = useAdmin()
-  const { user: authUser, loading: authLoading } = useAuth()
+  console.log("[v0] AdminDashboardContent - render START")
+  
+  let adminContext: ReturnType<typeof useAdmin>
+  try {
+    adminContext = useAdmin()
+    console.log("[v0] AdminDashboardContent - useAdmin OK, loading:", adminContext.state.loading, "user:", adminContext.state.user?.email ?? "null")
+  } catch (err) {
+    console.error("[v0] AdminDashboardContent - useAdmin() THREW:", err)
+    throw err
+  }
+  const { state, dispatch, updateActivity, handleLogout } = adminContext
+  
+  let authContext: ReturnType<typeof useAuth>
+  try {
+    authContext = useAuth()
+    console.log("[v0] AdminDashboardContent - useAuth OK, loading:", authContext.loading, "user:", authContext.user?.email ?? "null")
+  } catch (err) {
+    console.error("[v0] AdminDashboardContent - useAuth() THREW:", err)
+    throw err
+  }
+  const { user: authUser, loading: authLoading } = authContext
+  
   const router = useRouter()
-  const [activeTab, setActiveTab] = usePersistedState({
-    key: "admin-active-tab",
-    defaultValue: "overview",
-    expirationHours: 12,
-  })
+  console.log("[v0] AdminDashboardContent - useRouter OK")
+  
+  let activeTabState: ReturnType<typeof usePersistedState>
+  try {
+    activeTabState = usePersistedState({
+      key: "admin-active-tab",
+      defaultValue: "overview",
+      expirationHours: 12,
+    })
+    console.log("[v0] AdminDashboardContent - usePersistedState OK, value:", activeTabState[0])
+  } catch (err) {
+    console.error("[v0] AdminDashboardContent - usePersistedState() THREW:", err)
+    throw err
+  }
+  const [activeTab, setActiveTab] = activeTabState
+  
   const [isRegeneratingQR, setIsRegeneratingQR] = useState(false)
+  console.log("[v0] AdminDashboardContent - all hooks initialized successfully")
 
   useEffect(() => {
+    console.log("[v0] AdminDashboardContent useEffect[auth] - authLoading:", authLoading, "authUser:", authUser?.email ?? "null")
     // Warte bis Auth-Loading abgeschlossen ist
-    if (authLoading) return
+    if (authLoading) {
+      console.log("[v0] AdminDashboardContent useEffect[auth] - still loading, returning early")
+      return
+    }
 
     const checkAuth = async () => {
+      console.log("[v0] AdminDashboardContent checkAuth - starting")
       try {
         if (!authUser) {
+          console.log("[v0] AdminDashboardContent checkAuth - no authUser, redirecting to login")
           router.push("/auth/login")
           return
         }
 
+        console.log("[v0] AdminDashboardContent checkAuth - user found, dispatching SET_USER")
         dispatch({ type: "SET_USER", payload: { id: authUser.id, email: authUser.email } })
       } catch (error) {
-        console.error("Auth check failed:", error)
+        console.error("[v0] AdminDashboardContent checkAuth - FAILED:", error)
         router.push("/auth/login")
       } finally {
+        console.log("[v0] AdminDashboardContent checkAuth - dispatching SET_LOADING false")
         dispatch({ type: "SET_LOADING", payload: false })
       }
     }
@@ -552,7 +592,10 @@ function AdminDashboardContent() {
     }
   }
 
+  console.log("[v0] AdminDashboardContent - pre-render check: state.loading=", state.loading, "authLoading=", authLoading, "state.user=", state.user?.email ?? "null")
+  
   if (state.loading || authLoading) {
+    console.log("[v0] AdminDashboardContent - SHOWING LOADING SPINNER (state.loading:", state.loading, "authLoading:", authLoading, ")")
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -562,8 +605,11 @@ function AdminDashboardContent() {
   }
 
   if (!state.user) {
+    console.log("[v0] AdminDashboardContent - NO USER, returning null")
     return null
   }
+  
+  console.log("[v0] AdminDashboardContent - RENDERING FULL DASHBOARD for user:", state.user.email)
 
   return (
     <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6">
@@ -788,6 +834,7 @@ function AdminDashboardContent() {
 }
 
 export default function AdminDashboard() {
+  console.log("[v0] AdminDashboard (export default) - render, NOTE: wrapping in SECOND AdminProvider (layout.tsx already has one!)")
   return (
   <AdminProvider>
   <AdminDashboardContent />
