@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { FormField } from "@/components/ui/form-field"
 import { useFormValidation } from "@/hooks/use-form-validation"
 import { loginSchema } from "@/lib/validation/schemas"
@@ -25,6 +25,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get("redirectTo") || "/admin"
   const supabase = getBrowserClient()
 
   const { validateField, validateForm, getFieldError, markFieldTouched } = useFormValidation({
@@ -114,8 +116,8 @@ export default function LoginPage() {
         }
 
         await new Promise((resolve) => setTimeout(resolve, 1000))
-        console.log("[v0] Redirecting to /admin")
-        router.push("/admin")
+        console.log("[v0] Redirecting to", redirectTo)
+        router.push(redirectTo)
       }
     } catch (err) {
       console.log("[v0] Unexpected error:", err)

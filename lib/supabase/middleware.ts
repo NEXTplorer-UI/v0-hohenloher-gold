@@ -58,11 +58,13 @@ export async function updateSession(request: NextRequest) {
     ) {
       console.log("[v0] Middleware - REDIRECTING to login! Protected route:", request.nextUrl.pathname, "without user")
       const url = request.nextUrl.clone()
+      const originalPath = request.nextUrl.pathname + request.nextUrl.search
       if (request.nextUrl.pathname.startsWith("/customer")) {
         url.pathname = "/customer/login"
       } else {
         url.pathname = "/auth/login"
       }
+      url.searchParams.set("redirectTo", originalPath)
       return NextResponse.redirect(url)
     }
   } catch (error) {
