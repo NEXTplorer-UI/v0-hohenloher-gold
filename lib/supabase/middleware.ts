@@ -42,6 +42,8 @@ export async function updateSession(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
 
+    console.log("[v0] Middleware - path:", request.nextUrl.pathname, "user:", user?.email ?? "NO USER")
+
     const protectedRoutes = ["/crm", "/account", "/admin", "/customer/dashboard"]
     const isProtectedRoute = protectedRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
 
@@ -54,6 +56,7 @@ export async function updateSession(request: NextRequest) {
       !request.nextUrl.pathname.startsWith("/customer/register") &&
       !request.nextUrl.pathname.startsWith("/customer/forgot-password")
     ) {
+      console.log("[v0] Middleware - REDIRECTING to login! Protected route:", request.nextUrl.pathname, "without user")
       const url = request.nextUrl.clone()
       if (request.nextUrl.pathname.startsWith("/customer")) {
         url.pathname = "/customer/login"
@@ -63,6 +66,7 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url)
     }
   } catch (error) {
+    console.error("[v0] Middleware - ERROR:", error)
     // Continue without authentication if Supabase fails
   }
 
