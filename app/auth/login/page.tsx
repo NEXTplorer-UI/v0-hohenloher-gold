@@ -115,9 +115,9 @@ export default function LoginPage() {
           localStorage.setItem("hohenloher-admin-settings", JSON.stringify(adminSettings))
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-        console.log("[v0] Redirecting to", redirectTo)
-        router.push(redirectTo)
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        console.log("[v0] Redirecting to", redirectTo, "via window.location.href (full page load for cookies)")
+        window.location.href = redirectTo
       }
     } catch (err) {
       console.log("[v0] Unexpected error:", err)
