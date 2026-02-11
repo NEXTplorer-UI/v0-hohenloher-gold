@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -73,6 +74,14 @@ const INITIAL_FORM = {
 export default function NewManualOrderPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { user: authUser, loading: authLoading } = useAuth()
+
+  // Redirect to login if not authenticated (client-side check)
+  useEffect(() => {
+    if (!authLoading && !authUser) {
+      router.push("/auth/login?redirectTo=/admin/orders/new")
+    }
+  }, [authLoading, authUser, router])
 
   // Form state
   const [form, setForm] = useState(INITIAL_FORM)
@@ -382,6 +391,15 @@ export default function NewManualOrderPage() {
     setCustomerSearchQuery("")
     setOrderCreated(null)
   }, [])
+
+  if (authLoading || !authUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Authentifizierung wird geprüft...</span>
+      </div>
+    )
+  }
 
   if (loadingData) {
     return (

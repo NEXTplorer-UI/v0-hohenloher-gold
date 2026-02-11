@@ -45,7 +45,9 @@ export async function updateSession(request: NextRequest) {
     console.log("[v0] Middleware - path:", request.nextUrl.pathname, "user:", user?.email ?? "NO USER")
 
     const protectedRoutes = ["/crm", "/account", "/admin", "/customer/dashboard"]
-    const isProtectedRoute = protectedRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
+    const unprotectedAdminRoutes = ["/admin/orders/new"]
+    const isUnprotectedAdminRoute = unprotectedAdminRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
+    const isProtectedRoute = !isUnprotectedAdminRoute && protectedRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
 
     if (
       isProtectedRoute &&
