@@ -14,17 +14,18 @@ export async function GET() {
     const [productsRes, locationsRes, personsRes] = await Promise.all([
       supabase
         .from("products")
-        .select("id, name, price, category, size, unit, active")
-        .eq("active", true)
+        .select("id, name, price, category_id, unit, is_active, categories(name)")
+        .eq("is_active", true)
         .order("name"),
       supabase
         .from("pickup_locations")
         .select("id, name")
-        .eq("active", true)
+        .eq("is_active", true)
         .order("name"),
       supabase
         .from("distribution_persons")
         .select("id, name")
+        .eq("is_active", true)
         .order("name"),
     ])
 

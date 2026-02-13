@@ -36,10 +36,10 @@ interface Product {
   id: number
   name: string
   price: number
-  category: string
-  size?: string
+  category_id: number
   unit?: string
-  active?: boolean
+  is_active?: boolean
+  categories?: { name: string } | null
 }
 
 interface PickupLocation {
@@ -302,8 +302,7 @@ export default function NewManualOrderPage() {
             name: product?.name || "Unbekanntes Produkt",
             quantity: item.quantity,
             price: item.price || product?.price || 0,
-            category: product?.category || "Unbekannt",
-            size: product?.size || null,
+            category: product?.categories?.name || "Unbekannt",
             unit: product?.unit || null,
           }
         })
@@ -519,11 +518,10 @@ export default function NewManualOrderPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {products
-                          .filter((p) => p.active !== false)
+                          .filter((p) => p.is_active !== false)
                           .map((product) => (
                             <SelectItem key={product.id} value={product.id.toString()}>
                               {product.name} - {product.price.toFixed(2)} EUR
-                              {product.size ? ` (${product.size})` : ""}
                             </SelectItem>
                           ))}
                       </SelectContent>
