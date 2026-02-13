@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -74,15 +74,6 @@ const INITIAL_FORM = {
 export default function NewManualOrderPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { user: authUser, loading: authLoading } = useAuth()
-
-  // Redirect to login if not authenticated (client-side check)
-  useEffect(() => {
-    if (!authLoading && !authUser) {
-      router.push("/auth/login?redirectTo=/admin/orders/new")
-    }
-  }, [authLoading, authUser, router])
-
   // Form state
   const [form, setForm] = useState(INITIAL_FORM)
   const [isCreatingOrder, setIsCreatingOrder] = useState(false)
@@ -118,23 +109,14 @@ export default function NewManualOrderPage() {
   useEffect(() => {
     async function fetchFormData() {
       try {
-        const [productsRes, locationsRes, personsRes] = await Promise.all([
-          fetch("/api/products"),
-          fetch("/api/admin/pickup-locations"),
-          fetch("/api/admin/distribution-persons"),
-        ])
-
-        if (productsRes.ok) {
-          const data = await productsRes.json()
-          setProducts(data.products || data || [])
-        }
-        if (locationsRes.ok) {
-          const data = await locationsRes.json()
-          setPickupLocations(data.locations || [])
-        }
-        if (personsRes.ok) {
-          const data = await personsRes.json()
-          setDistributionPersons(data.persons || [])
+        const res = await fetch("/api/admin/orders/form-data")
+        if (res.ok) {
+          const data = await res.json()
+          setProducts(data.products || [])
+          setPickupLocations(data.pickupLocations || [])
+          setDistributionPersons(data.distributionPersons || [])
+        } else {
+          throw new Error("Failed to load form data")
         }
       } catch (error) {
         console.error("Error fetching form data:", error)
@@ -391,15 +373,6 @@ export default function NewManualOrderPage() {
     setCustomerSearchQuery("")
     setOrderCreated(null)
   }, [])
-
-  if (authLoading || !authUser) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="ml-2">Authentifizierung wird geprüft...</span>
-      </div>
-    )
-  }
 
   if (loadingData) {
     return (
